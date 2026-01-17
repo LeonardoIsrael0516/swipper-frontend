@@ -1,0 +1,710 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@layer base {
+  :root {
+    --background: 0 0% 99%;
+    --foreground: 240 10% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+
+    --primary: 330 85% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 10% 10%;
+
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 5% 45%;
+
+    --accent: 280 70% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 330 85% 60%;
+
+    --radius: 0.75rem;
+
+    /* Custom colors - Instagram Reels style gradient */
+    --gradient-start: 35 100% 55%;
+    --gradient-mid: 355 90% 55%;
+    --gradient-end: 320 85% 50%;
+    
+    --surface: 0 0% 100%;
+    --surface-elevated: 0 0% 100%;
+    --surface-hover: 240 5% 97%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 330 85% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 240 6% 90%;
+    --sidebar-ring: 330 85% 60%;
+  }
+
+  .dark {
+    --background: 240 10% 6%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 8%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 8%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 330 85% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 5% 18%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 5% 18%;
+    --muted-foreground: 240 5% 65%;
+
+    --accent: 280 70% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 5% 18%;
+    --input: 240 5% 18%;
+    --ring: 330 85% 60%;
+
+    --surface: 240 10% 10%;
+    --surface-elevated: 240 10% 12%;
+    --surface-hover: 240 10% 14%;
+
+    --sidebar-background: 240 10% 8%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 330 85% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 5% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 5% 18%;
+    --sidebar-ring: 330 85% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html, body, #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+}
+
+@layer utilities {
+  .gradient-primary {
+    background: radial-gradient(
+      circle at bottom left,
+      hsl(var(--gradient-start)) 0%,
+      hsl(var(--gradient-mid)) 45%,
+      hsl(var(--gradient-end)) 100%
+    );
+  }
+
+  .gradient-text {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--gradient-start)) 0%,
+      hsl(var(--gradient-mid)) 40%,
+      hsl(var(--gradient-end)) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-border {
+    position: relative;
+    background: hsl(var(--card));
+    border-radius: var(--radius);
+  }
+
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--gradient-start)) 0%,
+      hsl(var(--gradient-mid)) 40%,
+      hsl(var(--gradient-end)) 100%
+    );
+    -webkit-mask: 
+      linear-gradient(#fff 0 0) content-box, 
+      linear-gradient(#fff 0 0);
+    mask: 
+      linear-gradient(#fff 0 0) content-box, 
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .glass {
+    background: hsl(var(--surface) / 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .glass-card {
+    background: hsl(var(--card) / 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  /* Scroll snap for reels */
+  .reels-container {
+    scroll-snap-type: y mandatory;
+    overflow-y: scroll;
+    height: 100vh;
+    scroll-behavior: smooth;
+  }
+
+  /* Container para card 1920x1080 */
+  .reels-container-card {
+    scroll-snap-type: y mandatory;
+    overflow-y: scroll;
+    height: 100%;
+    width: 100%;
+    scroll-behavior: smooth;
+  }
+
+  .reel-slide {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    height: 100vh;
+    width: 100%;
+  }
+
+  /* Slide dentro do card 1920x1080 */
+  .reels-container-card .reel-slide {
+    height: 100%;
+    width: 100%;
+    min-height: 100%;
+  }
+  
+  /* Wrapper para centralizar conteúdo no desktop */
+  .reel-quiz-wrapper {
+    padding: 0;
+    position: relative;
+    z-index: 10;
+  }
+  
+  /* Em desktop, background e progress bar ocupam tela inteira */
+  @media (min-width: 768px) {
+    .reel-quiz-wrapper {
+      padding: 0;
+    }
+    
+    .reel-quiz-container {
+      width: 100vw !important;
+      max-width: 100vw !important;
+      height: auto !important;
+      max-height: 100vh !important;
+      aspect-ratio: 1080/1920 !important;
+    }
+    
+    /* Se a altura for o limitador, ajustar pela altura */
+    @media (min-aspect-ratio: 1080/1920) {
+      .reel-quiz-container {
+        height: 100vh !important;
+        max-height: 100vh !important;
+        width: auto !important;
+        max-width: calc(100vh * 1080 / 1920) !important;
+      }
+    }
+    
+    /* Progress Bar ocupa tela inteira no desktop */
+    .reel-quiz-fullscreen .reel-quiz-container .reel-progress-bar {
+      position: fixed !important;
+      top: 0;
+      left: 0;
+      right: 0;
+      width: 100vw !important;
+      z-index: 50;
+    }
+    
+    .reels-container-card {
+      width: 100%;
+      height: 100%;
+    }
+    
+    .reels-container-card .reel-slide {
+      width: 100%;
+      height: 100%;
+    }
+    
+    /* Background do slide ocupa tela inteira no desktop */
+    .reel-quiz-fullscreen .reels-container-card .reel-slide {
+      position: relative;
+      /* Garantir que o background seja preservado por padrão */
+      background-attachment: scroll;
+      /* Garantir que não haja fundo branco por padrão */
+      background-color: transparent;
+    }
+    
+    /* No desktop, manter background no slide mesmo quando usar background fixo */
+    /* Isso permite que imagens/vídeos apareçam nítidos no slide (duplicado com blur no fundo) */
+    /* Para cores/gradientes, o background fixo já cobre tudo, mas manter aqui também não causa problema */
+    .reel-quiz-fullscreen .reels-container-card .reel-slide.slide-active-desktop {
+      /* Apenas no desktop: remover background do slide quando há background fixo */
+      /* No mobile, o background continua no slide */
+      background: transparent !important;
+    }
+    
+    /* Para slides com imagem/vídeo, garantir que o background seja preservado */
+    .reel-quiz-fullscreen .reels-container-card .reel-slide.slide-normal-background {
+      /* Background será aplicado via inline styles normalmente - garantir que seja preservado */
+      background-size: cover !important;
+      background-position: center !important;
+      background-repeat: no-repeat !important;
+      /* Garantir que não haja fundo branco quando há background configurado */
+      min-height: 100%;
+    }
+    
+    /* Garantir que o container pai não tenha fundo branco */
+    .reel-quiz-fullscreen {
+      background-color: transparent !important;
+    }
+    
+    .reel-quiz-fullscreen .reel-quiz-wrapper {
+      background-color: transparent !important;
+    }
+    
+    .reel-quiz-fullscreen .reel-quiz-container {
+      background-color: transparent !important;
+    }
+    
+    .reel-quiz-fullscreen .reels-container-card {
+      background-color: transparent !important;
+    }
+    
+    /* Background fixo para desktop - ocupa tela inteira */
+    /* Aplicar tanto no contexto fullscreen quanto em qualquer contexto */
+    .reel-slide-desktop-bg {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 0 !important;
+      background-size: cover !important;
+      background-position: center !important;
+      background-repeat: no-repeat !important;
+      pointer-events: none !important;
+    }
+    
+    /* Para imagens, adicionar blur no background fixo */
+    .reel-slide-desktop-bg.reel-slide-desktop-bg-blur {
+      filter: blur(20px) !important;
+      transform: scale(1.1) !important;
+      /* Garantir que não apareçam bordas após blur */
+      margin: -10%;
+      width: 120% !important;
+      height: 120% !important;
+    }
+    
+    /* No contexto fullscreen, garantir que está visível */
+    .reel-quiz-fullscreen .reel-slide-desktop-bg {
+      display: block !important;
+    }
+    
+    /* No mobile, restaurar background no elemento do slide */
+    @media (max-width: 767px) {
+      .reel-quiz-fullscreen .reels-container-card .reel-slide {
+        background: inherit !important;
+        background-color: inherit !important;
+        background-image: inherit !important;
+      }
+    }
+    
+    /* Vídeo de background com blur ocupando tela toda no desktop */
+    .reel-slide-desktop-bg.reel-video-bg-blur {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 0 !important;
+      object-fit: cover;
+      filter: blur(20px) !important;
+      transform: scale(1.1) !important;
+      pointer-events: none !important;
+      /* Garantir que não apareçam bordas após blur */
+      margin: -10%;
+      width: 120% !important;
+      height: 120% !important;
+    }
+    
+    /* IMPORTANTE: Vídeos que são elementos (dentro do ReelContent) NÃO devem ocupar tela cheia */
+    /* Garantir que vídeos dentro do conteúdo mantêm tamanho normal */
+    .reel-quiz-fullscreen .reels-container-card .reel-slide [data-reel-content="true"] video,
+    .reel-quiz-fullscreen .reels-container-card .reel-slide [data-reel-content="true"] [data-video-element="true"],
+    .reel-quiz-fullscreen .reels-container-card .reel-slide [data-reel-content="true"] [data-video-element="true"] video,
+    .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper video,
+    .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper [data-video-element="true"],
+    .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper [data-video-element="true"] video {
+      position: relative !important;
+      inset: auto !important;
+      width: 100% !important;
+      height: auto !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      z-index: auto !important;
+      object-fit: contain !important;
+    }
+    
+    /* Overlay também ocupa tela inteira - ajustar para não sobrescrever o background */
+    .reel-quiz-fullscreen .reels-container-card .reel-slide > div[class*="absolute"]:first-child {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 1;
+      pointer-events: none;
+    }
+    
+    /* Conteúdo do slide fica no tamanho mobile e visível */
+    .reel-quiz-fullscreen .reels-container-card .reel-slide > div[class*="relative"]:last-child {
+      position: relative;
+      z-index: 10;
+      height: 100%;
+    }
+    
+    /* Container de conteúdo (ReelContent) com aspect ratio 9:20 no desktop */
+    .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper .reel-content-inner {
+      width: auto !important;
+      max-width: none !important;
+      aspect-ratio: 9/20 !important;
+      max-height: 90vh !important;
+      max-width: calc(90vh * 9 / 20) !important;
+    }
+    
+    /* Se a altura for o limitador, ajustar pela altura */
+    @media (min-aspect-ratio: 9/20) {
+      .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper .reel-content-inner {
+        height: 90vh !important;
+        max-height: 90vh !important;
+        width: auto !important;
+        max-width: calc(90vh * 9 / 20) !important;
+      }
+    }
+  }
+  
+  /* No mobile, tela cheia */
+  @media (max-width: 767px) {
+    .reel-quiz-wrapper {
+      padding: 0;
+    }
+    
+    .reel-quiz-container {
+      width: 100% !important;
+      height: 100vh !important;
+      height: 100svh !important;
+      height: 100dvh !important; /* Usar dynamic viewport height para considerar barras do navegador */
+      min-height: 100vh !important;
+      min-height: 100svh !important;
+      min-height: 100dvh !important;
+      max-width: 100% !important;
+      max-height: 100vh !important;
+      max-height: 100svh !important;
+      max-height: 100dvh !important;
+      aspect-ratio: unset !important; /* Remover aspect-ratio no mobile para usar altura dinâmica */
+    }
+    
+    .reels-container-card {
+      height: 100vh !important;
+      height: 100svh !important;
+      height: 100dvh !important;
+      min-height: 100vh !important;
+      min-height: 100svh !important;
+      min-height: 100dvh !important;
+    }
+    
+    .reels-container-card .reel-slide {
+      height: 100vh !important;
+      height: 100svh !important;
+      height: 100dvh !important;
+      min-height: 100vh !important;
+      min-height: 100svh !important;
+      min-height: 100dvh !important;
+    }
+
+    /* Safe areas (iOS notch/home indicator) */
+    @supports (padding: max(0px)) {
+      .reel-quiz-container {
+        padding-top: max(env(safe-area-inset-top), 0px);
+        padding-bottom: max(env(safe-area-inset-bottom), 0px);
+      }
+    }
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Glow effects */
+  .glow-primary {
+    box-shadow: 0 0 40px -10px hsl(var(--primary) / 0.5);
+  }
+
+  .glow-accent {
+    box-shadow: 0 0 60px -15px hsl(var(--accent) / 0.4);
+  }
+
+  /* Animations */
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px 0px hsl(var(--primary) / 0.3); }
+    50% { box-shadow: 0 0 40px 10px hsl(var(--primary) / 0.5); }
+  }
+
+  @keyframes slide-up {
+    from { 
+      opacity: 0; 
+      transform: translateY(30px); 
+    }
+    to { 
+      opacity: 1; 
+      transform: translateY(0); 
+    }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes scale-in {
+    from { 
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to { 
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  @keyframes swipe-hint {
+    0%, 100% { 
+      transform: translateY(0) translateX(-50%);
+      opacity: 1;
+    }
+    50% { 
+      transform: translateY(-20px) translateX(-50%);
+      opacity: 0.8;
+    }
+  }
+
+  @keyframes pulse-heart {
+    0%, 100% { 
+      transform: scale(1);
+    }
+    25% { 
+      transform: scale(1.2);
+    }
+    50% { 
+      transform: scale(1.1);
+    }
+    75% { 
+      transform: scale(1.15);
+    }
+  }
+
+  @keyframes bounce-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.3) translateY(50px);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.05) translateY(-10px);
+    }
+    70% {
+      transform: scale(0.9) translateY(0);
+    }
+    100% {
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  @keyframes slide-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(100px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes fade-scale {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes particle-explosion {
+    0% {
+      opacity: 1;
+      transform: scale(0) translate(0, 0);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1) translate(var(--tx), var(--ty));
+    }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.5s ease-out forwards;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.3s ease-out forwards;
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--muted-foreground) / 0.1) 50%,
+      hsl(var(--muted)) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  .animate-swipe-hint {
+    animation: swipe-hint 2s ease-in-out infinite;
+  }
+
+  .animate-pulse-heart {
+    animation: pulse-heart 0.6s ease-in-out;
+  }
+
+  .animate-button-pulse {
+    animation: button-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes button-pulse {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.85;
+      transform: scale(1.03);
+    }
+  }
+
+  .animate-bounce-in {
+    animation: bounce-in 0.6s ease-out forwards;
+  }
+
+  .animate-slide-in-right {
+    animation: slide-in-right 0.4s ease-out forwards;
+  }
+
+  .animate-fade-scale {
+    animation: fade-scale 0.3s ease-out forwards;
+  }
+
+  @keyframes bounce-subtle {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-4px);
+    }
+  }
+
+  .animate-bounce-subtle {
+    animation: bounce-subtle 2s ease-in-out infinite;
+  }
+}
+
+/* React Flow Controls - Dark Mode Styles */
+.dark .react-flow__controls-button {
+  background-color: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.dark .react-flow__controls-button:hover {
+  background-color: hsl(var(--surface-hover)) !important;
+}
+
+.dark .react-flow__controls-button:disabled {
+  background-color: hsl(var(--muted)) !important;
+  color: hsl(var(--muted-foreground)) !important;
+  opacity: 0.5;
+}
+
+.dark .react-flow__controls-button svg {
+  fill: hsl(var(--foreground)) !important;
+  stroke: hsl(var(--foreground)) !important;
+}

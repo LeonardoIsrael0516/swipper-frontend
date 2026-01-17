@@ -1,0 +1,291 @@
+﻿import { useState, useEffect } from 'react';
+import { SlideElement } from '@/contexts/BuilderContext';
+import * as LucideIcons from 'lucide-react';
+import { SwipeHintSubtle } from '@/components/reels/SwipeHintSubtle';
+
+// Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
+const normalizeUiConfig = (uiConfig: any): any => {
+  if (!uiConfig) return {};
+  if (typeof uiConfig === 'string') {
+    try {
+      return JSON.parse(uiConfig);
+    } catch {
+      return {};
+    }
+  }
+  if (typeof uiConfig === 'object' && uiConfig !== null) {
+    return uiConfig;
+  }
+  return {};
+};
+
+interface ReelQuestionnaireProps {
+  element: SlideElement;
+  onNextSlide?: () => void;
+  onSelectionChange?: (selectedIds: string[]) => void;
+}
+
+// Função para obter o componente do ícone do Lucide React
+const getIconComponent = (iconName: string) => {
+  if (!iconName || typeof iconName !== 'string') return null;
+  
+  const cleanIconName = iconName.trim();
+  if (!cleanIconName) return null;
+  
+  const IconComponent = (LucideIcons as any)[cleanIconName];
+  
+  if (IconComponent && typeof IconComponent === 'function') {
+    return IconComponent;
+  }
+  
+  return null;
+};
+
+// Função para renderizar o ícone à esquerda do item
+const renderLeftIcon = (item: any) => {
+  if (!item) return null;
+  
+  // PRIORIDADE: Se icon começar com "icon:", SEMPRE definir iconType como 'icon'
+  let iconType = item.iconType;
+  if (item.icon && typeof item.icon === 'string' && item.icon.trim().startsWith('icon:')) {
+    iconType = 'icon';
+  } else if (!iconType && item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.trim()) {
+    iconType = 'image';
+  } else if (!iconType && item.emoji && typeof item.emoji === 'string' && item.emoji.trim()) {
+    iconType = 'emoji';
+  } else if (!iconType) {
+    iconType = 'emoji';
+  }
+  
+  if (iconType === 'icon') {
+    const iconValue = item.icon || '';
+    if (!iconValue || typeof iconValue !== 'string') return null;
+    
+    const trimmedIcon = iconValue.trim();
+    if (!trimmedIcon) return null;
+    
+    // Remover prefixo "icon:" se presente
+    const iconName = trimmedIcon.startsWith('icon:') 
+      ? trimmedIcon.substring(5).trim() 
+      : trimmedIcon;
+    
+    if (!iconName) return null;
+    
+    const IconComponent = getIconComponent(iconName);
+    if (IconComponent && typeof IconComponent === 'function') {
+      const Icon = IconComponent;
+      return <Icon className="w-5 h-5 flex-shrink-0" />;
+    }
+    
+    return null;
+  }
+  
+  if (iconType === 'emoji') {
+    const emoji = item.emoji || '';
+    if (!emoji || typeof emoji !== 'string') return null;
+    
+    const trimmedEmoji = emoji.trim();
+    if (!trimmedEmoji) return null;
+    
+    return <span className="text-xl flex-shrink-0">{trimmedEmoji}</span>;
+  }
+  
+  if (iconType === 'image') {
+    const imageUrl = item.imageUrl || '';
+    if (!imageUrl || typeof imageUrl !== 'string') return null;
+    
+    const trimmedImageUrl = imageUrl.trim();
+    if (!trimmedImageUrl) return null;
+    
+    return (
+      <img 
+        src={trimmedImageUrl} 
+        alt="" 
+        className="w-5 h-5 object-cover flex-shrink-0 rounded"
+      />
+    );
+  }
+  
+  return null;
+};
+
+// Função para renderizar o ícone final do item
+const renderEndIcon = (endIcon: string, endIconCustom: string) => {
+  if (endIcon === 'none' || !endIcon) return null;
+  
+  if (endIcon === 'custom' && endIconCustom) {
+    const trimmedCustom = endIconCustom.trim();
+    if (!trimmedCustom) return null;
+    
+    // Se começar com "icon:", renderizar como ícone Lucide
+    if (trimmedCustom.startsWith('icon:')) {
+      const iconName = trimmedCustom.substring(5).trim();
+      if (!iconName) return null;
+      
+      const IconComponent = getIconComponent(iconName);
+      if (IconComponent && typeof IconComponent === 'function') {
+        const Icon = IconComponent;
+        return <Icon className="w-5 h-5" />;
+      }
+      
+      return null;
+    }
+    
+    // Se for URL de imagem
+    if (trimmedCustom.startsWith('http://') || trimmedCustom.startsWith('https://') || trimmedCustom.startsWith('/')) {
+      return <img src={trimmedCustom} alt="" className="w-5 h-5 object-cover rounded" />;
+    }
+    
+    // Se for emoji
+    return <span className="text-xl">{trimmedCustom}</span>;
+  }
+  
+  // Ícones pré-definidos
+  if (endIcon === 'arrow') {
+    const ArrowRight = LucideIcons.ArrowRight;
+    return <ArrowRight className="w-5 h-5" />;
+  }
+  if (endIcon === 'check') {
+    const CheckCircle = LucideIcons.CheckCircle;
+    return <CheckCircle className="w-5 h-5" />;
+  }
+  if (endIcon === 'verified') {
+    const CheckCircle2 = LucideIcons.CheckCircle2 || LucideIcons.CheckCircle;
+    return <CheckCircle2 className="w-5 h-5" />;
+  }
+  
+  return null;
+};
+
+export function ReelQuestionnaire({ element, onNextSlide, onSelectionChange }: ReelQuestionnaireProps) {
+  const config = normalizeUiConfig(element.uiConfig);
+  const {
+    items = [],
+    layout = 'list',
+    multipleSelection = false,
+    lockSlide = false,
+    endIcon = 'none',
+    endIconCustom = '',
+    itemHeight = 80,
+    gap = 12,
+    borderRadius = 12,
+    backgroundColor = '#ffffff',
+    textColor = '#000000',
+    selectedBackgroundColor = '#007bff',
+    selectedTextColor = '#ffffff',
+    borderColor = '#e5e7eb',
+    borderWidth = 1,
+  } = config;
+
+  // Estado de seleÃ§Ã£o
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Handler de clique no item
+  const handleItemClick = (itemId: string) => {
+    if (multipleSelection) {
+      const newSelectedIds = selectedIds.includes(itemId) ? selectedIds.filter(id => id !== itemId) : [...selectedIds, itemId];
+      setSelectedIds(newSelectedIds);
+      onSelectionChange?.(newSelectedIds);
+    } else {
+      setSelectedIds([itemId]);
+      onSelectionChange?.([itemId]);
+      setTimeout(() => { onNextSlide?.(); }, 500);
+    }
+  };
+
+  const showSwipeHint = multipleSelection && selectedIds.length > 0;
+
+  // Garantir que items é um array e normalizar cada item
+  const normalizedItems = Array.isArray(items) ? items.map((item: any) => {
+    // PRIORIDADE: Se icon começar com "icon:", SEMPRE definir iconType como 'icon'
+    let detectedIconType = item.iconType;
+    if (item.icon && typeof item.icon === 'string' && item.icon.trim().startsWith('icon:')) {
+      detectedIconType = 'icon';
+    } else if (!detectedIconType && item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.trim()) {
+      detectedIconType = 'image';
+    } else if (!detectedIconType && item.emoji && typeof item.emoji === 'string' && item.emoji.trim()) {
+      detectedIconType = 'emoji';
+    }
+    
+    const finalIconType = detectedIconType || 'emoji';
+    
+    const normalized = {
+      ...item,
+      iconType: finalIconType,
+      icon: item.icon && typeof item.icon === 'string' ? item.icon.trim() : '',
+      emoji: item.emoji && typeof item.emoji === 'string' ? item.emoji.trim() : '',
+      imageUrl: item.imageUrl && typeof item.imageUrl === 'string' ? item.imageUrl.trim() : '',
+      title: item.title && typeof item.title === 'string' ? item.title.trim() : '',
+      description: item.description && typeof item.description === 'string' ? item.description.trim() : '',
+    };
+    
+    return normalized;
+  }) : [];
+
+  const containerStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: `${gap}px`,
+    width: '100%',
+  };
+
+  const itemStyle: React.CSSProperties = {
+    minHeight: `${itemHeight}px`,
+    backgroundColor,
+    color: textColor,
+    border: `${borderWidth}px solid ${borderColor}`,
+    borderRadius: `${borderRadius}px`,
+    padding: '12px 16px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  };
+
+  const gridContainerStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: layout === 'grid' ? 'repeat(2, 1fr)' : '1fr',
+    gap: `${gap}px`,
+    width: '100%',
+  };
+
+  return (
+    <div style={containerStyle}>
+      {normalizedItems.length === 0 ? (
+        <div style={itemStyle}>
+          <p style={{ color: textColor, fontSize: '14px', opacity: 0.6 }}>
+            Nenhum item configurado
+          </p>
+        </div>
+      ) : (
+        <div style={layout === 'grid' ? gridContainerStyle : containerStyle}>
+          {normalizedItems.map((item: any, index: number) => (
+            <div
+              key={item.id || index}
+              style={itemStyle}
+            >
+              {/* Ícone à esquerda */}
+              {renderLeftIcon(item)}
+              
+              {/* Conteúdo do item */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '16px', fontWeight: 500, color: isSelected ? selectedTextColor : textColor }}>
+                  {item.title || `Item ${index + 1}`}
+                </span>
+                {item.description && (
+                  <span style={{ fontSize: '14px', color: isSelected ? selectedTextColor : textColor, opacity: 0.7 }}>
+                    {item.description}
+                  </span>
+                )}
+              </div>
+              
+              {/* Ícone final */}
+              {renderEndIcon(endIcon, endIconCustom)}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

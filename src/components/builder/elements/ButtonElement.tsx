@@ -1,0 +1,174 @@
+import { useState, useEffect, memo } from 'react';
+import { SlideElement } from '@/contexts/BuilderContext';
+import { cn } from '@/lib/utils';
+
+// Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
+const normalizeUiConfig = (uiConfig: any): any => {
+  if (!uiConfig) return {};
+  if (typeof uiConfig === 'string') {
+    try {
+      return JSON.parse(uiConfig);
+    } catch {
+      return {};
+    }
+  }
+  if (typeof uiConfig === 'object' && uiConfig !== null) {
+    return uiConfig;
+  }
+  return {};
+};
+
+interface ButtonElementProps {
+  element: SlideElement;
+  onButtonClick?: (destination: 'next-slide' | 'url', url?: string, openInNewTab?: boolean) => void;
+  isInBuilder?: boolean;
+  isActive?: boolean;
+}
+
+export const ButtonElement = memo(function ButtonElement({ element, onButtonClick, isInBuilder = false, isActive = false }: ButtonElementProps) {
+  const config = normalizeUiConfig(element.uiConfig);
+  const {
+    title = 'Clique aqui',
+    destination = 'next-slide',
+    url = '',
+    openInNewTab = true,
+    delayEnabled = false,
+    delaySeconds = 0,
+    lockSlide = false,
+    columnMode = false,
+    pulseAnimation = false,
+    colorType = 'solid',
+    backgroundColor = '#007bff',
+    gradient = {
+      direction: 'to right',
+      color1: '#007bff',
+      color2: '#0056b3',
+    },
+    textColor = '#ffffff',
+    strokeEnabled = false,
+    strokeColor = '#000000',
+    strokeWidth = 0,
+    borderRadius = 8,
+    padding = { top: 12, right: 24, bottom: 12, left: 24 },
+  } = config;
+
+  const [isVisible, setIsVisible] = useState(false);
+  const [opacity, setOpacity] = useState(0);
+
+  // Gerenciar delay - só começar quando o slide estiver ativo (ou se estiver no builder)
+  useEffect(() => {
+    // No builder, sempre considerar ativo (isInBuilder = true)
+    const shouldBeActive = isInBuilder || isActive;
+
+    // Se não está ativo (e não é builder), resetar
+    if (!shouldBeActive) {
+      if (delayEnabled && delaySeconds > 0) {
+        setIsVisible(false);
+        setOpacity(0);
+      } else {
+        // Sem delay, mostrar imediatamente mesmo quando inativo
+        setIsVisible(true);
+        setOpacity(1);
+      }
+      return;
+    }
+
+    // Slide está ativo (ou é builder) - iniciar delay se habilitado
+    if (delayEnabled && delaySeconds > 0) {
+      // Iniciar invisível
+      setIsVisible(false);
+      setOpacity(0);
+      
+      const timer = setTimeout(() => {
+        setIsVisible(true);
+        // Fade-in suave após tornar visível
+        setTimeout(() => setOpacity(1), 50);
+      }, delaySeconds * 1000);
+
+      return () => clearTimeout(timer);
+    } else {
+      // Sem delay ou delay desabilitado - mostrar imediatamente
+      setIsVisible(true);
+      setOpacity(1);
+    }
+  }, [delayEnabled, delaySeconds, isActive, isInBuilder]);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (onButtonClick) {
+      onButtonClick(destination, url, openInNewTab);
+    } else if (destination === 'url' && url) {
+      // Validar e preparar URL
+      let finalUrl = url.trim();
+      
+      // Adicionar protocolo se não tiver
+      if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+        finalUrl = `https://${finalUrl}`;
+      }
+      
+      // Validar URL antes de abrir
+      try {
+        const urlObj = new URL(finalUrl);
+        if (openInNewTab) {
+          window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+        } else {
+          window.location.href = urlObj.href;
+        }
+      } catch (error) {
+        console.error('URL inválida:', error);
+        // Tentar abrir mesmo assim se for uma URL simples
+        if (openInNewTab) {
+          window.open(finalUrl, '_blank', 'noopener,noreferrer');
+        } else {
+          window.location.href = finalUrl;
+        }
+      }
+    }
+  };
+
+  // Construir background style
+  let backgroundStyle: string;
+  if (colorType === 'gradient' && gradient) {
+    backgroundStyle = `linear-gradient(${gradient.direction}, ${gradient.color1}, ${gradient.color2})`;
+  } else {
+    backgroundStyle = backgroundColor || '#007bff';
+  }
+
+  const style: React.CSSProperties = {
+    background: backgroundStyle,
+    color: textColor,
+    borderRadius: `${borderRadius}px`,
+    padding: padding
+      ? `${padding.top || 0}px ${padding.right || 0}px ${padding.bottom || 0}px ${padding.left || 0}px`
+      : '12px 24px',
+    border: strokeEnabled && strokeWidth > 0
+      ? `${strokeWidth}px solid ${strokeColor || '#000000'}`
+      : 'none',
+    cursor: isInBuilder ? 'default' : 'pointer',
+    opacity,
+    transition: 'opacity 0.3s ease-in-out',
+    display: isVisible ? (columnMode ? 'inline-block' : 'block') : 'none',
+    width: columnMode ? 'auto' : '100%',
+    userSelect: 'none',
+    WebkitUserSelect: 'none',
+    MozUserSelect: 'none',
+    msUserSelect: 'none',
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      style={style}
+      className={cn(
+        'font-medium text-center',
+        pulseAnimation && !isInBuilder && 'animate-button-pulse'
+      )}
+      disabled={isInBuilder}
+    >
+      {title}
+    </button>
+  );
+});
+
