@@ -168,6 +168,7 @@ export default function PublicQuiz() {
   const prevSlideRef = useRef<number | null>(null);
   const { queueEvent } = useAnalyticsBatch();
   const slideRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const isProgrammaticScrollRef = useRef<boolean>(false);
 
   // Em reels NÃO deve existir scroll interno no slide.
   // Quando o conteúdo não cabe no viewport real do mobile (barras do navegador + safe-area),
@@ -665,10 +666,18 @@ export default function PublicQuiz() {
 
     const container = containerRef.current;
     if (container) {
+      // Marcar que o scroll é programático (não deve ser bloqueado)
+      isProgrammaticScrollRef.current = true;
+      
       container.scrollTo({
         top: slideIndex * container.clientHeight,
         behavior: 'smooth',
       });
+      
+      // Limpar a flag após a animação de scroll completar (assumindo ~500ms para smooth scroll)
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 600);
     }
   }, [reel, currentSlide]);
 
@@ -768,10 +777,13 @@ export default function PublicQuiz() {
 
         if (newSlide !== currentSlide && newSlide < reel.slides.length && newSlide >= 0) {
           // Verificar se o slide atual está travado e o usuário está tentando sair
+          // MAS apenas se o scroll não for programático (feito pelo botão)
           const currentSlideIsLocked = checkIfSlideIsLocked(currentSlide);
+          const isProgrammatic = isProgrammaticScrollRef.current;
           
-          // Se o slide atual está travado e o usuário está tentando ir para frente, bloquear
-          if (currentSlideIsLocked && newSlide > currentSlide) {
+          // Se o slide atual está travado, o usuário está tentando ir para frente
+          // E o scroll NÃO é programático (é manual), bloquear
+          if (currentSlideIsLocked && newSlide > currentSlide && !isProgrammatic) {
             // Reverter scroll para o slide atual (não permitir sair do slide travado)
             scrollTimeout = setTimeout(() => {
               scrollToSlide(currentSlide);
@@ -790,7 +802,9 @@ export default function PublicQuiz() {
               const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
               if (targetIndex >= 0 && targetIndex !== newSlide) {
                 // Verificar se o slide atual está travado antes de permitir redirecionamento
-                if (currentSlideIsLocked) {
+                // Mas apenas se o scroll não for programático
+                const isProgrammatic = isProgrammaticScrollRef.current;
+                if (currentSlideIsLocked && !isProgrammatic) {
                   // Reverter scroll para o slide atual
                   scrollTimeout = setTimeout(() => {
                     scrollToSlide(currentSlide);
