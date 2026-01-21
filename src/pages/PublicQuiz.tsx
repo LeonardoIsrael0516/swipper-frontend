@@ -996,12 +996,10 @@ export default function PublicQuiz() {
         const expectedScrollTop = currentSlide * slideHeight;
         
         // Bloquear qualquer movimento além da posição exata (sem tolerância)
-        if (currentScrollTop > expectedScrollTop) {
-          // Usar scrollTo com behavior: 'auto' para ser instantâneo
-          container.scrollTo({
-            top: expectedScrollTop,
-            behavior: 'auto'
-          });
+        // Também impedir scroll para trás além da posição quando travado
+        if (currentScrollTop !== expectedScrollTop) {
+          // Forçar diretamente sem animação para precisão máxima
+          container.scrollTop = expectedScrollTop;
         }
         
         // Continuar monitorando
@@ -1016,8 +1014,9 @@ export default function PublicQuiz() {
         const expectedScrollTop = currentSlide * slideHeight;
         
         // Bloquear qualquer movimento além da posição exata
-        if (currentScrollTop > expectedScrollTop) {
-          // Forçar diretamente sem animação
+        // Também impedir scroll para trás além da posição quando travado
+        if (currentScrollTop !== expectedScrollTop) {
+          // Forçar diretamente sem animação para precisão máxima
           container.scrollTop = expectedScrollTop;
         }
       }
@@ -1027,25 +1026,20 @@ export default function PublicQuiz() {
       // Só bloquear se realmente estiver no slide travado (usar currentSlide do estado)
       if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
         const expectedScrollTop = currentSlide * slideHeight;
-        const currentScrollTop = container.scrollTop;
         
-        // Verificar se está no slide travado (com tolerância de 10px para detectar que está no slide)
-        // Mas bloquear qualquer movimento para frente
-        if (Math.abs(currentScrollTop - expectedScrollTop) < 10) {
-          // Permitir scroll para cima (voltar), bloquear apenas para baixo (avançar)
-          if (e.deltaY > 0) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            // Forçar scrollTop de volta imediatamente
-            container.scrollTop = expectedScrollTop;
-            return false;
-          }
-        } else if (currentScrollTop > expectedScrollTop) {
-          // Se já passou da posição, reverter imediatamente
+        // Bloquear imediatamente qualquer scroll para baixo (avançar) sem tolerância
+        if (e.deltaY > 0) {
           e.preventDefault();
           e.stopImmediatePropagation();
+          // Forçar scrollTop de volta imediatamente
           container.scrollTop = expectedScrollTop;
           return false;
+        }
+        
+        // Também garantir que o scrollTop esteja exatamente na posição esperada
+        const currentScrollTop = container.scrollTop;
+        if (currentScrollTop !== expectedScrollTop) {
+          container.scrollTop = expectedScrollTop;
         }
       }
     };
@@ -1067,29 +1061,23 @@ export default function PublicQuiz() {
       // Só bloquear se realmente estiver no slide travado (usar currentSlide do estado)
       if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
         const expectedScrollTop = currentSlide * slideHeight;
-        const currentScrollTop = container.scrollTop;
+        const touchY = e.touches[0].clientY;
+        const deltaY = touchY - touchStartY;
         
-        // Verificar se está no slide travado (com tolerância de 10px para detectar que está no slide)
-        // Mas bloquear qualquer movimento para frente
-        if (Math.abs(currentScrollTop - expectedScrollTop) < 10) {
-          const touchY = e.touches[0].clientY;
-          const deltaY = touchY - touchStartY;
-          
-          // Se está tentando deslizar para baixo (deltaY positivo = swipe down = avançar), bloquear
-          if (deltaY > 10) {
-            isScrollingForward = true;
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            // Forçar scrollTop de volta imediatamente
-            container.scrollTop = expectedScrollTop;
-            return false;
-          }
-        } else if (currentScrollTop > expectedScrollTop) {
-          // Se já passou da posição, reverter imediatamente
+        // Bloquear imediatamente qualquer movimento para baixo (deltaY positivo = swipe down = avançar) sem tolerância
+        if (deltaY > 0) {
+          isScrollingForward = true;
           e.preventDefault();
           e.stopImmediatePropagation();
+          // Forçar scrollTop de volta imediatamente
           container.scrollTop = expectedScrollTop;
           return false;
+        }
+        
+        // Também garantir que o scrollTop esteja exatamente na posição esperada
+        const currentScrollTop = container.scrollTop;
+        if (currentScrollTop !== expectedScrollTop) {
+          container.scrollTop = expectedScrollTop;
         }
       }
     };
@@ -1109,12 +1097,9 @@ export default function PublicQuiz() {
         const currentScrollTop = container.scrollTop;
         
         // Bloquear qualquer movimento além da posição exata (sem tolerância)
-        if (currentScrollTop > expectedScrollTop) {
-          // Usar scrollTo com behavior: 'auto' para ser instantâneo
-          container.scrollTo({
-            top: expectedScrollTop,
-            behavior: 'auto'
-          });
+        // Usar atribuição direta para máxima precisão
+        if (currentScrollTop !== expectedScrollTop) {
+          container.scrollTop = expectedScrollTop;
         }
       }
     };
@@ -1606,7 +1591,11 @@ export default function PublicQuiz() {
           )}
 
           {/* Main Scrollable Container */}
-          <div ref={containerRef} className="reels-container-card hide-scrollbar">
+          <div 
+            ref={containerRef} 
+            className="reels-container-card hide-scrollbar"
+            style={{ overflow: isSlideLocked ? 'hidden' : undefined }}
+          >
         {slides.map((slide: any, index: number) => {
           // Usar slideConfig memoizado
           const slideConfigData = slideConfigs[index];
