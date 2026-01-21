@@ -200,6 +200,41 @@ export const ReelVideo = memo(function ReelVideo({
     };
   }, [autoplay, loop, hasUserInteracted, isYouTube, isSoundUnlocked, isActive, shouldShowSoundButton, onPlay, onPause]);
 
+  // Efeito específico: quando isActive muda para true, forçar play imediatamente
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || isYouTube || !isActive || !autoplay) return;
+
+    // Garantir muted antes de tentar tocar
+    if (!isSoundUnlocked) {
+      video.muted = true;
+      setIsMuted(true);
+    }
+
+    // Tentar tocar imediatamente quando slide fica ativo
+    const forcePlay = () => {
+      if (video && video.paused && isActive && autoplay) {
+        video.play().catch(() => {
+          // Autoplay pode falhar no iOS até haver interação
+        });
+      }
+    };
+
+    // Tentar imediatamente
+    forcePlay();
+
+    // Tentar após pequenos delays (vídeo pode ainda estar carregando)
+    const timeout1 = setTimeout(forcePlay, 50);
+    const timeout2 = setTimeout(forcePlay, 200);
+    const timeout3 = setTimeout(forcePlay, 500);
+
+    return () => {
+      clearTimeout(timeout1);
+      clearTimeout(timeout2);
+      clearTimeout(timeout3);
+    };
+  }, [isActive, autoplay, isSoundUnlocked, isYouTube]);
+
   // Garantir que vídeo sempre tente tocar quando estiver ativo (para iOS e outros casos)
   useEffect(() => {
     const video = videoRef.current;
@@ -471,7 +506,7 @@ export const ReelVideo = memo(function ReelVideo({
       <video
         ref={videoRef}
         src={videoSrc}
-        autoPlay={false} // Sempre false - controlamos via JavaScript para garantir muted correto
+        autoPlay={isActive && autoplay} // Usar autoplay nativo quando ativo (funciona melhor no iOS)
         loop={loop}
         muted={!isSoundUnlocked} // SEMPRE muted se som não estiver desbloqueado (necessário para autoplay)
         controls={controls}

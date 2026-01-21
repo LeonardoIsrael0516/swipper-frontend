@@ -173,7 +173,17 @@ export function ReelVideoBackground({
     video.addEventListener('loadeddata', handleLoadedData);
 
     if (isActive) {
-      // Tentar tocar imediatamente
+      // Garantir muted antes de tentar tocar (necessário para autoplay funcionar)
+      if (isBlurVersion) {
+        video.muted = true;
+        setIsMuted(true);
+      } else {
+        const shouldBeMuted = !isSoundUnlocked;
+        video.muted = shouldBeMuted;
+        setIsMuted(shouldBeMuted);
+      }
+      
+      // Tentar tocar imediatamente (o autoplay nativo também vai tentar)
       tryPlay();
       
       // Tentar novamente após delays (para casos onde o vídeo ainda está carregando)
@@ -325,7 +335,7 @@ export function ReelVideoBackground({
         ref={videoRef}
         key={src} // Key estável baseado na URL
         src={src}
-        autoPlay={false} // Sempre false - controlamos via JavaScript
+        autoPlay={isActive && autoplay} // Usar autoplay nativo quando ativo (funciona melhor no iOS)
         loop={loop}
         muted={isBlurVersion ? true : !isSoundUnlocked} // Versão blur sempre muted, versão nítida sempre muted se som não desbloqueado (necessário para autoplay)
         playsInline
