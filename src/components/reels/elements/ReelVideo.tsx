@@ -309,7 +309,7 @@ export const ReelVideo = memo(function ReelVideo({
       if (isSoundUnlocked) {
         video.muted = false;
         setIsMuted(false);
-        setShowVideoPlayButton(false);
+        // Botão desaparece automaticamente quando isSoundUnlocked muda
       } else {
         // Se som não está desbloqueado, tocar muted
         video.muted = true;
@@ -639,7 +639,6 @@ export const ReelVideo = memo(function ReelVideo({
       // Para YouTube, recarregar o iframe sem muted para habilitar som
       setHasUserInteracted(true);
       setIsMuted(false);
-      setShowYouTubePlayButton(false);
       
       const videoId = extractYouTubeId(youtubeUrl || '');
       if (videoId) {
@@ -671,31 +670,48 @@ export const ReelVideo = memo(function ReelVideo({
         onPlay?.();
       }
     } else {
-      // Para vídeo local (upload): desmutar e tocar com som
+      // Para vídeo local (upload): desmutar e reiniciar do início com som
       const video = videoRef.current;
-      if (video) {
+      if (video && isActive) {
         setHasUserInteracted(true);
         setIsMuted(false);
         video.muted = false;
         
-        // Esconder botão após clicar
-        setShowVideoPlayButton(false);
+        // Verificar diretamente o buffer no momento do desmutar
+        const hasInitialBuffer = video.buffered.length > 0 && 
+                                 video.buffered.start(0) === 0 && 
+                                 video.buffered.end(0) >= 1.0;
         
-        // NUNCA fazer seek - apenas desmutar e continuar tocando
-        // O seek causa re-buffer. Em vez disso, apenas desmutar
-        // Apenas garantir que está tocando
-        if (video.paused) {
+        // Se o buffer inicial está carregado, fazer seek imediato
+        if (hasInitialBuffer && !video.paused) {
+          // Buffer inicial está pronto, fazer seek sem causar re-buffer
+          video.currentTime = 0;
+        } else if (hasInitialBuffer) {
+          // Buffer está pronto mas vídeo está pausado - fazer seek e tocar
+          video.currentTime = 0;
           video.play()
             .then(() => {
               setIsPlaying(true);
               onPlay?.();
             })
-            .catch((error) => {
-              console.error('Error playing video:', error);
+            .catch(() => {
+              // Ignorar erro
             });
         } else {
-          setIsPlaying(true);
-          onPlay?.();
+          // Buffer inicial não está pronto - fazer seek mesmo assim
+          video.currentTime = 0;
+          
+          // Garantir que o vídeo está tocando
+          if (video.paused) {
+            video.play()
+              .then(() => {
+                setIsPlaying(true);
+                onPlay?.();
+              })
+              .catch(() => {
+                // Ignorar erro
+              });
+          }
         }
       }
     }
@@ -740,7 +756,7 @@ export const ReelVideo = memo(function ReelVideo({
             // NUNCA fazer seek - apenas desmutar e continuar tocando
             video.muted = false;
             setIsMuted(false);
-            setShowVideoPlayButton(false);
+            // Botão desaparece automaticamente quando isSoundUnlocked muda
             // Tentar tocar se estiver pausado
             if (video.paused) {
               video.play().catch(() => {
