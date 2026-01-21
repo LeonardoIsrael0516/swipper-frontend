@@ -34,7 +34,7 @@ export function ReelVideoBackground({
   const hlsRef = useRef<Hls | null>(null); // Referência para instância HLS
   
   // Contexto global de som
-  const { isSoundUnlocked, unlockSound } = useReelSound();
+  const { isSoundUnlocked } = useReelSound();
   
   // Verificar se é HLS
   const isHLS = src?.endsWith('.m3u8') || false;
@@ -42,9 +42,13 @@ export function ReelVideoBackground({
   // Lógica de muted:
   // - Se isSoundUnlocked === true: tentar tocar com som
   // - Se isSoundUnlocked === false: sempre muted (comportamento atual dos navegadores)
+  // CRÍTICO: Para iOS, o muted precisa estar no HTML desde o início
   const shouldStartMuted = !isSoundUnlocked && autoplay;
   const effectiveMuted = shouldStartMuted ? true : (isSoundUnlocked ? false : muted);
   const [isMuted, setIsMuted] = useState(effectiveMuted);
+  
+  // Estado para rastrear se o buffer inicial está carregado (para evitar re-buffer ao desmutar)
+  const [initialBufferLoaded, setInitialBufferLoaded] = useState(false);
   
   // Mostrar botão de som apenas se:
   // 1. Autoplay está ativo
@@ -88,7 +92,49 @@ export function ReelVideoBackground({
     // Verificar se o navegador suporta HLS nativamente (Safari)
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Safari suporta HLS nativamente
+      // CRÍTICO: Garantir muted ANTES de definir src (essencial para iOS autoplay)
+      // iOS requer muted no HTML antes de qualquer operação
+      if (isBlurVersion) {
+        video.muted = true;
+        video.setAttribute('muted', '');
+      } else {
+        const shouldBeMuted = !isSoundUnlocked;
+        video.muted = shouldBeMuted;
+        if (shouldBeMuted) {
+          video.setAttribute('muted', '');
+        } else {
+          video.removeAttribute('muted');
+        }
+      }
+      
+      // Garantir playsInline para iOS
+      video.setAttribute('playsinline', '');
+      video.playsInline = true;
+      
       video.src = src;
+      // Pré-carregar vídeo mesmo quando não está ativo
+      video.load();
+      
+      // Tentar tocar se estiver ativo e autoplay estiver habilitado
+      if (isActive && autoplay) {
+        // Aguardar que o vídeo esteja pronto antes de tentar tocar
+        const attemptPlay = () => {
+          if (video.readyState >= 2 && video.paused) {
+            video.play().catch(() => {
+              // Autoplay pode falhar no iOS até haver interação
+            });
+          }
+        };
+        
+        video.addEventListener('loadeddata', attemptPlay, { once: true });
+        video.addEventListener('canplay', attemptPlay, { once: true });
+        
+        // Tentar imediatamente se já estiver pronto
+        if (video.readyState >= 2) {
+          attemptPlay();
+        }
+      }
+      
       return;
     }
 
@@ -143,6 +189,8 @@ export function ReelVideoBackground({
       hlsRef.current = hls;
       hls.loadSource(secureUrl);
       hls.attachMedia(video);
+      // Forçar início do carregamento para pré-carregar vídeo
+      hls.startLoad();
 
       // Tratamento de erros
       hls.on(Hls.Events.ERROR, (event, data) => {
@@ -199,8 +247,14 @@ export function ReelVideoBackground({
         }
       });
 
-      // Tentar tocar quando HLS estiver pronto
+      // Garantir que o buffer inicial seja carregado
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Forçar carregamento do primeiro segmento para garantir buffer inicial
+        if (hls.levels && hls.levels.length > 0) {
+          hls.startLoad(0); // Começar do início para garantir buffer inicial
+        }
+        
+        // Tentar tocar quando HLS estiver pronto
         // Garantir muted antes de tentar tocar
         if (isBlurVersion) {
           video.muted = true;
@@ -212,7 +266,27 @@ export function ReelVideoBackground({
           }
         }
         
+        // Tentar tocar se estiver ativo, mas também pré-carregar se não estiver
         if (isActive && autoplay) {
+          video.play().catch(() => {
+            // Autoplay pode falhar
+          });
+        }
+      });
+      
+      // Também tentar tocar quando nível estiver carregado
+      hls.on(Hls.Events.LEVEL_LOADED, () => {
+        if (isActive && autoplay) {
+          // Garantir muted antes de tentar tocar
+          if (isBlurVersion) {
+            video.muted = true;
+            video.setAttribute('muted', '');
+          } else {
+            video.muted = !isSoundUnlocked;
+            if (!isSoundUnlocked) {
+              video.setAttribute('muted', '');
+            }
+          }
           video.play().catch(() => {
             // Autoplay pode falhar
           });
@@ -230,7 +304,21 @@ export function ReelVideoBackground({
       const secureUrl = src.startsWith('http://') 
         ? src.replace('http://', 'https://')
         : src;
+      
+      // CRÍTICO: Garantir muted ANTES de definir src
+      if (isBlurVersion) {
+        video.muted = true;
+        video.setAttribute('muted', '');
+      } else {
+        video.muted = !isSoundUnlocked;
+        if (!isSoundUnlocked) {
+          video.setAttribute('muted', '');
+        }
+      }
+      
       video.src = secureUrl;
+      // Pré-carregar vídeo mesmo quando não está ativo
+      video.load();
     }
   }, [src, isHLS, isActive, autoplay, isBlurVersion, isSoundUnlocked]);
 
@@ -258,17 +346,66 @@ export function ReelVideoBackground({
         });
       }
     };
+    
+    const handleLoadedData = () => {
+      // Quando dados carregarem, verificar se precisa tentar tocar
+      if (isActive && autoplay && video.paused) {
+        // Garantir muted antes de tentar tocar (iOS requer isso)
+        const shouldBeMuted = isBlurVersion ? true : !isSoundUnlocked;
+        video.muted = shouldBeMuted;
+        if (shouldBeMuted) {
+          video.setAttribute('muted', '');
+        }
+        
+        video.play().catch(() => {
+          // Autoplay pode falhar
+        });
+      }
+    };
 
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
+    video.addEventListener('loadeddata', handleLoadedData);
 
     return () => {
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('loadeddata', handleLoadedData);
     };
-  }, [loop, isActive]);
+  }, [loop, isActive, autoplay, isBlurVersion, isSoundUnlocked, isHLS]);
+
+  // Listener para rastrear quando o buffer inicial está carregado
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleProgress = () => {
+      // Verificar se o buffer inicial (primeiro segundo) está carregado
+      if (video.buffered.length > 0 && 
+          video.buffered.start(0) === 0 && 
+          video.buffered.end(0) >= 1.0) {
+        setInitialBufferLoaded(true);
+      }
+    };
+
+    const handleLoadedData = () => {
+      // Quando dados carregarem, verificar buffer
+      handleProgress();
+    };
+
+    video.addEventListener('progress', handleProgress);
+    video.addEventListener('loadeddata', handleLoadedData);
+    
+    // Verificar imediatamente se já está carregado
+    handleProgress();
+
+    return () => {
+      video.removeEventListener('progress', handleProgress);
+      video.removeEventListener('loadeddata', handleLoadedData);
+    };
+  }, [src, isHLS]);
 
   // Efeito para desmutar quando som é desbloqueado
   // IMPORTANTE: Versão blur sempre deve ficar muted (não tocar som)
@@ -285,21 +422,65 @@ export function ReelVideoBackground({
     
     // Para versão nítida: quando isSoundUnlocked muda, reiniciar do início com som
     if (isSoundUnlocked) {
-      // Reiniciar do início e desmutar
-      video.currentTime = 0;
+      // Desmutar primeiro (mantém vídeo tocando)
       video.muted = false;
       setIsMuted(false);
       
-      // Tocar novamente do início com som
-      video.play()
-        .then(() => {
-          setIsPlaying(true);
-        })
-        .catch((error) => {
-          console.error('Error playing video:', error);
-        });
+      // Reiniciar do início apenas se o buffer inicial já estiver carregado
+      // Isso evita re-buffer e tela branca
+      if (initialBufferLoaded) {
+        // Buffer inicial está pronto, fazer seek sem causar re-buffer
+        video.currentTime = 0;
+      } else {
+        // Se buffer não está pronto, aguardar um pouco antes de fazer seek
+        // Isso dá tempo para o buffer inicial carregar
+        const checkAndSeek = () => {
+          if (video.buffered.length > 0 && 
+              video.buffered.start(0) === 0 && 
+              video.buffered.end(0) >= 1.0) {
+            video.currentTime = 0;
+            setInitialBufferLoaded(true);
+          }
+        };
+        
+        // Verificar imediatamente
+        checkAndSeek();
+        
+        // Aguardar eventos de progresso
+        const handleProgress = () => {
+          checkAndSeek();
+        };
+        
+        video.addEventListener('progress', handleProgress, { once: true });
+        
+        // Timeout de segurança - após 2s, fazer seek mesmo assim
+        const timeout = setTimeout(() => {
+          if (video.readyState >= 2) {
+            video.currentTime = 0;
+            setInitialBufferLoaded(true);
+          }
+        }, 2000);
+        
+        return () => {
+          clearTimeout(timeout);
+          video.removeEventListener('progress', handleProgress);
+        };
+      }
+      
+      // Garantir que o vídeo está tocando
+      if (video.paused) {
+        video.play()
+          .then(() => {
+            setIsPlaying(true);
+          })
+          .catch((error) => {
+            // Ignorar erro
+          });
+      } else {
+        setIsPlaying(true);
+      }
     }
-  }, [isSoundUnlocked, isActive, isBlurVersion]);
+  }, [isSoundUnlocked, isActive, isBlurVersion, initialBufferLoaded]);
 
   // Consolidar lógica de play/pause baseada em isActive
   useEffect(() => {
@@ -400,7 +581,7 @@ export function ReelVideoBackground({
         video.removeEventListener('loadeddata', handleLoadedData);
       };
     } else {
-      // Vídeo não está ativo - apenas pausar (não resetar currentTime para evitar re-buffer)
+      // Vídeo não está ativo - PAUSAR para evitar que vídeos de outros slides toquem
       if (!video.paused) {
         video.pause();
         setIsPlaying(false);
@@ -416,7 +597,94 @@ export function ReelVideoBackground({
     }
   }, [isActive, autoplay, isBlurVersion, isSoundUnlocked]); // Incluir isSoundUnlocked para sincronizar muted inicial
 
+  // Efeito específico para HLS: tentar tocar quando slide ficar ativo
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isHLS) return;
+    
+    // Se não está ativo, pausar o vídeo para evitar que vídeos de outros slides toquem
+    if (!isActive || !autoplay) {
+      if (!video.paused) {
+        video.pause();
+        setIsPlaying(false);
+      }
+      return;
+    }
+
+    // CRÍTICO: Garantir muted ANTES de qualquer tentativa de play
+    if (isBlurVersion) {
+      video.muted = true;
+      video.setAttribute('muted', '');
+      setIsMuted(true);
+    } else {
+      video.muted = !isSoundUnlocked;
+      if (!isSoundUnlocked) {
+        video.setAttribute('muted', '');
+        setIsMuted(true);
+      }
+    }
+
+    // Função para tentar tocar o vídeo HLS
+    const attemptHLSPlay = async () => {
+      if (!video || !isActive || !autoplay) return;
+      
+      // Garantir muted novamente antes de cada tentativa
+      if (isBlurVersion) {
+        video.muted = true;
+        video.setAttribute('muted', '');
+        setIsMuted(true);
+      } else {
+        video.muted = !isSoundUnlocked;
+        if (!isSoundUnlocked) {
+          video.setAttribute('muted', '');
+          setIsMuted(true);
+        }
+      }
+      
+      // Tentar tocar se estiver pausado
+      if (video.paused) {
+        try {
+          await video.play();
+          setIsPlaying(true);
+        } catch (error) {
+          // Autoplay pode falhar
+        }
+      }
+    };
+
+    // Tentar imediatamente e após delays (HLS pode precisar de mais tempo)
+    attemptHLSPlay();
+    const timeout1 = setTimeout(attemptHLSPlay, 100);
+    const timeout2 = setTimeout(attemptHLSPlay, 300);
+    const timeout3 = setTimeout(attemptHLSPlay, 600);
+    const timeout4 = setTimeout(attemptHLSPlay, 1000);
+    const timeout5 = setTimeout(attemptHLSPlay, 1500);
+
+    // Adicionar listeners para quando HLS estiver pronto
+    const handleReady = () => {
+      attemptHLSPlay();
+    };
+
+    video.addEventListener('loadedmetadata', handleReady);
+    video.addEventListener('loadeddata', handleReady);
+    video.addEventListener('canplay', handleReady);
+    video.addEventListener('canplaythrough', handleReady);
+
+    return () => {
+      clearTimeout(timeout1);
+      clearTimeout(timeout2);
+      clearTimeout(timeout3);
+      clearTimeout(timeout4);
+      clearTimeout(timeout5);
+      video.removeEventListener('loadedmetadata', handleReady);
+      video.removeEventListener('loadeddata', handleReady);
+      video.removeEventListener('canplay', handleReady);
+      video.removeEventListener('canplaythrough', handleReady);
+    };
+  }, [isActive, autoplay, isSoundUnlocked, isBlurVersion, isHLS]);
+
   // Garantir que vídeo sempre tente tocar quando estiver ativo (para iOS e outros casos)
+  // Este useEffect é para vídeos não-HLS
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !isActive || !autoplay || isHLS) {
@@ -431,7 +699,7 @@ export function ReelVideoBackground({
     const attemptPlay = () => {
       if (!video || !isActive || !autoplay) return;
       
-      // CRÍTICO: Garantir muted ANTES de tentar tocar
+      // CRÍTICO: Garantir muted ANTES de tentar tocar (iOS requer isso)
       // Configurar muted corretamente
       if (isBlurVersion) {
         video.muted = true;
@@ -443,12 +711,18 @@ export function ReelVideoBackground({
         video.muted = shouldBeMuted;
         if (shouldBeMuted) {
           video.setAttribute('muted', '');
+        } else {
+          video.removeAttribute('muted');
         }
         setIsMuted(shouldBeMuted);
       }
       
-      // Tentar tocar se estiver pausado (mesmo que ainda não esteja totalmente carregado)
-      if (video.paused) {
+      // Garantir playsInline para iOS
+      video.setAttribute('playsinline', '');
+      video.playsInline = true;
+      
+      // Tentar tocar se estiver pausado e pronto para tocar
+      if (video.paused && video.readyState >= 2) {
         // Marcar que tentamos tocar apenas quando realmente tentamos
         setHasAttemptedPlay(true);
         
@@ -464,26 +738,40 @@ export function ReelVideoBackground({
               // O useEffect vai atualizar o botão baseado em isPlaying
             });
         }
-      } else {
-        // Se vídeo já está tocando, não marcar hasAttemptedPlay
+      } else if (!video.paused) {
+        // Se vídeo já está tocando
         if (video.readyState >= 2) {
           setIsPlaying(true);
+          setHasAttemptedPlay(false);
         }
       }
     };
 
-    // Tentar imediatamente
-    attemptPlay();
-
     // Adicionar listeners para quando vídeo estiver pronto
     const handleReady = () => {
-      attemptPlay();
+      // Aguardar que vídeo esteja pronto (readyState >= 2) antes de tentar tocar
+      if (video.readyState >= 2) {
+        attemptPlay();
+      }
     };
+
+    const handleCanPlay = () => {
+      handleReady();
+    };
+
+    const handleCanPlayThrough = () => {
+      handleReady();
+    };
+
+    // Se vídeo já está pronto, tentar imediatamente
+    if (video.readyState >= 2) {
+      attemptPlay();
+    }
 
     video.addEventListener('loadedmetadata', handleReady);
     video.addEventListener('loadeddata', handleReady);
-    video.addEventListener('canplay', handleReady);
-    video.addEventListener('canplaythrough', handleReady);
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('canplaythrough', handleCanPlayThrough);
 
     // No iOS, autoplay só funciona após interação do usuário
     // Adicionar listener global para qualquer interação na página
@@ -501,39 +789,15 @@ export function ReelVideoBackground({
     return () => {
       video.removeEventListener('loadedmetadata', handleReady);
       video.removeEventListener('loadeddata', handleReady);
-      video.removeEventListener('canplay', handleReady);
-      video.removeEventListener('canplaythrough', handleReady);
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('canplaythrough', handleCanPlayThrough);
       document.removeEventListener('touchstart', handleUserInteraction);
       document.removeEventListener('touchend', handleUserInteraction);
       document.removeEventListener('click', handleUserInteraction);
       window.removeEventListener('scroll', handleUserInteraction);
     };
-  }, [isActive, autoplay, isBlurVersion, isSoundUnlocked]);
+  }, [isActive, autoplay, isBlurVersion, isSoundUnlocked, isHLS]);
 
-  const handleUnlockSound = () => {
-    // Desbloquear som globalmente - isso afeta todos os vídeos
-    unlockSound();
-    
-    // Para vídeo de background: reiniciar do início com som
-    const video = videoRef.current;
-    if (video && isActive && !isBlurVersion) {
-      setHasUserInteracted(true);
-      
-      // Reiniciar do início
-      video.currentTime = 0;
-      video.muted = false;
-      setIsMuted(false);
-      
-      // Tocar do início com som
-      video.play()
-        .then(() => {
-          setIsPlaying(true);
-        })
-        .catch((error) => {
-          console.error('Error playing video:', error);
-        });
-    }
-  };
 
   // Classes para versão blur (fundo fixo no desktop)
   // No mobile, a versão blur não deve aparecer (hidden), apenas a versão nítida
@@ -556,7 +820,7 @@ export function ReelVideoBackground({
         src={isHLS ? undefined : src} // HLS é configurado via hls.js, não via src
         autoPlay={isActive && autoplay && !isHLS} // HLS autoplay é controlado via hls.js
         loop={loop}
-        muted={isBlurVersion ? true : !isSoundUnlocked} // Versão blur sempre muted, versão nítida sempre muted se som não desbloqueado (necessário para autoplay)
+        muted={isBlurVersion ? true : (isSoundUnlocked ? false : true)} // CRÍTICO: muted sempre true quando som não desbloqueado (necessário para autoplay no iOS)
         playsInline
         preload="auto"
         poster={thumbnailUrl}
@@ -572,6 +836,7 @@ export function ReelVideoBackground({
           left: 0,
           zIndex: 0,
           pointerEvents: 'none', // Vídeo não deve capturar cliques
+          backgroundColor: '#000', // Fundo preto enquanto carrega para evitar branco
         }}
       />
       

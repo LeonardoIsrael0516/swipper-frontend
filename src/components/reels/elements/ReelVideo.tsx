@@ -166,6 +166,16 @@ export const ReelVideo = memo(function ReelVideo({
 
       // Pré-carregar vídeo mesmo quando não está ativo para melhorar performance
       // O hls.js já começa a carregar quando attachMedia é chamado
+      // Forçar início do carregamento desde o início para garantir buffer inicial
+      hls.startLoad();
+      
+      // Garantir que o buffer inicial seja carregado
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Forçar carregamento do primeiro segmento para garantir buffer inicial
+        if (hls.levels && hls.levels.length > 0) {
+          hls.startLoad(0); // Começar do início
+        }
+      });
 
       // Tratamento de erros
       hls.on(Hls.Events.ERROR, (event, data) => {
@@ -310,11 +320,11 @@ export const ReelVideo = memo(function ReelVideo({
       if (video.paused) {
         // Marcar que tentamos tocar apenas quando realmente tentamos
         setHasAttemptedPlay(true);
-        
-        const playPromise = video.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
+      
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
               setIsPlaying(true);
             })
             .catch((error) => {
@@ -326,7 +336,7 @@ export const ReelVideo = memo(function ReelVideo({
         // Se vídeo já está tocando, não marcar hasAttemptedPlay
         // Isso evita mostrar botão quando vídeo já está tocando
         if (video.readyState >= 2) {
-          setIsPlaying(true);
+            setIsPlaying(true);
         }
       }
     };
@@ -379,27 +389,22 @@ export const ReelVideo = memo(function ReelVideo({
         video.removeEventListener('canplay', handleCanPlay);
         video.removeEventListener('loadeddata', handleLoadedData);
       };
-    } else if (!isActive) {
-      // Se vídeo não está ativo, apenas pausar (não resetar currentTime para evitar re-buffer)
+    } else {
+      // Vídeo não está ativo - PAUSAR para evitar que vídeos de outros slides toquem
       if (!video.paused) {
         video.pause();
         setIsPlaying(false);
       }
-      // Manter muted se não está ativo
-      video.muted = true;
-      setIsMuted(true);
-      // Resetar hasAttemptedPlay quando slide não está ativo
-      setHasAttemptedPlay(false);
+      
+      return () => {
+        video.removeEventListener('play', handlePlay);
+        video.removeEventListener('pause', handlePause);
+        video.removeEventListener('ended', handleEnded);
+        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        video.removeEventListener('canplay', handleCanPlay);
+        video.removeEventListener('loadeddata', handleLoadedData);
+      };
     }
-    
-    return () => {
-      video.removeEventListener('play', handlePlay);
-      video.removeEventListener('pause', handlePause);
-      video.removeEventListener('ended', handleEnded);
-      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      video.removeEventListener('canplay', handleCanPlay);
-      video.removeEventListener('loadeddata', handleLoadedData);
-    };
   }, [autoplay, loop, hasUserInteracted, isYouTube, isSoundUnlocked, isActive, onPlay, onPause]);
 
   // Efeito específico: quando isActive muda para true, forçar play imediatamente
@@ -557,7 +562,16 @@ export const ReelVideo = memo(function ReelVideo({
   // Efeito específico para HLS: tentar tocar quando slide ficar ativo
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || isYouTube || !isHLS || !isActive || !autoplay) return;
+    if (!video || isYouTube || !isHLS) return;
+    
+    // Se não está ativo, pausar o vídeo para evitar que vídeos de outros slides toquem
+    if (!isActive || !autoplay) {
+      if (!video.paused) {
+        video.pause();
+        setIsPlaying(false);
+      }
+      return;
+    }
 
     // CRÍTICO: Garantir muted ANTES de qualquer tentativa de play
     if (!isSoundUnlocked) {
@@ -664,21 +678,25 @@ export const ReelVideo = memo(function ReelVideo({
         setIsMuted(false);
         video.muted = false;
         
-        // Voltar para o início
-        video.currentTime = 0;
-        
         // Esconder botão após clicar
         setShowVideoPlayButton(false);
         
-        video.play()
-          .then(() => {
-            setIsPlaying(true);
-            onPlay?.();
-          })
-          .catch((error) => {
-            console.error('Error playing video:', error);
-            // Se falhar, não mostrar botão novamente (som já foi desbloqueado)
-          });
+        // NUNCA fazer seek - apenas desmutar e continuar tocando
+        // O seek causa re-buffer. Em vez disso, apenas desmutar
+        // Apenas garantir que está tocando
+        if (video.paused) {
+          video.play()
+            .then(() => {
+              setIsPlaying(true);
+              onPlay?.();
+            })
+            .catch((error) => {
+              console.error('Error playing video:', error);
+            });
+        } else {
+          setIsPlaying(true);
+          onPlay?.();
+        }
       }
     }
   };
@@ -687,47 +705,49 @@ export const ReelVideo = memo(function ReelVideo({
   useEffect(() => {
     if (isActive && isSoundUnlocked) {
       // Som foi desbloqueado e vídeo está ativo - reiniciar com som
-      if (isYouTube && iframeRef.current) {
-        // Para YouTube, recarregar iframe sem muted
-        const videoId = extractYouTubeId(youtubeUrl || '');
-        if (videoId) {
-          const params = new URLSearchParams();
-          params.append('autoplay', '1');
-          params.append('loop', loop ? '1' : '0');
-          if (loop) {
-            params.append('playlist', videoId);
+        if (isYouTube && iframeRef.current) {
+          // Para YouTube, recarregar iframe sem muted
+          const videoId = extractYouTubeId(youtubeUrl || '');
+          if (videoId) {
+            const params = new URLSearchParams();
+            params.append('autoplay', '1');
+            params.append('loop', loop ? '1' : '0');
+            if (loop) {
+              params.append('playlist', videoId);
+            }
+            params.append('modestbranding', '1');
+            params.append('playsinline', '1');
+            params.append('rel', '0');
+            params.append('iv_load_policy', '3');
+            params.append('fs', '0');
+            params.append('cc_load_policy', '0');
+            params.append('disablekb', '1');
+            params.append('enablejsapi', '1');
+            if (controls === false) {
+              params.append('controls', '0');
+            }
+            if (typeof window !== 'undefined') {
+              params.append('origin', window.location.origin);
+            }
+            // NÃO adicionar mute=1
+            const newUrl = `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
+            iframeRef.current.src = newUrl;
           }
-          params.append('modestbranding', '1');
-          params.append('playsinline', '1');
-          params.append('rel', '0');
-          params.append('iv_load_policy', '3');
-          params.append('fs', '0');
-          params.append('cc_load_policy', '0');
-          params.append('disablekb', '1');
-          params.append('enablejsapi', '1');
-          if (controls === false) {
-            params.append('controls', '0');
+        } else {
+        // Para vídeo local - apenas desmutar (NÃO fazer seek para evitar re-buffer)
+          const video = videoRef.current;
+          if (video) {
+            // NUNCA fazer seek - apenas desmutar e continuar tocando
+            video.muted = false;
+            setIsMuted(false);
+            setShowVideoPlayButton(false);
+            // Tentar tocar se estiver pausado
+            if (video.paused) {
+              video.play().catch(() => {
+                // Ignorar erro se autoplay falhar
+              });
+            }
           }
-          if (typeof window !== 'undefined') {
-            params.append('origin', window.location.origin);
-          }
-          // NÃO adicionar mute=1
-          const newUrl = `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
-          iframeRef.current.src = newUrl;
-        }
-      } else {
-        // Para vídeo local - reiniciar do início com som
-        const video = videoRef.current;
-        if (video) {
-          video.currentTime = 0; // Reiniciar do início quando desbloquear som
-          video.muted = false;
-          setIsMuted(false);
-          setShowVideoPlayButton(false);
-          // Tentar tocar
-          video.play().catch(() => {
-            // Ignorar erro se autoplay falhar
-          });
-        }
       }
     }
   }, [isSoundUnlocked, isActive, isYouTube, youtubeUrl, loop, controls]);
