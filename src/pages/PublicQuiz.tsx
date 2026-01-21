@@ -202,10 +202,10 @@ export default function PublicQuiz() {
       
       // Fallback: se a altura calculada for muito pequena ou inválida, usar viewport height
       // No mobile, 100dvh pode ser menor que o esperado devido a safe-area
-      // Usar uma altura base similar ao preview (844px) mas ajustada para o viewport real
+      // Usar uma altura base similar ao preview (663px) mas ajustada para o viewport real
       if (availableHeight <= 0 || availableHeight < 400) {
         // Calcular altura baseada no viewport, similar ao preview do builder
-        const viewportHeight = window.innerHeight || window.visualViewport?.height || 844;
+        const viewportHeight = window.innerHeight || window.visualViewport?.height || 663;
         // Descontar paddings e uma margem de segurança para safe-area
         const safeAreaBottom = typeof window !== 'undefined' && CSS.supports('padding: env(safe-area-inset-bottom)') 
           ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-bottom)')) || 0
@@ -1307,13 +1307,13 @@ export default function PublicQuiz() {
       <div className="fixed inset-0 bg-transparent reel-quiz-fullscreen">
         {/* Container centralizador para conteúdo */}
         <div className="flex items-center justify-center w-full h-full reel-quiz-wrapper">
-        {/* Card do quiz - 1080x1920 (vertical mobile) - apenas conteúdo */}
+        {/* Card do quiz - proporção 9:15.3 (vertical mobile) - apenas conteúdo */}
         <div 
           className="relative overflow-hidden reel-quiz-container"
           style={{ 
             width: '100%', 
             height: '100%',
-            aspectRatio: '1080/1920'
+            aspectRatio: '9/15.3'
           }}
         >
           {/* Progress Bar - apenas se habilitada */}

@@ -22,9 +22,9 @@ export const ReelContent = memo(function ReelContent({ children, type = 'mixed',
         O container que realmente precisa rolar deve ser o conteúdo específico da página (ex: PublicQuiz/PreviewQuiz),
         e não o wrapper genérico aqui. 
       */}
-      {/* No desktop, container com aspect ratio 9:20 (como mobile preview) */}
+      {/* No desktop, container com aspect ratio 9:15.3 (como mobile preview) */}
       <div 
-        className="w-full h-full min-h-0 max-w-[1920px] mx-auto flex flex-col justify-start reel-content-inner md:w-auto md:max-w-none md:aspect-[9/20] md:max-h-[90vh]"
+        className="w-full h-full min-h-0 max-w-[1920px] mx-auto flex flex-col justify-start reel-content-inner md:w-auto md:max-w-none md:aspect-[9/15.3] md:max-h-[90vh]"
         style={{
           position: 'relative',
           isolation: 'isolate', // Criar novo contexto de empilhamento

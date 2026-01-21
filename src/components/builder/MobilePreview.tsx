@@ -180,11 +180,11 @@ function SortableElement({ element, reelId }: { element: SlideElement; reelId?: 
 }
 
 // Constantes para cálculo de altura
-const PREVIEW_HEIGHT = 844; // altura total do preview
+const PREVIEW_HEIGHT = 816; // altura total do preview (480 * 15.3 / 9 = proporção 9:15.3)
 const PADDING_TOP = 16; // padding do container (p-4 = 16px)
 const PADDING_BOTTOM = 16; // padding do container
 const ELEMENT_MARGIN = 16; // margin-bottom entre elementos (mb-4 = 16px)
-const AVAILABLE_HEIGHT = PREVIEW_HEIGHT - PADDING_TOP - PADDING_BOTTOM; // ~812px
+const AVAILABLE_HEIGHT = PREVIEW_HEIGHT - PADDING_TOP - PADDING_BOTTOM; // ~784px
 
 export function MobilePreview() {
   const { selectedSlide, reel, setReel, setSelectedSlide, setHasUnsavedChanges, setLastSavedAt, setHasAvailableSpace } = useBuilder();
@@ -592,9 +592,11 @@ export function MobilePreview() {
             height: '100%',
             maxWidth: '100%',
             maxHeight: '100%',
+            aspectRatio: '9/15.3',
+            overflow: 'hidden',
           } : {
-            width: '390px',
-            height: '844px',
+            width: '480px',
+            height: '816px',
           }}
         >
           {/* Outer glow effect - apenas no desktop */}
@@ -630,7 +632,7 @@ export function MobilePreview() {
               )}
               
               {/* Conteúdo com z-index para ficar acima do vídeo */}
-              <div ref={contentRef} className={`relative z-10 w-full h-full flex flex-col ${!isMobile ? 'overflow-hidden' : ''}`}>
+              <div ref={contentRef} className={`relative z-10 w-full h-full flex flex-col overflow-hidden`}>
               {/* Indicador visual de espaço usado */}
               {spaceUsage > 90 && (
                 <div className="absolute top-0 left-0 right-0 h-1 bg-yellow-500/50 z-20" />
