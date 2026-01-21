@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, memo } from 'react';
 import { VolumeX } from 'lucide-react';
 import { extractYouTubeId, getYouTubeEmbedUrl } from '@/lib/youtube';
 import { useReelSound } from '@/contexts/ReelSoundContext';
+import Hls from 'hls.js';
 
 interface ReelVideoProps {
   src?: string;
@@ -46,6 +47,7 @@ export const ReelVideo = memo(function ReelVideo({
   // Determinar origem do vídeo
   const isYouTube = !!youtubeUrl;
   const videoSrc = isYouTube ? null : src;
+  const isHLS = videoSrc?.endsWith('.m3u8') || false;
   
   // Lógica de muted:
   // - Se isSoundUnlocked === true: tentar tocar com som
@@ -99,9 +101,55 @@ export const ReelVideo = memo(function ReelVideo({
     controls,
   }) : null;
 
+  // Configurar HLS se necessário
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || isYouTube) return;
+    if (!video || isYouTube || !isHLS || !videoSrc) return;
+
+    // Verificar se o navegador suporta HLS nativamente (Safari)
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari suporta HLS nativamente
+      video.src = videoSrc;
+      return;
+    }
+
+    // Para outros navegadores, usar hls.js
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        backBufferLength: 90,
+      });
+
+      hls.loadSource(videoSrc);
+      hls.attachMedia(video);
+
+      // Configurar muted para autoplay funcionar
+      if (!isSoundUnlocked) {
+        video.muted = true;
+      }
+
+      // Tentar tocar quando HLS estiver pronto
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (isActive && autoplay) {
+          video.play().catch(() => {
+            // Autoplay pode falhar
+          });
+        }
+      });
+
+      return () => {
+        hls.destroy();
+      };
+    } else {
+      // Fallback: tentar usar video.src mesmo sem suporte
+      video.src = videoSrc;
+    }
+  }, [videoSrc, isHLS, isYouTube, isActive, autoplay, isSoundUnlocked]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || isYouTube || isHLS) return; // Não processar vídeos HLS aqui (já processado acima)
 
     const handlePlay = () => {
       setIsPlaying(true);
@@ -558,8 +606,8 @@ export const ReelVideo = memo(function ReelVideo({
     >
       <video
         ref={videoRef}
-        src={videoSrc}
-        autoPlay={isActive && autoplay} // Usar autoplay nativo quando ativo (funciona melhor no iOS)
+        src={isHLS ? undefined : videoSrc} // HLS é configurado via hls.js, não via src
+        autoPlay={isActive && autoplay && !isHLS} // HLS autoplay é controlado via hls.js
         loop={loop}
         muted={!isSoundUnlocked} // SEMPRE muted se som não estiver desbloqueado (necessário para autoplay)
         controls={controls}

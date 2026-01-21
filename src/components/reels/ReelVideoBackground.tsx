@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { VolumeX } from 'lucide-react';
 import { useReelSound } from '@/contexts/ReelSoundContext';
+import Hls from 'hls.js';
 
 interface ReelVideoBackgroundProps {
   src: string;
@@ -30,9 +31,13 @@ export function ReelVideoBackground({
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const lastActiveStateRef = useRef<boolean>(false); // Rastrear último estado de isActive
   const [hasAttemptedPlay, setHasAttemptedPlay] = useState(false); // Rastrear se já tentamos tocar
+  const hlsRef = useRef<Hls | null>(null); // Referência para instância HLS
   
   // Contexto global de som
   const { isSoundUnlocked, unlockSound } = useReelSound();
+  
+  // Verificar se é HLS
+  const isHLS = src?.endsWith('.m3u8') || false;
   
   // Lógica de muted:
   // - Se isSoundUnlocked === true: tentar tocar com som
@@ -69,10 +74,68 @@ export function ReelVideoBackground({
     }
   }, [isSoundUnlocked, autoplay, isBlurVersion, isPlaying, hasAttemptedPlay]);
 
+  // Configurar HLS se necessário
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isHLS || !src) return;
+
+    // Limpar instância HLS anterior se existir
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    // Verificar se o navegador suporta HLS nativamente (Safari)
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari suporta HLS nativamente
+      video.src = src;
+      return;
+    }
+
+    // Para outros navegadores, usar hls.js
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        backBufferLength: 90,
+      });
+
+      hlsRef.current = hls;
+      hls.loadSource(src);
+      hls.attachMedia(video);
+
+      // Configurar muted para autoplay funcionar
+      if (isBlurVersion) {
+        video.muted = true;
+      } else {
+        video.muted = !isSoundUnlocked;
+      }
+
+      // Tentar tocar quando HLS estiver pronto
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (isActive && autoplay) {
+          video.play().catch(() => {
+            // Autoplay pode falhar
+          });
+        }
+      });
+
+      return () => {
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        }
+      };
+    } else {
+      // Fallback: tentar usar video.src mesmo sem suporte
+      video.src = src;
+    }
+  }, [src, isHLS, isActive, autoplay, isBlurVersion, isSoundUnlocked]);
+
   // Setup event listeners uma vez
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || isHLS) return; // Não processar vídeos HLS aqui (já processado acima)
 
     const handlePlay = () => {
       setIsPlaying(true);
@@ -139,7 +202,7 @@ export function ReelVideoBackground({
   // Consolidar lógica de play/pause baseada em isActive
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !autoplay) return;
+    if (!video || !autoplay || isHLS) return; // HLS é controlado pelo useEffect acima
 
     // Função para tentar tocar o vídeo
     const tryPlay = () => {
@@ -254,7 +317,7 @@ export function ReelVideoBackground({
   // Garantir que vídeo sempre tente tocar quando estiver ativo (para iOS e outros casos)
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !isActive || !autoplay) {
+    if (!video || !isActive || !autoplay || isHLS) {
       // Resetar hasAttemptedPlay quando não está ativo
       if (!isActive) {
         setHasAttemptedPlay(false);
@@ -382,8 +445,8 @@ export function ReelVideoBackground({
       <video
         ref={videoRef}
         key={src} // Key estável baseado na URL
-        src={src}
-        autoPlay={isActive && autoplay} // Usar autoplay nativo quando ativo (funciona melhor no iOS)
+        src={isHLS ? undefined : src} // HLS é configurado via hls.js, não via src
+        autoPlay={isActive && autoplay && !isHLS} // HLS autoplay é controlado via hls.js
         loop={loop}
         muted={isBlurVersion ? true : !isSoundUnlocked} // Versão blur sempre muted, versão nítida sempre muted se som não desbloqueado (necessário para autoplay)
         playsInline
