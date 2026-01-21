@@ -52,8 +52,21 @@ export function ReelVideoBackground({
   // Atualizar estado do botão baseado em se o vídeo está tocando
   useEffect(() => {
     // Só mostrar botão se autoplay está ativo, som não está desbloqueado, não é blur, vídeo não está tocando, E já tentamos tocar
-    const shouldShow = autoplay && !isSoundUnlocked && !isBlurVersion && !isPlaying && hasAttemptedPlay;
-    setShowSoundButton(shouldShow);
+    // Adicionar delay para dar tempo do vídeo começar a tocar antes de mostrar o botão
+    if (autoplay && !isSoundUnlocked && !isBlurVersion && !isPlaying && hasAttemptedPlay) {
+      const timeout = setTimeout(() => {
+        // Verificar novamente se ainda não está tocando após o delay
+        const video = videoRef.current;
+        if (video && video.paused && !isPlaying) {
+          setShowSoundButton(true);
+        }
+      }, 800); // Aguardar 800ms antes de mostrar o botão (dar mais tempo para vídeo começar)
+      
+      return () => clearTimeout(timeout);
+    } else {
+      // Se vídeo está tocando ou não tentamos tocar, esconder botão
+      setShowSoundButton(false);
+    }
   }, [isSoundUnlocked, autoplay, isBlurVersion, isPlaying, hasAttemptedPlay]);
 
   // Setup event listeners uma vez
@@ -132,9 +145,6 @@ export function ReelVideoBackground({
     const tryPlay = () => {
       if (!video || !isActive || !autoplay) return;
       
-      // Marcar que tentamos tocar
-      setHasAttemptedPlay(true);
-      
       // Configurar muted antes de tentar tocar
       if (isBlurVersion) {
         video.muted = true;
@@ -147,6 +157,9 @@ export function ReelVideoBackground({
       
       // Tentar tocar se estiver pausado
       if (video.paused) {
+        // Marcar que tentamos tocar apenas quando realmente tentamos
+        setHasAttemptedPlay(true);
+        
         const playPromise = video.play();
         if (playPromise !== undefined) {
           playPromise
@@ -157,6 +170,12 @@ export function ReelVideoBackground({
               // Autoplay bloqueado - o useEffect vai atualizar o botão baseado em isPlaying
               // Não fazer nada aqui, o estado isPlaying já vai estar false
             });
+        }
+      } else {
+        // Se vídeo já está tocando, não marcar hasAttemptedPlay
+        // Isso evita mostrar botão quando vídeo já está tocando
+        if (video.readyState >= 2) {
+          setIsPlaying(true);
         }
       }
     };
@@ -231,9 +250,6 @@ export function ReelVideoBackground({
       return;
     }
 
-    // Marcar que tentamos tocar
-    setHasAttemptedPlay(true);
-
     // Função para tentar tocar o vídeo (sempre muted se som não desbloqueado)
     const attemptPlay = () => {
       if (!video || !isActive || !autoplay) return;
@@ -251,6 +267,9 @@ export function ReelVideoBackground({
       
       // Tentar tocar se estiver pausado (mesmo que ainda não esteja totalmente carregado)
       if (video.paused) {
+        // Marcar que tentamos tocar apenas quando realmente tentamos
+        setHasAttemptedPlay(true);
+        
         const playPromise = video.play();
         if (playPromise !== undefined) {
           playPromise
@@ -261,6 +280,11 @@ export function ReelVideoBackground({
               // Autoplay bloqueado - isso é esperado no iOS até haver interação
               // O useEffect vai atualizar o botão baseado em isPlaying
             });
+        }
+      } else {
+        // Se vídeo já está tocando, não marcar hasAttemptedPlay
+        if (video.readyState >= 2) {
+          setIsPlaying(true);
         }
       }
     };
