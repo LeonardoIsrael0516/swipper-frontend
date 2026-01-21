@@ -200,31 +200,38 @@ export const ReelVideo = memo(function ReelVideo({
     };
   }, [autoplay, loop, hasUserInteracted, isYouTube, isSoundUnlocked, isActive, shouldShowSoundButton, onPlay, onPause]);
 
-  // Garantir que vídeo tente tocar quando estiver pronto (mesmo após montagem ou atualização)
-  // E também quando houver qualquer interação do usuário (necessário para iOS)
+  // Garantir que vídeo sempre tente tocar quando estiver ativo (para iOS e outros casos)
   useEffect(() => {
     const video = videoRef.current;
     if (!video || isYouTube || !isActive || !autoplay) return;
 
-    // Função para tentar tocar o vídeo
+    // Função para tentar tocar o vídeo (sempre muted se som não desbloqueado)
     const attemptPlay = () => {
       if (!video || !isActive || !autoplay) return;
       
-      // Garantir muted para autoplay funcionar
+      // SEMPRE garantir muted se som não está desbloqueado (necessário para autoplay)
       if (!isSoundUnlocked) {
         video.muted = true;
         setIsMuted(true);
       }
       
-      // Tentar tocar se estiver pausado
-      if (video.paused && video.readyState >= 2) {
-        video.play().catch(() => {
-          // Autoplay pode falhar, isso é esperado
-        });
+      // Tentar tocar se estiver pausado (mesmo que ainda não esteja totalmente carregado)
+      if (video.paused) {
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+            })
+            .catch(() => {
+              // Autoplay bloqueado - isso é esperado no iOS até haver interação
+              // Não fazer nada, o listener de interação vai tentar novamente
+            });
+        }
       }
     };
 
-    // Verificar imediatamente
+    // Tentar imediatamente
     attemptPlay();
 
     // Adicionar listeners para quando vídeo estiver pronto
@@ -232,9 +239,9 @@ export const ReelVideo = memo(function ReelVideo({
       attemptPlay();
     };
 
+    video.addEventListener('loadedmetadata', handleReady);
     video.addEventListener('loadeddata', handleReady);
     video.addEventListener('canplay', handleReady);
-    video.addEventListener('loadedmetadata', handleReady);
     video.addEventListener('canplaythrough', handleReady);
 
     // No iOS, autoplay só funciona após interação do usuário
@@ -243,16 +250,17 @@ export const ReelVideo = memo(function ReelVideo({
       attemptPlay();
     };
 
-    // Adicionar listeners para diferentes tipos de interação
-    document.addEventListener('touchstart', handleUserInteraction, { once: true, passive: true });
-    document.addEventListener('touchend', handleUserInteraction, { once: true, passive: true });
-    document.addEventListener('click', handleUserInteraction, { once: true, passive: true });
-    window.addEventListener('scroll', handleUserInteraction, { once: true, passive: true });
+    // Adicionar listeners para diferentes tipos de interação (uma vez apenas)
+    const options = { once: true, passive: true };
+    document.addEventListener('touchstart', handleUserInteraction, options);
+    document.addEventListener('touchend', handleUserInteraction, options);
+    document.addEventListener('click', handleUserInteraction, options);
+    window.addEventListener('scroll', handleUserInteraction, options);
 
     return () => {
+      video.removeEventListener('loadedmetadata', handleReady);
       video.removeEventListener('loadeddata', handleReady);
       video.removeEventListener('canplay', handleReady);
-      video.removeEventListener('loadedmetadata', handleReady);
       video.removeEventListener('canplaythrough', handleReady);
       document.removeEventListener('touchstart', handleUserInteraction);
       document.removeEventListener('touchend', handleUserInteraction);
@@ -465,7 +473,7 @@ export const ReelVideo = memo(function ReelVideo({
         src={videoSrc}
         autoPlay={false} // Sempre false - controlamos via JavaScript para garantir muted correto
         loop={loop}
-        muted={isMuted || !isSoundUnlocked} // Sempre muted se som não estiver desbloqueado
+        muted={!isSoundUnlocked} // SEMPRE muted se som não estiver desbloqueado (necessário para autoplay)
         controls={controls}
         playsInline
         preload="auto"
@@ -476,23 +484,8 @@ export const ReelVideo = memo(function ReelVideo({
           height: 'auto',
           maxWidth: '100%',
           maxHeight: '100%',
-          backgroundColor: '#000', // Fundo preto para quando vídeo não está carregado
         }}
         poster={thumbnailUrl}
-        onLoadedData={() => {
-          // Quando vídeo carregar, tentar tocar se estiver ativo
-          if (isActive && autoplay && videoRef.current) {
-            const video = videoRef.current;
-            if (!isSoundUnlocked) {
-              video.muted = true;
-            }
-            if (video.paused) {
-              video.play().catch(() => {
-                // Autoplay pode falhar
-              });
-            }
-          }
-        }}
       />
 
       {/* Botão de som minimalista no canto inferior direito */}

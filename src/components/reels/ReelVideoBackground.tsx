@@ -202,35 +202,47 @@ export function ReelVideoBackground({
     }
   }, [isActive, autoplay, isBlurVersion, isSoundUnlocked]); // Incluir isSoundUnlocked para sincronizar muted inicial
 
-  // Garantir que vídeo tente tocar quando estiver pronto (mesmo após montagem ou atualização)
-  // E também quando houver qualquer interação do usuário (necessário para iOS)
+  // Garantir que vídeo sempre tente tocar quando estiver ativo (para iOS e outros casos)
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !isActive || !autoplay) return;
 
-    // Função para tentar tocar o vídeo
+    // Função para tentar tocar o vídeo (sempre muted se som não desbloqueado)
     const attemptPlay = () => {
       if (!video || !isActive || !autoplay) return;
       
-      // Configurar muted
+      // Configurar muted corretamente
       if (isBlurVersion) {
         video.muted = true;
         setIsMuted(true);
       } else {
+        // Versão nítida: sempre muted se som não desbloqueado
         const shouldBeMuted = !isSoundUnlocked;
         video.muted = shouldBeMuted;
         setIsMuted(shouldBeMuted);
+        setShowSoundButton(shouldBeMuted);
       }
       
-      // Tentar tocar se estiver pausado e pronto
-      if (video.paused && video.readyState >= 2) {
-        video.play().catch(() => {
-          // Autoplay pode falhar, isso é esperado
-        });
+      // Tentar tocar se estiver pausado (mesmo que ainda não esteja totalmente carregado)
+      if (video.paused) {
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+            })
+            .catch(() => {
+              // Autoplay bloqueado - isso é esperado no iOS até haver interação
+              // Mostrar botão de som se necessário
+              if (!isBlurVersion && !isSoundUnlocked) {
+                setShowSoundButton(true);
+              }
+            });
+        }
       }
     };
 
-    // Verificar imediatamente
+    // Tentar imediatamente
     attemptPlay();
 
     // Adicionar listeners para quando vídeo estiver pronto
@@ -238,9 +250,9 @@ export function ReelVideoBackground({
       attemptPlay();
     };
 
+    video.addEventListener('loadedmetadata', handleReady);
     video.addEventListener('loadeddata', handleReady);
     video.addEventListener('canplay', handleReady);
-    video.addEventListener('loadedmetadata', handleReady);
     video.addEventListener('canplaythrough', handleReady);
 
     // No iOS, autoplay só funciona após interação do usuário
@@ -249,16 +261,17 @@ export function ReelVideoBackground({
       attemptPlay();
     };
 
-    // Adicionar listeners para diferentes tipos de interação
-    document.addEventListener('touchstart', handleUserInteraction, { once: true, passive: true });
-    document.addEventListener('touchend', handleUserInteraction, { once: true, passive: true });
-    document.addEventListener('click', handleUserInteraction, { once: true, passive: true });
-    window.addEventListener('scroll', handleUserInteraction, { once: true, passive: true });
+    // Adicionar listeners para diferentes tipos de interação (uma vez apenas)
+    const options = { once: true, passive: true };
+    document.addEventListener('touchstart', handleUserInteraction, options);
+    document.addEventListener('touchend', handleUserInteraction, options);
+    document.addEventListener('click', handleUserInteraction, options);
+    window.addEventListener('scroll', handleUserInteraction, options);
 
     return () => {
+      video.removeEventListener('loadedmetadata', handleReady);
       video.removeEventListener('loadeddata', handleReady);
       video.removeEventListener('canplay', handleReady);
-      video.removeEventListener('loadedmetadata', handleReady);
       video.removeEventListener('canplaythrough', handleReady);
       document.removeEventListener('touchstart', handleUserInteraction);
       document.removeEventListener('touchend', handleUserInteraction);
@@ -314,7 +327,7 @@ export function ReelVideoBackground({
         src={src}
         autoPlay={false} // Sempre false - controlamos via JavaScript
         loop={loop}
-        muted={isBlurVersion ? true : (!isSoundUnlocked ? true : isMuted)} // Versão blur sempre muted, versão nítida sempre muted se som não desbloqueado
+        muted={isBlurVersion ? true : !isSoundUnlocked} // Versão blur sempre muted, versão nítida sempre muted se som não desbloqueado (necessário para autoplay)
         playsInline
         preload="auto"
         poster={thumbnailUrl}
@@ -330,23 +343,6 @@ export function ReelVideoBackground({
           left: 0,
           zIndex: 0,
           pointerEvents: 'none', // Vídeo não deve capturar cliques
-          backgroundColor: '#000', // Fundo preto para quando vídeo não está carregado
-        }}
-        onLoadedData={() => {
-          // Quando vídeo carregar, tentar tocar se estiver ativo
-          if (isActive && autoplay && videoRef.current) {
-            const video = videoRef.current;
-            if (isBlurVersion) {
-              video.muted = true;
-            } else {
-              video.muted = !isSoundUnlocked;
-            }
-            if (video.paused) {
-              video.play().catch(() => {
-                // Autoplay pode falhar
-              });
-            }
-          }
         }}
       />
       
