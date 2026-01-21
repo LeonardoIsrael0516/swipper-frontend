@@ -99,6 +99,18 @@ export function ReelVideoBackground({
         ? src.replace('http://', 'https://')
         : src;
 
+      // CRÍTICO: Garantir muted ANTES de anexar mídia
+      // Isso é essencial para autoplay funcionar em todos os navegadores
+      if (isBlurVersion) {
+        video.muted = true;
+        video.setAttribute('muted', '');
+      } else {
+        video.muted = !isSoundUnlocked;
+        if (!isSoundUnlocked) {
+          video.setAttribute('muted', '');
+        }
+      }
+
       const hls = new Hls({
         enableWorker: false, // Desabilitar worker pode ajudar com problemas de SSL
         lowLatencyMode: false,
@@ -131,13 +143,6 @@ export function ReelVideoBackground({
       hlsRef.current = hls;
       hls.loadSource(secureUrl);
       hls.attachMedia(video);
-
-      // Configurar muted para autoplay funcionar
-      if (isBlurVersion) {
-        video.muted = true;
-      } else {
-        video.muted = !isSoundUnlocked;
-      }
 
       // Tratamento de erros
       hls.on(Hls.Events.ERROR, (event, data) => {
@@ -196,6 +201,17 @@ export function ReelVideoBackground({
 
       // Tentar tocar quando HLS estiver pronto
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Garantir muted antes de tentar tocar
+        if (isBlurVersion) {
+          video.muted = true;
+          video.setAttribute('muted', '');
+        } else {
+          video.muted = !isSoundUnlocked;
+          if (!isSoundUnlocked) {
+            video.setAttribute('muted', '');
+          }
+        }
+        
         if (isActive && autoplay) {
           video.play().catch(() => {
             // Autoplay pode falhar
@@ -415,14 +431,19 @@ export function ReelVideoBackground({
     const attemptPlay = () => {
       if (!video || !isActive || !autoplay) return;
       
+      // CRÍTICO: Garantir muted ANTES de tentar tocar
       // Configurar muted corretamente
       if (isBlurVersion) {
         video.muted = true;
+        video.setAttribute('muted', '');
         setIsMuted(true);
       } else {
         // Versão nítida: sempre muted se som não desbloqueado
         const shouldBeMuted = !isSoundUnlocked;
         video.muted = shouldBeMuted;
+        if (shouldBeMuted) {
+          video.setAttribute('muted', '');
+        }
         setIsMuted(shouldBeMuted);
       }
       
@@ -436,6 +457,7 @@ export function ReelVideoBackground({
           playPromise
             .then(() => {
               setIsPlaying(true);
+              setHasAttemptedPlay(false); // Resetar quando começar a tocar
             })
             .catch(() => {
               // Autoplay bloqueado - isso é esperado no iOS até haver interação

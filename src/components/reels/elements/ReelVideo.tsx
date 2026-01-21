@@ -153,13 +153,16 @@ export const ReelVideo = memo(function ReelVideo({
         levelLoadingTimeOut: 10000,
       });
 
-      hls.loadSource(secureUrl);
-      hls.attachMedia(video);
-
-      // Configurar muted para autoplay funcionar
+      // CRÍTICO: Garantir muted ANTES de anexar mídia
+      // Isso é essencial para autoplay funcionar em todos os navegadores
       if (!isSoundUnlocked) {
         video.muted = true;
+        video.setAttribute('muted', '');
+        setIsMuted(true);
       }
+
+      hls.loadSource(secureUrl);
+      hls.attachMedia(video);
 
       // Pré-carregar vídeo mesmo quando não está ativo para melhorar performance
       // O hls.js já começa a carregar quando attachMedia é chamado
@@ -247,9 +250,18 @@ export const ReelVideo = memo(function ReelVideo({
     }
   }, [videoSrc, isHLS, isYouTube]); // Remover isActive, autoplay, isSoundUnlocked das dependências para pré-carregar sempre
 
+  // Configurar vídeo não-HLS e garantir muted antes de qualquer play
   useEffect(() => {
     const video = videoRef.current;
     if (!video || isYouTube || isHLS) return; // Não processar vídeos HLS aqui (já processado acima)
+    
+    // CRÍTICO: Garantir muted ANTES de qualquer coisa
+    // Isso deve ser feito o mais cedo possível
+    if (!isSoundUnlocked) {
+      video.muted = true;
+      video.setAttribute('muted', '');
+      setIsMuted(true);
+    }
 
     const handlePlay = () => {
       setIsPlaying(true);
@@ -391,6 +403,7 @@ export const ReelVideo = memo(function ReelVideo({
   }, [autoplay, loop, hasUserInteracted, isYouTube, isSoundUnlocked, isActive, onPlay, onPause]);
 
   // Efeito específico: quando isActive muda para true, forçar play imediatamente
+  // Este é o efeito principal que garante autoplay mutado
   useEffect(() => {
     const video = videoRef.current;
     if (!video || isYouTube || !isActive || !autoplay) {
@@ -401,23 +414,41 @@ export const ReelVideo = memo(function ReelVideo({
       return;
     }
 
-    // Garantir muted antes de tentar tocar
+    // CRÍTICO: Garantir muted ANTES de qualquer tentativa de play
+    // Isso é essencial para autoplay funcionar em todos os navegadores
     if (!isSoundUnlocked) {
       video.muted = true;
       setIsMuted(true);
+      // Garantir que o atributo HTML também está definido
+      video.setAttribute('muted', '');
     }
 
-    // Tentar tocar imediatamente quando slide fica ativo
-    const forcePlay = () => {
-      if (video && video.paused && isActive && autoplay) {
-        // Marcar que tentamos tocar apenas quando realmente tentamos
+    // Função para tentar tocar o vídeo
+    const forcePlay = async () => {
+      if (!video || !isActive || !autoplay) return;
+      
+      // Garantir muted novamente antes de cada tentativa
+      if (!isSoundUnlocked) {
+        video.muted = true;
+        video.setAttribute('muted', '');
+      }
+      
+      if (video.paused) {
+        // Marcar que tentamos tocar
         setHasAttemptedPlay(true);
-        video.play().catch(() => {
+        
+        try {
+          await video.play();
+          setIsPlaying(true);
+          setHasAttemptedPlay(false); // Resetar quando começar a tocar
+        } catch (error) {
           // Autoplay pode falhar no iOS até haver interação
-        });
-      } else if (video && !video.paused) {
-        // Se vídeo já está tocando, não marcar hasAttemptedPlay
+          // Continuar tentando
+        }
+      } else {
+        // Se vídeo já está tocando
         setIsPlaying(true);
+        setHasAttemptedPlay(false);
       }
     };
 
@@ -428,11 +459,27 @@ export const ReelVideo = memo(function ReelVideo({
     const timeout1 = setTimeout(forcePlay, 50);
     const timeout2 = setTimeout(forcePlay, 200);
     const timeout3 = setTimeout(forcePlay, 500);
+    const timeout4 = setTimeout(forcePlay, 1000);
+
+    // Adicionar listeners para quando vídeo estiver pronto
+    const handleReady = () => {
+      forcePlay();
+    };
+
+    video.addEventListener('loadedmetadata', handleReady);
+    video.addEventListener('loadeddata', handleReady);
+    video.addEventListener('canplay', handleReady);
+    video.addEventListener('canplaythrough', handleReady);
 
     return () => {
       clearTimeout(timeout1);
       clearTimeout(timeout2);
       clearTimeout(timeout3);
+      clearTimeout(timeout4);
+      video.removeEventListener('loadedmetadata', handleReady);
+      video.removeEventListener('loadeddata', handleReady);
+      video.removeEventListener('canplay', handleReady);
+      video.removeEventListener('canplaythrough', handleReady);
     };
   }, [isActive, autoplay, isSoundUnlocked, isYouTube]);
 
@@ -512,21 +559,32 @@ export const ReelVideo = memo(function ReelVideo({
     const video = videoRef.current;
     if (!video || isYouTube || !isHLS || !isActive || !autoplay) return;
 
+    // CRÍTICO: Garantir muted ANTES de qualquer tentativa de play
+    if (!isSoundUnlocked) {
+      video.muted = true;
+      video.setAttribute('muted', '');
+      setIsMuted(true);
+    }
+
     // Função para tentar tocar o vídeo HLS
-    const attemptHLSPlay = () => {
+    const attemptHLSPlay = async () => {
       if (!video || !isActive || !autoplay) return;
       
-      // Garantir muted antes de tentar tocar
+      // Garantir muted novamente antes de cada tentativa
       if (!isSoundUnlocked) {
         video.muted = true;
+        video.setAttribute('muted', '');
         setIsMuted(true);
       }
       
       // Tentar tocar se estiver pausado
       if (video.paused) {
-        video.play().catch(() => {
+        try {
+          await video.play();
+          setIsPlaying(true);
+        } catch (error) {
           // Autoplay pode falhar
-        });
+        }
       }
     };
 
