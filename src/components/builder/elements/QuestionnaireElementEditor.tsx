@@ -359,6 +359,7 @@ export function QuestionnaireElementEditor({ element, tab }: QuestionnaireElemen
   const [lockSlide, setLockSlide] = useState(config.lockSlide ?? false);
   const [delayEnabled, setDelayEnabled] = useState(config.delayEnabled || false);
   const [delaySeconds, setDelaySeconds] = useState(config.delaySeconds || 0);
+  const [hideSocialElementsOnDelay, setHideSocialElementsOnDelay] = useState(config.hideSocialElementsOnDelay || false);
   const [endIcon, setEndIcon] = useState<'none' | 'arrow' | 'verified'>(() => {
     const icon = config.endIcon || 'none';
     // Se for 'check' ou 'custom', converter para 'none'
@@ -431,6 +432,7 @@ export function QuestionnaireElementEditor({ element, tab }: QuestionnaireElemen
     setLockSlide(normalizedConfig.lockSlide ?? false);
     setDelayEnabled(normalizedConfig.delayEnabled || false);
     setDelaySeconds(normalizedConfig.delaySeconds || 0);
+    setHideSocialElementsOnDelay(normalizedConfig.hideSocialElementsOnDelay || false);
     const icon = normalizedConfig.endIcon || 'none';
     setEndIcon((icon === 'check' || icon === 'custom') ? 'none' : (icon as 'none' | 'arrow' | 'verified'));
     setItemHeight(normalizedConfig.itemHeight ?? 80);
@@ -484,6 +486,7 @@ export function QuestionnaireElementEditor({ element, tab }: QuestionnaireElemen
         lockSlide,
         delayEnabled,
         delaySeconds,
+        hideSocialElementsOnDelay,
         endIcon,
         itemHeight,
         gap,
@@ -518,6 +521,7 @@ export function QuestionnaireElementEditor({ element, tab }: QuestionnaireElemen
     lockSlide,
     delayEnabled,
     delaySeconds,
+    hideSocialElementsOnDelay,
     endIcon,
     itemHeight,
     gap,
@@ -667,6 +671,22 @@ export function QuestionnaireElementEditor({ element, tab }: QuestionnaireElemen
                 className="mt-2"
               />
             </div>
+          )}
+
+          {delayEnabled && (
+            <div className="flex items-center justify-between">
+              <Label htmlFor="hideSocialElementsOnDelay">Ocultar Elementos Sociais</Label>
+              <Switch
+                id="hideSocialElementsOnDelay"
+                checked={hideSocialElementsOnDelay}
+                onCheckedChange={setHideSocialElementsOnDelay}
+              />
+            </div>
+          )}
+          {delayEnabled && hideSocialElementsOnDelay && (
+            <p className="text-xs text-muted-foreground">
+              Quando o questionário aparecer (após o delay), os elementos sociais (botões de ação, nome de usuário e legenda) serão ocultados automaticamente.
+            </p>
           )}
 
           <div className="border-t pt-4 space-y-3">

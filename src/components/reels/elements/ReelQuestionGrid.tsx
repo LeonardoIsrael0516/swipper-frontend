@@ -22,10 +22,11 @@ interface ReelQuestionGridProps {
   element: SlideElement;
   onNextSlide?: (elementId: string, itemId: string) => void;
   onSelectionChange?: (selectedIds: string[]) => void;
+  onVisibilityChange?: (elementId: string, isVisible: boolean, shouldHideSocial: boolean) => void;
   isActive?: boolean;
 }
 
-export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNextSlide, onSelectionChange, isActive = false }: ReelQuestionGridProps) {
+export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNextSlide, onSelectionChange, onVisibilityChange, isActive = false }: ReelQuestionGridProps) {
   const config = normalizeUiConfig(element.uiConfig);
   const {
     items = [],
@@ -33,6 +34,7 @@ export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNext
     lockSlide = false,
     delayEnabled = false,
     delaySeconds = 0,
+    hideSocialElementsOnDelay = false,
     gap = 12,
     borderRadius = 12,
     backgroundColor = '#ffffff',
@@ -79,15 +81,29 @@ export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNext
         setIsVisible(true);
         // Fade-in suave após tornar visível
         setTimeout(() => setOpacity(1), 50);
+        // Notificar quando ficar visível se deve ocultar elementos sociais
+        if (onVisibilityChange && hideSocialElementsOnDelay) {
+          onVisibilityChange(element.id, true, true);
+        }
       }, delaySeconds * 1000);
 
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        // Notificar quando ficar invisível
+        if (onVisibilityChange && hideSocialElementsOnDelay) {
+          onVisibilityChange(element.id, false, true);
+        }
+      };
     } else {
       // Sem delay ou delay desabilitado - mostrar imediatamente
       setIsVisible(true);
       setOpacity(1);
+      // Se não há delay, não deve ocultar elementos sociais
+      if (onVisibilityChange && hideSocialElementsOnDelay) {
+        onVisibilityChange(element.id, true, false);
+      }
     }
-  }, [delayEnabled, delaySeconds, isActive]);
+  }, [delayEnabled, delaySeconds, isActive, hideSocialElementsOnDelay, element.id, onVisibilityChange]);
 
   // Notificar mudanças de seleção
   // Usar useRef para evitar loop infinito quando onSelectionChange é recriado

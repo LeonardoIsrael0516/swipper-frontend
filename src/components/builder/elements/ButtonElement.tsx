@@ -21,11 +21,12 @@ const normalizeUiConfig = (uiConfig: any): any => {
 interface ButtonElementProps {
   element: SlideElement;
   onButtonClick?: (destination: 'next-slide' | 'url', url?: string, openInNewTab?: boolean) => void;
+  onVisibilityChange?: (elementId: string, isVisible: boolean, shouldHideSocial: boolean) => void;
   isInBuilder?: boolean;
   isActive?: boolean;
 }
 
-export const ButtonElement = memo(function ButtonElement({ element, onButtonClick, isInBuilder = false, isActive = false }: ButtonElementProps) {
+export const ButtonElement = memo(function ButtonElement({ element, onButtonClick, onVisibilityChange, isInBuilder = false, isActive = false }: ButtonElementProps) {
   const config = normalizeUiConfig(element.uiConfig);
   const {
     title = 'Clique aqui',
@@ -35,6 +36,7 @@ export const ButtonElement = memo(function ButtonElement({ element, onButtonClic
     delayEnabled = false,
     delaySeconds = 0,
     lockSlide = false,
+    hideSocialElementsOnDelay = false,
     columnMode = false,
     pulseAnimation = false,
     colorType = 'solid',
@@ -83,15 +85,29 @@ export const ButtonElement = memo(function ButtonElement({ element, onButtonClic
         setIsVisible(true);
         // Fade-in suave após tornar visível
         setTimeout(() => setOpacity(1), 50);
+        // Notificar quando ficar visível se deve ocultar elementos sociais
+        if (onVisibilityChange && hideSocialElementsOnDelay) {
+          onVisibilityChange(element.id, true, true);
+        }
       }, delaySeconds * 1000);
 
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        // Notificar quando ficar invisível
+        if (onVisibilityChange && hideSocialElementsOnDelay) {
+          onVisibilityChange(element.id, false, true);
+        }
+      };
     } else {
       // Sem delay ou delay desabilitado - mostrar imediatamente
       setIsVisible(true);
       setOpacity(1);
+      // Se não há delay, não deve ocultar elementos sociais
+      if (onVisibilityChange && hideSocialElementsOnDelay) {
+        onVisibilityChange(element.id, true, false);
+      }
     }
-  }, [delayEnabled, delaySeconds, isActive, isInBuilder]);
+  }, [delayEnabled, delaySeconds, isActive, isInBuilder, hideSocialElementsOnDelay, element.id, onVisibilityChange]);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();

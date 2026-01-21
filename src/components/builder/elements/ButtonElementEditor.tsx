@@ -38,6 +38,7 @@ export function ButtonElementEditor({ element, tab }: ButtonElementEditorProps) 
   const [openInNewTab, setOpenInNewTab] = useState(config.openInNewTab !== false); // default true
   const [delayEnabled, setDelayEnabled] = useState(config.delayEnabled || false);
   const [delaySeconds, setDelaySeconds] = useState(config.delaySeconds || 0);
+  const [hideSocialElementsOnDelay, setHideSocialElementsOnDelay] = useState(config.hideSocialElementsOnDelay || false);
   const [lockSlide, setLockSlide] = useState(config.lockSlide || false);
   const [columnMode, setColumnMode] = useState(config.columnMode || false);
   const [pulseAnimation, setPulseAnimation] = useState(config.pulseAnimation || false);
@@ -65,6 +66,7 @@ export function ButtonElementEditor({ element, tab }: ButtonElementEditorProps) 
     setOpenInNewTab(normalizedConfig.openInNewTab !== false);
     setDelayEnabled(normalizedConfig.delayEnabled || false);
     setDelaySeconds(normalizedConfig.delaySeconds || 0);
+    setHideSocialElementsOnDelay(normalizedConfig.hideSocialElementsOnDelay || false);
     setLockSlide(normalizedConfig.lockSlide || false);
     setColumnMode(normalizedConfig.columnMode || false);
     setPulseAnimation(normalizedConfig.pulseAnimation || false);
@@ -93,6 +95,7 @@ export function ButtonElementEditor({ element, tab }: ButtonElementEditorProps) 
         openInNewTab,
         delayEnabled,
         delaySeconds,
+        hideSocialElementsOnDelay,
         lockSlide,
         columnMode,
         pulseAnimation,
@@ -117,6 +120,7 @@ export function ButtonElementEditor({ element, tab }: ButtonElementEditorProps) 
     openInNewTab,
     delayEnabled,
     delaySeconds,
+    hideSocialElementsOnDelay,
     lockSlide,
     columnMode,
     pulseAnimation,
@@ -205,6 +209,22 @@ export function ButtonElementEditor({ element, tab }: ButtonElementEditorProps) 
               className="mt-2"
             />
           </div>
+        )}
+
+        {delayEnabled && (
+          <div className="flex items-center justify-between">
+            <Label htmlFor="hideSocialElementsOnDelay">Ocultar Elementos Sociais</Label>
+            <Switch
+              id="hideSocialElementsOnDelay"
+              checked={hideSocialElementsOnDelay}
+              onCheckedChange={setHideSocialElementsOnDelay}
+            />
+          </div>
+        )}
+        {delayEnabled && hideSocialElementsOnDelay && (
+          <p className="text-xs text-muted-foreground">
+            Quando o botão aparecer (após o delay), os elementos sociais (botões de ação, nome de usuário e legenda) serão ocultados automaticamente.
+          </p>
         )}
 
         <div className="flex items-center justify-between">

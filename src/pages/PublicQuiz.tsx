@@ -158,6 +158,7 @@ export default function PublicQuiz() {
   const [questionnaireResponses, setQuestionnaireResponses] = useState<Record<string, string[]>>({});
   const [progressStates, setProgressStates] = useState<Record<string, number>>({}); // elementId -> progress %
   const [formValidStates, setFormValidStates] = useState<Record<string, boolean>>({}); // elementId -> isValid
+  const [elementsHidingSocial, setElementsHidingSocial] = useState<Set<string>>(new Set()); // elementId -> should hide social
   const containerRef = useRef<HTMLDivElement>(null);
   const formRefs = useRef<Record<string, ReelFormRef>>({});
   const prevIsSlideLockedRef = useRef<boolean>(false);
@@ -1014,6 +1015,24 @@ export default function PublicQuiz() {
     return null;
   }, [reel]);
 
+  // Callback para elementos notificarem quando ficam visíveis e devem ocultar elementos sociais
+  const handleElementVisibilityChange = useCallback((elementId: string, isVisible: boolean, shouldHideSocial: boolean) => {
+    setElementsHidingSocial((prev) => {
+      const next = new Set(prev);
+      if (isVisible && shouldHideSocial) {
+        next.add(elementId);
+      } else {
+        next.delete(elementId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Limpar elementos ocultando sociais quando mudar de slide
+  useEffect(() => {
+    setElementsHidingSocial(new Set());
+  }, [currentSlide]);
+
   const handleButtonClick = useCallback((destination: 'next-slide' | 'url', url?: string, openInNewTab?: boolean, elementId?: string) => {
     // Registrar interação
     if (visitIdRef.current && reel && reel.slides?.[currentSlide]) {
@@ -1252,7 +1271,7 @@ export default function PublicQuiz() {
 
           {/* Elementos Sociais - renderizados uma vez para manter estado entre slides */}
           {reel?.socialConfig?.enabled && (
-            <div style={{ visibility: slides[currentSlide]?.hideSocialElements ? 'hidden' : 'visible' }}>
+            <div style={{ visibility: (slides[currentSlide]?.hideSocialElements || elementsHidingSocial.size > 0) ? 'hidden' : 'visible' }}>
               <ReelSocialActionsTikTok
                 reelId={reel.id}
                 socialConfig={reel.socialConfig}
@@ -1413,6 +1432,7 @@ export default function PublicQuiz() {
                                   key={element.id}
                                   element={elementWithConfig}
                                   onButtonClick={(dest, url, openInNewTab) => handleButtonClick(dest, url, openInNewTab, element.id)}
+                                  onVisibilityChange={handleElementVisibilityChange}
                                   isActive={index === currentSlide}
                                 />
                               );
@@ -1490,6 +1510,7 @@ export default function PublicQuiz() {
                                   element={elementWithConfig}
                                   isActive={index === currentSlide}
                                   onNextSlide={handleQuestionnaireNext}
+                                  onVisibilityChange={handleElementVisibilityChange}
                                   onSelectionChange={(selectedIds) => {
                                     // Registrar interação de questionário
                                     if (visitIdRef.current && reel && reel.slides?.[currentSlide]) {
@@ -1517,6 +1538,7 @@ export default function PublicQuiz() {
                                   element={elementWithConfig}
                                   isActive={index === currentSlide}
                                   onNextSlide={handleQuestionnaireNext}
+                                  onVisibilityChange={handleElementVisibilityChange}
                                   onSelectionChange={(selectedIds) => {
                                     // Atualizar estado de respostas do question grid
                                     // O useEffect que verifica lockSlide será acionado automaticamente
@@ -1635,7 +1657,7 @@ export default function PublicQuiz() {
               )}
 
               {/* Elementos Sociais - renderizados apenas no slide atual */}
-              {reel?.socialConfig?.enabled && index === currentSlide && !slide.hideSocialElements && (
+              {reel?.socialConfig?.enabled && index === currentSlide && !slide.hideSocialElements && elementsHidingSocial.size === 0 && (
                 <>
                   <ReelUsername socialConfig={reel.socialConfig} />
                   <ReelCaption slide={slide} socialConfig={reel.socialConfig} />

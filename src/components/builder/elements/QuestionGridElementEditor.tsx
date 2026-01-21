@@ -302,6 +302,7 @@ export function QuestionGridElementEditor({ element, tab }: QuestionGridElementE
   const [lockSlide, setLockSlide] = useState(config.lockSlide ?? false);
   const [delayEnabled, setDelayEnabled] = useState(config.delayEnabled || false);
   const [delaySeconds, setDelaySeconds] = useState(config.delaySeconds || 0);
+  const [hideSocialElementsOnDelay, setHideSocialElementsOnDelay] = useState(config.hideSocialElementsOnDelay || false);
   const [gap, setGap] = useState(config.gap ?? 12);
   const [borderRadius, setBorderRadius] = useState(config.borderRadius ?? 12);
   const [backgroundColor, setBackgroundColor] = useState(config.backgroundColor || '#ffffff');
@@ -342,6 +343,7 @@ export function QuestionGridElementEditor({ element, tab }: QuestionGridElementE
     setLockSlide(normalizedConfig.lockSlide ?? false);
     setDelayEnabled(normalizedConfig.delayEnabled || false);
     setDelaySeconds(normalizedConfig.delaySeconds || 0);
+    setHideSocialElementsOnDelay(normalizedConfig.hideSocialElementsOnDelay || false);
     setGap(normalizedConfig.gap ?? 12);
     setBorderRadius(normalizedConfig.borderRadius ?? 12);
     setBackgroundColor(normalizedConfig.backgroundColor || '#ffffff');
@@ -370,6 +372,7 @@ export function QuestionGridElementEditor({ element, tab }: QuestionGridElementE
         lockSlide,
         delayEnabled,
         delaySeconds,
+        hideSocialElementsOnDelay,
         gap,
         borderRadius,
         backgroundColor,
@@ -399,6 +402,7 @@ export function QuestionGridElementEditor({ element, tab }: QuestionGridElementE
     lockSlide,
     delayEnabled,
     delaySeconds,
+    hideSocialElementsOnDelay,
     gap,
     borderRadius,
     backgroundColor,
@@ -531,6 +535,22 @@ export function QuestionGridElementEditor({ element, tab }: QuestionGridElementE
                 className="mt-2"
               />
             </div>
+          )}
+
+          {delayEnabled && (
+            <div className="flex items-center justify-between">
+              <Label htmlFor="hideSocialElementsOnDelay">Ocultar Elementos Sociais</Label>
+              <Switch
+                id="hideSocialElementsOnDelay"
+                checked={hideSocialElementsOnDelay}
+                onCheckedChange={setHideSocialElementsOnDelay}
+              />
+            </div>
+          )}
+          {delayEnabled && hideSocialElementsOnDelay && (
+            <p className="text-xs text-muted-foreground">
+              Quando a grade aparecer (após o delay), os elementos sociais (botões de ação, nome de usuário e legenda) serão ocultados automaticamente.
+            </p>
           )}
         </div>
 

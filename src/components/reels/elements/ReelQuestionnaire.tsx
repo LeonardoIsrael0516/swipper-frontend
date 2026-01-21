@@ -22,6 +22,7 @@ interface ReelQuestionnaireProps {
   element: SlideElement;
   onNextSlide?: (elementId: string, itemId: string) => void;
   onSelectionChange?: (selectedIds: string[]) => void;
+  onVisibilityChange?: (elementId: string, isVisible: boolean, shouldHideSocial: boolean) => void;
   isActive?: boolean;
 }
 
@@ -173,7 +174,7 @@ const renderEndIcon = (endIcon: string, endIconCustom: string, isSelected: boole
   return null;
 };
 
-export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNextSlide, onSelectionChange, isActive = false }: ReelQuestionnaireProps) {
+export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNextSlide, onSelectionChange, onVisibilityChange, isActive = false }: ReelQuestionnaireProps) {
   const config = normalizeUiConfig(element.uiConfig);
   const {
     items = [],
@@ -182,6 +183,7 @@ export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNe
     lockSlide = false,
     delayEnabled = false,
     delaySeconds = 0,
+    hideSocialElementsOnDelay = false,
     endIcon = 'none',
     endIconCustom = '',
     itemHeight = 80,
@@ -227,15 +229,29 @@ export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNe
         setIsVisible(true);
         // Fade-in suave após tornar visível
         setTimeout(() => setOpacity(1), 50);
+        // Notificar quando ficar visível se deve ocultar elementos sociais
+        if (onVisibilityChange && hideSocialElementsOnDelay) {
+          onVisibilityChange(element.id, true, true);
+        }
       }, delaySeconds * 1000);
 
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        // Notificar quando ficar invisível
+        if (onVisibilityChange && hideSocialElementsOnDelay) {
+          onVisibilityChange(element.id, false, true);
+        }
+      };
     } else {
       // Sem delay ou delay desabilitado - mostrar imediatamente
       setIsVisible(true);
       setOpacity(1);
+      // Se não há delay, não deve ocultar elementos sociais
+      if (onVisibilityChange && hideSocialElementsOnDelay) {
+        onVisibilityChange(element.id, true, false);
+      }
     }
-  }, [delayEnabled, delaySeconds, isActive]);
+  }, [delayEnabled, delaySeconds, isActive, hideSocialElementsOnDelay, element.id, onVisibilityChange]);
 
   // Notificar mudanças de seleção
   // Usar useRef para evitar loop infinito quando onSelectionChange é recriado
