@@ -314,24 +314,23 @@ export default function PreviewQuiz() {
           }
         }
 
+        // Atualizar currentSlide primeiro para renderizar os elementos
+        setCurrentSlide(newSlide);
+
         // Se o novo slide tem lockSlide, garantir que o scroll vá completo até o final
         if (newSlide > currentSlide && hasLockSlide(newSlide)) {
           const expectedScrollTop = newSlide * slideHeight;
           // Se o scroll não está exatamente no final do slide (com margem de erro de 5px)
           if (Math.abs(scrollTop - expectedScrollTop) > 5) {
-            // Forçar scroll completo para o slide travado
+            // Forçar scroll completo para o slide travado (sem smooth para ser instantâneo)
             scrollTimeout = setTimeout(() => {
               container.scrollTo({
                 top: expectedScrollTop,
-                behavior: 'smooth',
+                behavior: 'auto', // Usar 'auto' para ser instantâneo
               });
             }, 10);
-            return;
           }
         }
-
-        // Scroll normal
-        setCurrentSlide(newSlide);
       }
     };
 
