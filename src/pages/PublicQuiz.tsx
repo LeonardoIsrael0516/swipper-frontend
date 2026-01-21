@@ -20,12 +20,10 @@ import { ButtonElement } from '@/components/builder/elements/ButtonElement';
 import { AccordionElement } from '@/components/builder/elements/AccordionElement';
 import { DashElement } from '@/components/builder/elements/DashElement';
 import { SpacingElement } from '@/components/builder/elements/SpacingElement';
-import { lazy, Suspense } from 'react';
-
-// Lazy load componentes pesados
-const CarouselElement = lazy(() => import('@/components/builder/elements/CarouselElement').then(module => ({ default: module.CarouselElement })));
-const ChartElement = lazy(() => import('@/components/builder/elements/ChartElement').then(module => ({ default: module.ChartElement })));
-const ScoreElement = lazy(() => import('@/components/builder/elements/ScoreElement').then(module => ({ default: module.ScoreElement })));
+import { Suspense } from 'react';
+import { CarouselElement } from '@/components/builder/elements/CarouselElement';
+import { ChartElement } from '@/components/builder/elements/ChartElement';
+import { ScoreElement } from '@/components/builder/elements/ScoreElement';
 import { ReelVideo } from '@/components/reels/elements/ReelVideo';
 import { ReelComparativo } from '@/components/reels/elements/ReelComparativo';
 import { ReelPrice } from '@/components/reels/elements/ReelPrice';
@@ -115,7 +113,6 @@ const groupElements = (elements: any[]): any[] => {
 // Reducer para estados relacionados a slides
 interface SlideState {
   currentSlide: number;
-  renderedSlides: number;
   isSlideLocked: boolean;
   showSwipeHint: boolean;
   showSwipeHintOnUnlock: boolean;
@@ -123,7 +120,6 @@ interface SlideState {
 
 type SlideAction =
   | { type: 'SET_CURRENT_SLIDE'; payload: number }
-  | { type: 'SET_RENDERED_SLIDES'; payload: number }
   | { type: 'SET_IS_LOCKED'; payload: boolean }
   | { type: 'SET_SHOW_SWIPE_HINT'; payload: boolean }
   | { type: 'SET_SHOW_SWIPE_HINT_UNLOCK'; payload: boolean };
@@ -132,8 +128,6 @@ const slideReducer = (state: SlideState, action: SlideAction): SlideState => {
   switch (action.type) {
     case 'SET_CURRENT_SLIDE':
       return { ...state, currentSlide: action.payload };
-    case 'SET_RENDERED_SLIDES':
-      return { ...state, renderedSlides: action.payload };
     case 'SET_IS_LOCKED':
       return { ...state, isSlideLocked: action.payload };
     case 'SET_SHOW_SWIPE_HINT':
@@ -147,7 +141,6 @@ const slideReducer = (state: SlideState, action: SlideAction): SlideState => {
 
 const initialSlideState: SlideState = {
   currentSlide: 0,
-  renderedSlides: 2,
   isSlideLocked: false,
   showSwipeHint: true,
   showSwipeHintOnUnlock: false,
@@ -160,7 +153,7 @@ export default function PublicQuiz() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const [slideState, dispatchSlide] = useReducer(slideReducer, initialSlideState);
-  const { currentSlide, renderedSlides, isSlideLocked, showSwipeHint, showSwipeHintOnUnlock } = slideState;
+  const { currentSlide, isSlideLocked, showSwipeHint, showSwipeHintOnUnlock } = slideState;
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [questionnaireResponses, setQuestionnaireResponses] = useState<Record<string, string[]>>({});
   const [progressStates, setProgressStates] = useState<Record<string, number>>({}); // elementId -> progress %
@@ -173,8 +166,6 @@ export default function PublicQuiz() {
   const prevSlideRef = useRef<number | null>(null);
   const { queueEvent } = useAnalyticsBatch();
   const slideRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const visibleSlidesRef = useRef<Set<number>>(new Set([0])); // Inicialmente apenas o primeiro slide
-  const [visibleSlideIndices, setVisibleSlideIndices] = useState<Set<number>>(new Set([0]));
 
   // Em reels NÃO deve existir scroll interno no slide.
   // Quando o conteúdo não cabe no viewport real do mobile (barras do navegador + safe-area),
@@ -678,82 +669,6 @@ export default function PublicQuiz() {
     }
   }, [reel, currentSlide]);
 
-  // Inicializar renderedSlides quando os slides carregarem
-  useEffect(() => {
-    if (reel?.slides && reel.slides.length > 0) {
-      dispatchSlide({ type: 'SET_RENDERED_SLIDES', payload: Math.min(2, reel.slides.length) });
-    }
-  }, [reel?.slides]);
-
-  // Virtualização: usar IntersectionObserver para detectar slides visíveis
-  useEffect(() => {
-    if (!reel?.slides || reel.slides.length === 0 || !containerRef.current) return;
-
-    // Detectar se é desktop (largura > 768px)
-    const isDesktop = window.innerWidth > 768;
-    
-    const observerOptions = {
-      root: containerRef.current,
-      // No desktop, usar rootMargin menor para evitar detecção de múltiplos slides
-      rootMargin: isDesktop ? '50% 0px' : '100% 0px',
-      // No desktop, usar threshold mais rigoroso para evitar falsos positivos
-      threshold: isDesktop ? [0.5, 1] : [0, 0.1, 0.5, 1],
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-      const newVisibleIndices = new Set<number>();
-      
-      entries.forEach((entry) => {
-        const slideElement = entry.target as HTMLElement;
-        const slideIndex = parseInt(slideElement.dataset.slideIndex || '0', 10);
-        
-        // No desktop, ser mais rigoroso: só considerar visível se intersectionRatio > 0.5
-        // No mobile, manter 0.1 para melhor detecção
-        const minRatio = isDesktop ? 0.5 : 0.1;
-        if (entry.isIntersecting && entry.intersectionRatio > minRatio) {
-          newVisibleIndices.add(slideIndex);
-          // Adicionar slides adjacentes ao buffer (menos no desktop)
-          const bufferSize = isDesktop ? 1 : 2;
-          for (let i = Math.max(0, slideIndex - bufferSize); i <= Math.min(reel.slides.length - 1, slideIndex + bufferSize); i++) {
-            newVisibleIndices.add(i);
-          }
-        }
-      });
-      
-      // Sempre incluir slide atual e buffer próximo
-      newVisibleIndices.add(currentSlide);
-      const bufferSize = isDesktop ? 1 : 2;
-      for (let i = Math.max(0, currentSlide - bufferSize); i <= Math.min(reel.slides.length - 1, currentSlide + bufferSize); i++) {
-        newVisibleIndices.add(i);
-      }
-      
-      if (newVisibleIndices.size > 0) {
-        setVisibleSlideIndices(newVisibleIndices);
-        visibleSlidesRef.current = newVisibleIndices;
-        
-        // Atualizar renderedSlides para incluir todos os visíveis + buffer
-        const maxVisible = Math.max(...Array.from(newVisibleIndices), 0);
-        const newRenderedSlides = Math.min(maxVisible + 3, reel.slides.length);
-        if (newRenderedSlides > renderedSlides) {
-          dispatchSlide({ type: 'SET_RENDERED_SLIDES', payload: newRenderedSlides });
-        }
-      }
-    }, observerOptions);
-
-    // Observar todos os slides renderizados após um pequeno delay para garantir que estão no DOM
-    const timeoutId = setTimeout(() => {
-      slideRefs.current.forEach((slideElement) => {
-        if (slideElement) {
-          observer.observe(slideElement);
-        }
-      });
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      observer.disconnect();
-    };
-  }, [reel?.slides, currentSlide, renderedSlides]);
 
   // Throttle scroll handler com requestAnimationFrame
   const scrollHandlerRef = useRef<number | null>(null);
@@ -1347,40 +1262,9 @@ export default function PublicQuiz() {
           {/* Main Scrollable Container */}
           <div ref={containerRef} className="reels-container-card hide-scrollbar">
         {slides.map((slide: any, index: number) => {
-          // Virtualização: renderizar apenas slides visíveis + buffer (até renderedSlides)
-          const shouldRender = index < renderedSlides;
-          // Renderizar se está visível, é o slide atual, ou está próximo (buffer)
-          // Removido index < 3 para evitar renderização forçada dos primeiros 3 slides
-          const isVisible = visibleSlideIndices.has(index) || 
-                           index === currentSlide || 
-                           Math.abs(index - currentSlide) <= 1;
-
           // Usar slideConfig memoizado
           const slideConfigData = slideConfigs[index];
           const slideConfig = slideConfigData?.config;
-
-          // Placeholder vazio para slides não renderizados (mantém a altura do scroll)
-          if (!shouldRender) {
-            return <div key={slide.id} className="reel-slide" style={{ height: '100%', width: '100%' }} data-slide-index={index} />;
-          }
-
-          // Se não está visível e não é o slide atual, renderizar placeholder leve
-          // Mas ainda manter no DOM para IntersectionObserver funcionar
-          if (!isVisible && index !== currentSlide) {
-            return (
-              <div 
-                key={slide.id} 
-                ref={(el) => {
-                  if (el) slideRefs.current.set(slide.id, el);
-                  else slideRefs.current.delete(slide.id);
-                }}
-                className="reel-slide" 
-                style={{ height: '100%', width: '100%', pointerEvents: 'none' }} 
-                data-slide-index={index}
-                aria-hidden="true"
-              />
-            );
-          }
 
           return (
             <ReelSlide 
@@ -1424,17 +1308,15 @@ export default function PublicQuiz() {
                       flexDirection: 'column',
                       width: '100%',
                       gap: '16px', // Espaçamento entre elementos
+                      visibility: index === currentSlide ? 'visible' : 'hidden',
+                      pointerEvents: index === currentSlide ? 'auto' : 'none',
                     }}
                   >
                   {(() => {
-                    // CRÍTICO: Só renderizar elementos se este for o slide atual
-                    // Isso previne elementos de outros slides aparecerem no desktop
-                    if (index !== currentSlide) {
-                      return null;
-                    }
-                    
+                    // Renderizar todos os elementos sempre, mas controlar visibilidade via CSS
                     // Usar elementos agrupados memoizados
                     const grouped = groupedElementsBySlide[slide.id] || [];
+                    const isActive = index === currentSlide;
                     
                     // Verificar se há background configurado (vídeo ou imagem)
                     const hasBackground = slide.backgroundConfig?.type === 'video' || 
@@ -1523,11 +1405,7 @@ export default function PublicQuiz() {
                             case 'TIMER':
                               return <TimerElement key={element.id} element={elementWithConfig} reelId={reel?.id} />;
                             case 'CAROUSEL':
-                              return (
-                                <Suspense key={element.id} fallback={<div className="w-full h-64 bg-white/10 rounded-lg animate-pulse" />}>
-                                  <CarouselElement element={elementWithConfig} />
-                                </Suspense>
-                              );
+                              return <CarouselElement key={element.id} element={elementWithConfig} />;
                             case 'BUTTON':
                               return (
                                 <ButtonElement
@@ -1705,17 +1583,9 @@ export default function PublicQuiz() {
                             case 'CIRCULAR':
                               return <DashElement key={element.id} element={elementWithConfig} isActive={index === currentSlide} />;
                             case 'CHART':
-                              return (
-                                <Suspense key={element.id} fallback={<div className="w-full h-64 bg-white/10 rounded-lg animate-pulse" />}>
-                                  <ChartElement element={elementWithConfig} />
-                                </Suspense>
-                              );
+                              return <ChartElement key={element.id} element={elementWithConfig} />;
                             case 'SCORE':
-                              return (
-                                <Suspense key={element.id} fallback={<div className="w-full h-64 bg-white/10 rounded-lg animate-pulse" />}>
-                                  <ScoreElement element={elementWithConfig} isActive={index === currentSlide} />
-                                </Suspense>
-                              );
+                              return <ScoreElement key={element.id} element={elementWithConfig} isActive={index === currentSlide} />;
                             case 'SPACING':
                               return <SpacingElement key={element.id} element={elementWithConfig} />;
                             default:

@@ -144,9 +144,8 @@ export const ReelVideo = memo(function ReelVideo({
           });
       }
     } else if (!isActive) {
-      // Se vídeo não está ativo, pausar e resetar
+      // Se vídeo não está ativo, apenas pausar (não resetar currentTime para evitar re-buffer)
       video.pause();
-      video.currentTime = 0;
       setIsPlaying(false);
       // Manter muted se não está ativo
       video.muted = true;
@@ -290,12 +289,11 @@ export const ReelVideo = memo(function ReelVideo({
         }
       }
     } else {
-      // Vídeo não está ativo - pausar
+      // Vídeo não está ativo - apenas pausar (não resetar currentTime para evitar re-buffer)
       if (!isYouTube) {
         const video = videoRef.current;
         if (video) {
           video.pause();
-          video.currentTime = 0;
           setIsPlaying(false);
           // Manter muted se não está ativo
           video.muted = true;
@@ -403,6 +401,7 @@ export const ReelVideo = memo(function ReelVideo({
         muted={isMuted}
         controls={controls}
         playsInline
+        preload="auto"
         className="w-full h-full object-contain"
         style={{
           position: 'relative',

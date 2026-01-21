@@ -169,7 +169,7 @@ export function ReelVideoBackground({
         }
       }
     } else {
-      // Vídeo não está ativo - apenas pausar (não resetar currentTime para evitar piscar)
+      // Vídeo não está ativo - apenas pausar (não resetar currentTime para evitar re-buffer)
       if (!video.paused) {
         video.pause();
         setIsPlaying(false);
