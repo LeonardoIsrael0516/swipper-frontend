@@ -320,12 +320,12 @@ export default function PreviewQuiz() {
       clearTimeout(scrollTimeout);
 
       if (newSlide !== currentSlide && newSlide < reel.slides.length && newSlide >= 0) {
-        // Verificar se o próximo slide está travado ANTES de mudar
-        const nextSlideIsLocked = checkIfSlideIsLocked(newSlide);
+        // Verificar se o slide atual está travado e o usuário está tentando sair
+        const currentSlideIsLocked = checkIfSlideIsLocked(currentSlide);
         
-        // Se está tentando ir para frente e o próximo slide está travado, bloquear
-        if (newSlide > currentSlide && nextSlideIsLocked) {
-          // Reverter scroll para o slide atual
+        // Se o slide atual está travado e o usuário está tentando ir para frente, bloquear
+        if (currentSlideIsLocked && newSlide > currentSlide) {
+          // Reverter scroll para o slide atual (não permitir sair do slide travado)
           scrollTimeout = setTimeout(() => {
             scrollToSlide(currentSlide);
           }, 50);
@@ -342,9 +342,8 @@ export default function PreviewQuiz() {
             const targetSlideId = logicNext.defaultNext;
             const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
             if (targetIndex >= 0 && targetIndex !== newSlide) {
-              // Verificar se o slide conectado também está travado
-              const targetSlideIsLocked = checkIfSlideIsLocked(targetIndex);
-              if (targetSlideIsLocked) {
+              // Verificar se o slide atual está travado antes de permitir redirecionamento
+              if (currentSlideIsLocked) {
                 // Reverter scroll para o slide atual
                 scrollTimeout = setTimeout(() => {
                   scrollToSlide(currentSlide);
@@ -361,7 +360,7 @@ export default function PreviewQuiz() {
           }
         }
 
-        // Scroll normal - se está voltando, sempre permitir (slide anterior não pode estar travado)
+        // Scroll normal - permitir mudança de slide
         setCurrentSlide(newSlide);
       }
     };
@@ -463,49 +462,68 @@ export default function PreviewQuiz() {
     // Não resetar prevIsSlideLockedRef aqui, deixar que o useEffect acima faça isso
   }, [currentSlide]);
 
-  // Bloquear scroll quando slide está travado
+  // Bloquear scroll quando slide está travado (apenas para frente)
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const preventWheel = (e: WheelEvent) => {
       if (isSlideLocked) {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
+        // Permitir scroll para cima (voltar), bloquear apenas para baixo (avançar)
+        if (e.deltaY > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
       }
+    };
+
+    // Para touch, precisamos verificar a direção do swipe
+    let touchStartY = 0;
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY;
     };
 
     const preventTouch = (e: TouchEvent) => {
       if (isSlideLocked) {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
+        const touchY = e.touches[0].clientY;
+        const deltaY = touchY - touchStartY;
+        
+        // Se está tentando deslizar para baixo (deltaY positivo = swipe down = avançar), bloquear
+        // Se está tentando deslizar para cima (deltaY negativo = swipe up = voltar), permitir
+        if (deltaY > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
       }
     };
 
     const preventKeys = (e: KeyboardEvent) => {
-      if (isSlideLocked && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'PageDown' || e.key === 'PageUp' || e.key === ' ')) {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
+      if (isSlideLocked) {
+        // Bloquear apenas teclas que avançam para frente
+        if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+        // Permitir ArrowUp e PageUp para voltar
       }
     };
 
     if (isSlideLocked) {
       container.addEventListener('wheel', preventWheel, { passive: false });
+      container.addEventListener('touchstart', handleTouchStart, { passive: true });
       container.addEventListener('touchmove', preventTouch, { passive: false });
       document.addEventListener('keydown', preventKeys);
-      container.style.overflow = 'hidden';
-    } else {
-      container.style.overflow = 'auto';
+      // Não alterar overflow - deixar scroll funcionar para voltar
     }
 
     return () => {
       container.removeEventListener('wheel', preventWheel);
+      container.removeEventListener('touchstart', handleTouchStart);
       container.removeEventListener('touchmove', preventTouch);
       document.removeEventListener('keydown', preventKeys);
-      container.style.overflow = 'auto';
     };
   }, [isSlideLocked]);
 
