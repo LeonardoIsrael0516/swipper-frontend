@@ -180,11 +180,11 @@ function SortableElement({ element, reelId }: { element: SlideElement; reelId?: 
 }
 
 // Constantes para cálculo de altura
-const PREVIEW_HEIGHT = 816; // altura total do preview (480 * 15.3 / 9 = proporção 9:15.3)
+const PREVIEW_HEIGHT = 819; // altura total do preview (480 * 15.35 / 9 = proporção 9:15.35)
 const PADDING_TOP = 16; // padding do container (p-4 = 16px)
 const PADDING_BOTTOM = 16; // padding do container
 const ELEMENT_MARGIN = 16; // margin-bottom entre elementos (mb-4 = 16px)
-const AVAILABLE_HEIGHT = PREVIEW_HEIGHT - PADDING_TOP - PADDING_BOTTOM; // ~784px
+const AVAILABLE_HEIGHT = PREVIEW_HEIGHT - PADDING_TOP - PADDING_BOTTOM; // ~787px
 
 export function MobilePreview() {
   const { selectedSlide, reel, setReel, setSelectedSlide, setHasUnsavedChanges, setLastSavedAt, setHasAvailableSpace } = useBuilder();
@@ -592,11 +592,11 @@ export function MobilePreview() {
             height: '100%',
             maxWidth: '100%',
             maxHeight: '100%',
-            aspectRatio: '9/15.3',
+            aspectRatio: '9/15.35',
             overflow: 'hidden',
           } : {
             width: '480px',
-            height: '816px',
+            height: '819px',
           }}
         >
           {/* Outer glow effect - apenas no desktop */}
@@ -632,7 +632,7 @@ export function MobilePreview() {
               )}
               
               {/* Conteúdo com z-index para ficar acima do vídeo */}
-              <div ref={contentRef} className={`relative z-10 w-full h-full flex flex-col overflow-hidden`}>
+              <div ref={contentRef} className={`relative z-10 w-full h-full flex flex-col overflow-hidden`} style={{ maxHeight: '100%', maxWidth: '100%' }}>
               {/* Indicador visual de espaço usado */}
               {spaceUsage > 90 && (
                 <div className="absolute top-0 left-0 right-0 h-1 bg-yellow-500/50 z-20" />
@@ -648,7 +648,7 @@ export function MobilePreview() {
                 onDragEnd={handleDragEnd}
               >
                 <SortableContext items={sortedElements.map((el) => el.id)} strategy={verticalListSortingStrategy}>
-                  <div ref={elementsContainerRef} className="p-4 pb-20" style={{ maxHeight: `${availableHeight}px`, overflow: 'hidden' }}>
+                  <div ref={elementsContainerRef} className="p-4 pb-20" style={{ maxHeight: `${availableHeight}px`, overflow: 'hidden', width: '100%' }}>
                         {sortedElements.length > 0 ? (() => {
                           // Agrupar elementos (botões coluna consecutivos)
                           const grouped = groupElements(sortedElements);

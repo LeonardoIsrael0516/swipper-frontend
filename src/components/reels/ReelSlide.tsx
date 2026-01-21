@@ -260,7 +260,7 @@ const ReelSlideComponent = forwardRef<HTMLDivElement, ReelSlideProps>(
   
   // Determinar se deve usar background fixo
   // No desktop: apenas cores e gradientes ficam fullscreen
-  // Imagens e vídeos ficam no container com aspect ratio 9:15.3
+  // Imagens e vídeos ficam no container com aspect ratio 9:15.35
   const useFixedBg = useMemo(() => {
     if (!isActive) return false;
     // Apenas cores e gradientes usam background fixo fullscreen no desktop
@@ -300,7 +300,7 @@ const ReelSlideComponent = forwardRef<HTMLDivElement, ReelSlideProps>(
     <>
       {/* Background fixo para desktop - ocupa tela inteira */}
       {/* Apenas cores e gradientes ficam fullscreen no desktop */}
-      {/* Imagens e vídeos ficam dentro do container com aspect ratio 9:15.3 */}
+      {/* Imagens e vídeos ficam dentro do container com aspect ratio 9:15.35 */}
       {useFixedBg && (
         <div
           className="reel-slide-desktop-bg hidden md:block"

@@ -239,16 +239,16 @@
       max-width: 100vw !important;
       height: auto !important;
       max-height: 100vh !important;
-      aspect-ratio: 9/15.3 !important;
+      aspect-ratio: 9/15.35 !important;
     }
     
     /* Se a altura for o limitador, ajustar pela altura */
-    @media (min-aspect-ratio: 9/15.3) {
+    @media (min-aspect-ratio: 9/15.35) {
       .reel-quiz-container {
         height: 100vh !important;
         max-height: 100vh !important;
         width: auto !important;
-        max-width: calc(100vh * 9 / 15.3) !important;
+        max-width: calc(100vh * 9 / 15.35) !important;
       }
     }
     
@@ -410,22 +410,22 @@
       height: 100%;
     }
     
-    /* Container de conteúdo (ReelContent) com aspect ratio 9:15.3 no desktop */
+    /* Container de conteúdo (ReelContent) com aspect ratio 9:15.35 no desktop */
     .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper .reel-content-inner {
       width: auto !important;
       max-width: none !important;
-      aspect-ratio: 9/15.3 !important;
+      aspect-ratio: 9/15.35 !important;
       max-height: 90vh !important;
-      max-width: calc(90vh * 9 / 15.3) !important;
+      max-width: calc(90vh * 9 / 15.35) !important;
     }
     
     /* Se a altura for o limitador, ajustar pela altura */
-    @media (min-aspect-ratio: 9/15.3) {
+    @media (min-aspect-ratio: 9/15.35) {
       .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper .reel-content-inner {
         height: 90vh !important;
         max-height: 90vh !important;
         width: auto !important;
-        max-width: calc(90vh * 9 / 15.3) !important;
+        max-width: calc(90vh * 9 / 15.35) !important;
       }
     }
   }

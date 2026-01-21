@@ -1307,13 +1307,13 @@ export default function PublicQuiz() {
       <div className="fixed inset-0 bg-transparent reel-quiz-fullscreen">
         {/* Container centralizador para conteúdo */}
         <div className="flex items-center justify-center w-full h-full reel-quiz-wrapper">
-        {/* Card do quiz - proporção 9:15.3 (vertical mobile) - apenas conteúdo */}
+        {/* Card do quiz - proporção 9:15.35 (vertical mobile) - apenas conteúdo */}
         <div 
           className="relative overflow-hidden reel-quiz-container"
           style={{ 
             width: '100%', 
             height: '100%',
-            aspectRatio: '9/15.3'
+            aspectRatio: '9/15.35'
           }}
         >
           {/* Progress Bar - apenas se habilitada */}
