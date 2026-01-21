@@ -1100,6 +1100,68 @@ export default function PublicQuiz() {
     }
   }, [submitCompleteForms, reel, currentSlide, getNextSlideIndex, scrollToSlide, queueEvent]);
 
+  // Handler para ações de item (slide ou URL)
+  const handleItemAction = useCallback((itemId: string, actionType: 'none' | 'slide' | 'url', slideId?: string, url?: string, openInNewTab?: boolean) => {
+    if (!reel?.slides || currentSlide >= reel.slides.length) return;
+    
+    const currentSlideData = reel.slides[currentSlide];
+    
+    // Encontrar o elemento do questionário/question grid atual
+    const questionnaireElement = currentSlideData.elements?.find((el: any) => {
+      const config = normalizeUiConfig(el.uiConfig);
+      const items = config.items || [];
+      return items.some((item: any) => item.id === itemId);
+    });
+    
+    if (!questionnaireElement) return;
+    
+    const elementId = questionnaireElement.id;
+    
+    // PRIORIDADE 1: Verificar conexão no fluxo primeiro
+    const nextIndex = getNextSlideIndex(currentSlideData.id, elementId, undefined, itemId);
+    
+    if (nextIndex !== null) {
+      // Há conexão no fluxo - usar ela (ignorar ação do item)
+      dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
+      scrollToSlide(nextIndex);
+      return;
+    }
+    
+    // PRIORIDADE 2: Usar ação configurada do item
+    dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
+    
+    if (actionType === 'slide' && slideId) {
+      // Navegar para slide específico
+      const targetSlideIndex = reel.slides.findIndex((s: any) => s.id === slideId);
+      if (targetSlideIndex !== -1) {
+        scrollToSlide(targetSlideIndex);
+      }
+    } else if (actionType === 'url' && url) {
+      // Abrir URL
+      let finalUrl = url.trim();
+      if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+        finalUrl = `https://${finalUrl}`;
+      }
+      
+      try {
+        const urlObj = new URL(finalUrl);
+        if (openInNewTab !== false) {
+          window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+        } else {
+          window.location.href = urlObj.href;
+        }
+      } catch (error) {
+        console.error('URL inválida:', error);
+        if (openInNewTab !== false) {
+          window.open(finalUrl, '_blank', 'noopener,noreferrer');
+        } else {
+          window.location.href = finalUrl;
+        }
+      }
+    }
+    // Se actionType === 'none', não fazer nada (apenas selecionou)
+  }, [reel, currentSlide, getNextSlideIndex, scrollToSlide]);
+
   const handleQuestionnaireNext = useCallback((elementId: string, itemId: string) => {
     if (!reel?.slides || currentSlide >= reel.slides.length) return;
     
@@ -1516,6 +1578,7 @@ export default function PublicQuiz() {
                                   element={elementWithConfig}
                                   isActive={index === currentSlide}
                                   onNextSlide={handleQuestionnaireNext}
+                                  onItemAction={handleItemAction}
                                   onVisibilityChange={handleElementVisibilityChange}
                                   onSelectionChange={(selectedIds) => {
                                     // Registrar interação de questionário
@@ -1544,6 +1607,7 @@ export default function PublicQuiz() {
                                   element={elementWithConfig}
                                   isActive={index === currentSlide}
                                   onNextSlide={handleQuestionnaireNext}
+                                  onItemAction={handleItemAction}
                                   onVisibilityChange={handleElementVisibilityChange}
                                   onSelectionChange={(selectedIds) => {
                                     // Atualizar estado de respostas do question grid

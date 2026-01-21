@@ -21,6 +21,7 @@ const normalizeUiConfig = (uiConfig: any): any => {
 interface ReelQuestionnaireProps {
   element: SlideElement;
   onNextSlide?: (elementId: string, itemId: string) => void;
+  onItemAction?: (itemId: string, actionType: 'none' | 'slide' | 'url', slideId?: string, url?: string, openInNewTab?: boolean) => void;
   onSelectionChange?: (selectedIds: string[]) => void;
   onVisibilityChange?: (elementId: string, isVisible: boolean, shouldHideSocial: boolean) => void;
   isActive?: boolean;
@@ -174,7 +175,7 @@ const renderEndIcon = (endIcon: string, endIconCustom: string, isSelected: boole
   return null;
 };
 
-export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNextSlide, onSelectionChange, onVisibilityChange, isActive = false }: ReelQuestionnaireProps) {
+export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNextSlide, onItemAction, onSelectionChange, onVisibilityChange, isActive = false }: ReelQuestionnaireProps) {
   const config = normalizeUiConfig(element.uiConfig);
   const {
     items = [],
@@ -270,29 +271,6 @@ export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNe
   // O hint global já aparece quando o slide é desbloqueado, então não precisamos mostrar aqui
   // Isso evita duplicação de hints
 
-  // Handler de clique no item
-  const handleItemClick = (itemId: string) => {
-    if (multipleSelection) {
-      // Toggle na seleção
-      setSelectedIds((prev) => {
-        if (prev.includes(itemId)) {
-          return prev.filter((id) => id !== itemId);
-        } else {
-          return [...prev, itemId];
-        }
-      });
-    } else {
-      // Seleção única: selecionar e avançar (se lockSlide desabilitado)
-      setSelectedIds([itemId]);
-      if (!lockSlide && onNextSlide) {
-        // Pequeno delay para feedback visual
-        setTimeout(() => {
-          onNextSlide(element.id, itemId);
-        }, 300);
-      }
-    }
-  };
-
   // Garantir que items é um array e normalizar cada item
   const normalizedItems = Array.isArray(items) ? items.map((item: any) => {
     // PRIORIDADE ABSOLUTA: Se icon começar com "icon:", SEMPRE definir iconType como 'icon'
@@ -331,10 +309,55 @@ export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNe
       imageUrl: item.imageUrl && typeof item.imageUrl === 'string' ? item.imageUrl.trim() : '',
       title: item.title && typeof item.title === 'string' ? item.title.trim() : '',
       description: item.description && typeof item.description === 'string' ? item.description.trim() : '',
+      // Campos de ação
+      actionType: item.actionType || 'none',
+      slideId: item.slideId,
+      url: item.url,
+      openInNewTab: item.openInNewTab !== false,
     };
     
     return normalized;
   }) : [];
+
+  // Handler de clique no item - precisa estar depois de normalizedItems
+  const handleItemClick = (itemId: string) => {
+    const item = normalizedItems.find((it: any) => it.id === itemId);
+    const itemActionType = item?.actionType || 'none';
+    
+    if (multipleSelection) {
+      // Toggle na seleção
+      setSelectedIds((prev) => {
+        if (prev.includes(itemId)) {
+          return prev.filter((id) => id !== itemId);
+        } else {
+          return [...prev, itemId];
+        }
+      });
+    } else {
+      // Seleção única: selecionar
+      setSelectedIds([itemId]);
+      
+      // Se tem ação configurada e callback de ação, chamar ação primeiro
+      // O callback de ação vai verificar fluxo primeiro e depois executar ação do item
+      if (itemActionType !== 'none' && onItemAction) {
+        setTimeout(() => {
+          onItemAction(
+            itemId,
+            itemActionType,
+            item?.slideId,
+            item?.url,
+            item?.openInNewTab !== false
+          );
+        }, 300);
+      } else if (!lockSlide && onNextSlide) {
+        // Comportamento padrão: avançar (se lockSlide desabilitado)
+        // Pequeno delay para feedback visual
+        setTimeout(() => {
+          onNextSlide(element.id, itemId);
+        }, 300);
+      }
+    }
+  };
 
   const containerStyle: React.CSSProperties = {
     display: isVisible ? 'flex' : 'none',

@@ -51,7 +51,7 @@ const normalizeUiConfig = (uiConfig: any): any => {
 const generateId = () => `questionnaire-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 // Componente SortableItem movido para fora para evitar recriação
-const SortableQuestionnaireItem = React.memo(({ item, itemIndex, updateItem, removeItem, duplicateItem, isUploading, setIsUploading }: any) => {
+const SortableQuestionnaireItem = React.memo(({ item, itemIndex, updateItem, removeItem, duplicateItem, isUploading, setIsUploading, reel }: any) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
       id: item.id,
     });
@@ -336,6 +336,94 @@ const SortableQuestionnaireItem = React.memo(({ item, itemIndex, updateItem, rem
                 </div>
               )}
             </div>
+
+            {/* Configuração de Ação */}
+            <div className="border-t pt-3 mt-3 space-y-3">
+              <Label className="text-xs font-semibold mb-2 block">Ação ao Clicar</Label>
+              <Select
+                value={item.actionType || 'none'}
+                onValueChange={(value: 'none' | 'slide' | 'url') => {
+                  const updates: any = { actionType: value };
+                  if (value === 'none') {
+                    updates.slideId = undefined;
+                    updates.url = undefined;
+                    updates.openInNewTab = undefined;
+                  } else if (value === 'slide') {
+                    updates.url = undefined;
+                    updates.openInNewTab = undefined;
+                  } else if (value === 'url') {
+                    updates.slideId = undefined;
+                    if (updates.openInNewTab === undefined) {
+                      updates.openInNewTab = true;
+                    }
+                  }
+                  updateItem(item.id, updates);
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum</SelectItem>
+                  <SelectItem value="slide">Slide</SelectItem>
+                  <SelectItem value="url">URL Personalizada</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {item.actionType === 'slide' && reel?.slides && (
+                <div>
+                  <Label htmlFor={`item-slide-${item.id}`} className="text-xs">
+                    Slide de Destino
+                  </Label>
+                  <Select
+                    value={item.slideId || ''}
+                    onValueChange={(value) => updateItem(item.id, { slideId: value })}
+                  >
+                    <SelectTrigger className="h-8 text-xs mt-1">
+                      <SelectValue placeholder="Selecione um slide" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {reel.slides.map((slide: any, index: number) => (
+                        <SelectItem key={slide.id} value={slide.id}>
+                          Slide {index + 1}: {slide.question || `Slide ${index + 1}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    O fluxo visual sempre tem prioridade. Este será usado apenas se não houver conexão no fluxo.
+                  </p>
+                </div>
+              )}
+
+              {item.actionType === 'url' && (
+                <>
+                  <div>
+                    <Label htmlFor={`item-url-${item.id}`} className="text-xs">
+                      URL
+                    </Label>
+                    <Input
+                      id={`item-url-${item.id}`}
+                      type="url"
+                      value={item.url || ''}
+                      onChange={(e) => updateItem(item.id, { url: e.target.value })}
+                      className="mt-1 h-8 text-sm"
+                      placeholder="https://exemplo.com"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor={`item-openInNewTab-${item.id}`} className="text-xs">
+                      Abrir em Nova Aba
+                    </Label>
+                    <Switch
+                      id={`item-openInNewTab-${item.id}`}
+                      checked={item.openInNewTab !== false}
+                      onCheckedChange={(checked) => updateItem(item.id, { openInNewTab: checked })}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
           </AccordionContent>
         </AccordionItem>
       </div>
@@ -350,7 +438,7 @@ interface QuestionnaireElementEditorProps {
 }
 
 export function QuestionnaireElementEditor({ element, tab }: QuestionnaireElementEditorProps) {
-  const { updateElement } = useBuilder();
+  const { updateElement, reel } = useBuilder();
   const config = normalizeUiConfig(element.uiConfig);
 
   const [items, setItems] = useState(config.items || []);
@@ -757,6 +845,7 @@ export function QuestionnaireElementEditor({ element, tab }: QuestionnaireElemen
                     duplicateItem={duplicateItem}
                     isUploading={isUploading}
                     setIsUploading={setIsUploading}
+                    reel={reel}
                   />
                 ))}
               </Accordion>

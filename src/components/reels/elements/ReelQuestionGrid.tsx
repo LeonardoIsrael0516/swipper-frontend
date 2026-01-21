@@ -21,12 +21,13 @@ const normalizeUiConfig = (uiConfig: any): any => {
 interface ReelQuestionGridProps {
   element: SlideElement;
   onNextSlide?: (elementId: string, itemId: string) => void;
+  onItemAction?: (itemId: string, actionType: 'none' | 'slide' | 'url', slideId?: string, url?: string, openInNewTab?: boolean) => void;
   onSelectionChange?: (selectedIds: string[]) => void;
   onVisibilityChange?: (elementId: string, isVisible: boolean, shouldHideSocial: boolean) => void;
   isActive?: boolean;
 }
 
-export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNextSlide, onSelectionChange, onVisibilityChange, isActive = false }: ReelQuestionGridProps) {
+export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNextSlide, onItemAction, onSelectionChange, onVisibilityChange, isActive = false }: ReelQuestionGridProps) {
   const config = normalizeUiConfig(element.uiConfig);
   const {
     items = [],
@@ -122,8 +123,23 @@ export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNext
   // O hint global já aparece quando o slide é desbloqueado, então não precisamos mostrar aqui
   // Isso evita duplicação de hints
 
-  // Handler de clique no item
+  // Normalizar items - incluindo campos de ação
+  const normalizedItems = Array.isArray(items) ? items.map((item: any) => ({
+    id: item.id || '',
+    imageUrl: item.imageUrl && typeof item.imageUrl === 'string' ? item.imageUrl.trim() : undefined,
+    title: item.title && typeof item.title === 'string' ? item.title.trim() : '',
+    description: item.description && typeof item.description === 'string' ? item.description.trim() : '',
+    actionType: item.actionType || 'none',
+    slideId: item.slideId,
+    url: item.url,
+    openInNewTab: item.openInNewTab !== false,
+  })) : [];
+
+  // Handler de clique no item - precisa estar depois de normalizedItems
   const handleItemClick = (itemId: string) => {
+    const item = normalizedItems.find((it: any) => it.id === itemId);
+    const itemActionType = item?.actionType || 'none';
+    
     if (multipleSelection) {
       // Toggle na seleção
       setSelectedIds((prev) => {
@@ -134,9 +150,23 @@ export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNext
         }
       });
     } else {
-      // Seleção única: selecionar e avançar (se lockSlide desabilitado)
+      // Seleção única: selecionar
       setSelectedIds([itemId]);
-      if (!lockSlide && onNextSlide) {
+      
+      // Se tem ação configurada e callback de ação, chamar ação primeiro
+      // O callback de ação vai verificar fluxo primeiro e depois executar ação do item
+      if (itemActionType !== 'none' && onItemAction) {
+        setTimeout(() => {
+          onItemAction(
+            itemId,
+            itemActionType,
+            item?.slideId,
+            item?.url,
+            item?.openInNewTab !== false
+          );
+        }, 300);
+      } else if (!lockSlide && onNextSlide) {
+        // Comportamento padrão: avançar (se lockSlide desabilitado)
         // Pequeno delay para feedback visual
         setTimeout(() => {
           onNextSlide(element.id, itemId);
@@ -144,14 +174,6 @@ export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNext
       }
     }
   };
-
-  // Normalizar items - apenas imageUrl, title, description
-  const normalizedItems = Array.isArray(items) ? items.map((item: any) => ({
-    id: item.id || '',
-    imageUrl: item.imageUrl && typeof item.imageUrl === 'string' ? item.imageUrl.trim() : undefined,
-    title: item.title && typeof item.title === 'string' ? item.title.trim() : '',
-    description: item.description && typeof item.description === 'string' ? item.description.trim() : '',
-  })) : [];
 
   const containerStyle: React.CSSProperties = {
     display: isVisible ? 'flex' : 'none',
