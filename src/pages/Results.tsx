@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ResultsHeader } from '@/components/builder/ResultsHeader';
@@ -8,7 +8,9 @@ import { LeadsTable } from '@/components/results/LeadsTable';
 import { AnalyticsPanel } from '@/components/results/AnalyticsPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { toast } from 'sonner';
 
 export default function Results() {
   const { reelId } = useParams<{ reelId: string }>();
@@ -23,52 +25,72 @@ export default function Results() {
     queryKey: ['reel-metrics', reelId],
     queryFn: async () => {
       const response = await api.get(`/analytics/reel/${reelId}/metrics`);
-      return (response as any).data || response;
+      // api.get() já extrai o data do TransformInterceptor
+      return response;
     },
     enabled: !!reelId,
   });
 
-  const { data: visitsData, isLoading: isLoadingVisits, refetch: refetchVisits } = useQuery({
+  const { data: visitsData, isLoading: isLoadingVisits, refetch: refetchVisits, error: visitsError } = useQuery({
     queryKey: ['reel-visits', reelId, startDate, endDate, visitsPage, visitsLimit],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-      params.append('page', visitsPage.toString());
-      params.append('limit', visitsLimit.toString());
-      
-      const queryString = params.toString();
-      const url = `/analytics/reel/${reelId}/visits?${queryString}`;
-      const response = await api.get(url);
-      return (response as any).data || response;
+      try {
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        params.append('page', visitsPage.toString());
+        params.append('limit', visitsLimit.toString());
+        
+        const queryString = params.toString();
+        const url = `/analytics/reel/${reelId}/visits?${queryString}`;
+        const response = await api.get(url);
+        // api.get() já extrai o data do TransformInterceptor
+        // A resposta já é { data: [...], meta: {...}, slides: [...] }
+        return response;
+      } catch (error: any) {
+        const errorMessage = error?.message || 'Erro ao carregar visitas';
+        toast.error(errorMessage);
+        throw error;
+      }
     },
     enabled: !!reelId,
+    retry: 1,
   });
 
   const { data: analyticsData, isLoading: isLoadingAnalytics, refetch: refetchAnalytics } = useQuery({
     queryKey: ['reel-analytics', reelId],
     queryFn: async () => {
       const response = await api.get(`/analytics/reel/${reelId}/analytics`);
-      return (response as any).data || response;
+      // api.get() já extrai o data do TransformInterceptor
+      return response;
     },
     enabled: !!reelId,
   });
 
-  const { data: leadsData, isLoading: isLoadingLeads, refetch: refetchLeads } = useQuery({
+  const { data: leadsData, isLoading: isLoadingLeads, refetch: refetchLeads, error: leadsError } = useQuery({
     queryKey: ['reel-leads', reelId, startDate, endDate, leadsPage, leadsLimit],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-      params.append('page', leadsPage.toString());
-      params.append('limit', leadsLimit.toString());
-      
-      const queryString = params.toString();
-      const url = `/analytics/reel/${reelId}/leads?${queryString}`;
-      const response = await api.get(url);
-      return (response as any).data || response;
+      try {
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        params.append('page', leadsPage.toString());
+        params.append('limit', leadsLimit.toString());
+        
+        const queryString = params.toString();
+        const url = `/analytics/reel/${reelId}/leads?${queryString}`;
+        const response = await api.get(url);
+        // api.get() já extrai o data do TransformInterceptor
+        // A resposta já é { data: [...], meta: {...} }
+        return response;
+      } catch (error: any) {
+        const errorMessage = error?.message || 'Erro ao carregar leads';
+        toast.error(errorMessage);
+        throw error;
+      }
     },
     enabled: !!reelId,
+    retry: 1,
   });
 
   const handleRefresh = (startDate?: string, endDate?: string) => {
@@ -150,31 +172,51 @@ export default function Results() {
               <TabsTrigger value="leads">Leads</TabsTrigger>
             </TabsList>
             <TabsContent value="visits" className="mt-4 sm:mt-6">
-              <VisitsTable
-                reelId={reelId}
-                visits={visitsData?.data || []}
-                slides={visitsData?.slides || []}
-                meta={visitsData?.meta}
-                isLoading={isLoadingVisits}
-                page={visitsPage}
-                limit={visitsLimit}
-                onRefresh={handleRefresh}
-                onPageChange={handleVisitsPageChange}
-                onLimitChange={handleVisitsLimitChange}
-              />
+              {visitsError ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Erro ao carregar visitas</AlertTitle>
+                  <AlertDescription>
+                    {(visitsError as any)?.message || 'Ocorreu um erro ao carregar as visitas. Tente novamente.'}
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <VisitsTable
+                  reelId={reelId}
+                  visits={visitsData?.data || []}
+                  slides={visitsData?.slides || []}
+                  meta={visitsData?.meta}
+                  isLoading={isLoadingVisits}
+                  page={visitsPage}
+                  limit={visitsLimit}
+                  onRefresh={handleRefresh}
+                  onPageChange={handleVisitsPageChange}
+                  onLimitChange={handleVisitsLimitChange}
+                />
+              )}
             </TabsContent>
             <TabsContent value="leads" className="mt-4 sm:mt-6">
-              <LeadsTable
-                reelId={reelId}
-                leads={leadsData?.data || []}
-                meta={leadsData?.meta}
-                isLoading={isLoadingLeads}
-                page={leadsPage}
-                limit={leadsLimit}
-                onRefresh={handleRefresh}
-                onPageChange={handleLeadsPageChange}
-                onLimitChange={handleLeadsLimitChange}
-              />
+              {leadsError ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Erro ao carregar leads</AlertTitle>
+                  <AlertDescription>
+                    {(leadsError as any)?.message || 'Ocorreu um erro ao carregar os leads. Tente novamente.'}
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <LeadsTable
+                  reelId={reelId}
+                  leads={leadsData?.data || []}
+                  meta={leadsData?.meta}
+                  isLoading={isLoadingLeads}
+                  page={leadsPage}
+                  limit={leadsLimit}
+                  onRefresh={handleRefresh}
+                  onPageChange={handleLeadsPageChange}
+                  onLimitChange={handleLeadsLimitChange}
+                />
+              )}
             </TabsContent>
           </Tabs>
 
