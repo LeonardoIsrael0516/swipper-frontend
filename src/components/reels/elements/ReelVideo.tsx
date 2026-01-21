@@ -73,7 +73,7 @@ export const ReelVideo = memo(function ReelVideo({
           setShowYouTubePlayButton(true);
           setShowVideoPlayButton(true);
         }
-      }, 800); // Aguardar 800ms antes de mostrar o botão (dar mais tempo para vídeo começar)
+      }, 1500); // Aguardar 1.5s antes de mostrar o botão (dar mais tempo para vídeo começar, especialmente no primeiro carregamento)
       
       return () => clearTimeout(timeout);
     } else {
@@ -184,6 +184,15 @@ export const ReelVideo = memo(function ReelVideo({
       }
     };
 
+    const handleLoadedMetadata = () => {
+      // Tentar tocar assim que metadata estiver carregada
+      if (isActive && autoplay) {
+        tryPlay();
+      }
+    };
+
+    // Adicionar listeners para múltiplos eventos de carregamento
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('canplay', handleCanPlay);
     video.addEventListener('loadeddata', handleLoadedData);
 
@@ -194,16 +203,19 @@ export const ReelVideo = memo(function ReelVideo({
       
       // Tentar novamente após delays (para casos onde o vídeo ainda está carregando)
       const timeoutId1 = setTimeout(tryPlay, 100);
-      const timeoutId2 = setTimeout(tryPlay, 500);
-      const timeoutId3 = setTimeout(tryPlay, 1000);
+      const timeoutId2 = setTimeout(tryPlay, 300);
+      const timeoutId3 = setTimeout(tryPlay, 600);
+      const timeoutId4 = setTimeout(tryPlay, 1000);
       
       return () => {
         clearTimeout(timeoutId1);
         clearTimeout(timeoutId2);
         clearTimeout(timeoutId3);
+        clearTimeout(timeoutId4);
         video.removeEventListener('play', handlePlay);
         video.removeEventListener('pause', handlePause);
         video.removeEventListener('ended', handleEnded);
+        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
         video.removeEventListener('canplay', handleCanPlay);
         video.removeEventListener('loadeddata', handleLoadedData);
       };
@@ -224,6 +236,7 @@ export const ReelVideo = memo(function ReelVideo({
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('canplay', handleCanPlay);
       video.removeEventListener('loadeddata', handleLoadedData);
     };
