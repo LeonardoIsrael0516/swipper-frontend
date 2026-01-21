@@ -198,42 +198,6 @@ export default function PreviewQuiz() {
     // Formulário já foi submetido pelo próprio componente, apenas atualizar estado se necessário
   }, []);
 
-  // Função helper para verificar se um slide tem lockSlide habilitado
-  const hasLockSlide = useCallback((slideIndex: number): boolean => {
-    if (!reel?.slides || slideIndex >= reel.slides.length || slideIndex < 0) {
-      return false;
-    }
-
-    const slideData = reel.slides[slideIndex];
-    if (!slideData?.elements) {
-      return false;
-    }
-
-    // Verificar se algum elemento tem lockSlide habilitado
-    for (const element of slideData.elements) {
-      const config = normalizeUiConfig(element.uiConfig);
-      
-      if (element.elementType === 'BUTTON' && config.lockSlide === true) {
-        return true;
-      }
-      
-      if ((element.elementType === 'QUESTIONNAIRE' || element.elementType === 'QUESTION_GRID') 
-          && config.lockSlide === true) {
-        return true;
-      }
-      
-      if (element.elementType === 'PROGRESS' && config.lockSlide === true) {
-        return true;
-      }
-      
-      if (element.elementType === 'FORM' && config.lockSlide === true) {
-        return true;
-      }
-    }
-
-    return false;
-  }, [reel]);
-
   const scrollToSlide = useCallback(async (slideIndex: number) => {
     // Enviar formulários completos antes de avançar
     if (reel?.slides && currentSlide < reel.slides.length) {
@@ -260,6 +224,67 @@ export default function PreviewQuiz() {
       });
     }
   }, [reel, currentSlide]);
+
+  // Função helper para verificar se um slide específico está travado
+  const checkIfSlideIsLocked = useCallback((slideIndex: number): boolean => {
+    if (!reel?.slides || slideIndex >= reel.slides.length || slideIndex < 0) {
+      return false;
+    }
+    
+    const slideData = reel.slides[slideIndex];
+    if (!slideData?.elements) {
+      return false;
+    }
+    
+    // Verificar elementos travados (mesma lógica do useEffect de lock)
+    let hasLocked = false;
+    let questionnaireLocked = false;
+    let progressLocked = false;
+    let formLocked = false;
+    
+    slideData.elements.forEach((element: any) => {
+      const config = normalizeUiConfig(element.uiConfig);
+      
+      if (element.elementType === 'BUTTON' && config.lockSlide === true) {
+        hasLocked = true;
+      }
+      
+      if (element.elementType === 'QUESTIONNAIRE' && config.lockSlide === true) {
+        const elementId = element.id;
+        const responses = questionnaireResponses[elementId] || [];
+        if (responses.length === 0) {
+          questionnaireLocked = true;
+        }
+      }
+      
+      if (element.elementType === 'QUESTION_GRID' && config.lockSlide === true) {
+        const elementId = element.id;
+        const responses = questionnaireResponses[elementId] || [];
+        if (responses.length === 0) {
+          questionnaireLocked = true;
+        }
+      }
+      
+      if (element.elementType === 'PROGRESS') {
+        const elementId = element.id;
+        const currentProgress = progressStates[elementId] || 0;
+        const targetProgress = config.progress ?? 100;
+        if (currentProgress < targetProgress) {
+          progressLocked = true;
+        }
+      }
+      
+      if (element.elementType === 'FORM' && config.lockSlide === true) {
+        const elementId = element.id;
+        const isFormValid = formValidStates[elementId] || false;
+        if (!isFormValid) {
+          formLocked = true;
+        }
+      }
+    });
+    
+    return hasLocked || questionnaireLocked || progressLocked || formLocked;
+  }, [reel?.slides, questionnaireResponses, progressStates, formValidStates]);
 
   // Inicializar renderedSlides quando os slides carregarem
   useEffect(() => {
@@ -290,12 +315,23 @@ export default function PreviewQuiz() {
       const scrollTop = container.scrollTop;
       const slideHeight = container.clientHeight;
       const newSlide = Math.round(scrollTop / slideHeight);
-      const expectedScrollTop = newSlide * slideHeight;
 
       // Limpar timeout anterior
       clearTimeout(scrollTimeout);
 
       if (newSlide !== currentSlide && newSlide < reel.slides.length && newSlide >= 0) {
+        // Verificar se o próximo slide está travado ANTES de mudar
+        const nextSlideIsLocked = checkIfSlideIsLocked(newSlide);
+        
+        // Se está tentando ir para frente e o próximo slide está travado, bloquear
+        if (newSlide > currentSlide && nextSlideIsLocked) {
+          // Reverter scroll para o slide atual
+          scrollTimeout = setTimeout(() => {
+            scrollToSlide(currentSlide);
+          }, 50);
+          return; // Não atualizar currentSlide
+        }
+        
         // Verificar se há uma conexão defaultNext no slide atual
         const currentSlideData = reel.slides[currentSlide];
         if (currentSlideData && newSlide === currentSlide + 1) {
@@ -306,6 +342,16 @@ export default function PreviewQuiz() {
             const targetSlideId = logicNext.defaultNext;
             const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
             if (targetIndex >= 0 && targetIndex !== newSlide) {
+              // Verificar se o slide conectado também está travado
+              const targetSlideIsLocked = checkIfSlideIsLocked(targetIndex);
+              if (targetSlideIsLocked) {
+                // Reverter scroll para o slide atual
+                scrollTimeout = setTimeout(() => {
+                  scrollToSlide(currentSlide);
+                }, 50);
+                return;
+              }
+              
               // Redirecionar para o slide conectado
               scrollTimeout = setTimeout(() => {
                 scrollToSlide(targetIndex);
@@ -315,26 +361,8 @@ export default function PreviewQuiz() {
           }
         }
 
-        // Atualizar currentSlide primeiro para renderizar os elementos
+        // Scroll normal - se está voltando, sempre permitir (slide anterior não pode estar travado)
         setCurrentSlide(newSlide);
-
-        // Se o novo slide tem lockSlide e o scroll não está completo, forçar scroll completo
-        if (hasLockSlide(newSlide)) {
-          // Se o scroll não está exatamente no final do slide (com margem de erro de 2px)
-          if (Math.abs(scrollTop - expectedScrollTop) > 2) {
-            // Forçar scroll completo imediatamente (sem smooth para ser instantâneo)
-            requestAnimationFrame(() => {
-              container.scrollTop = expectedScrollTop;
-            });
-          }
-        }
-      } else if (newSlide === currentSlide && hasLockSlide(currentSlide)) {
-        // Se já está no slide travado mas o scroll não está completo, corrigir
-        if (Math.abs(scrollTop - expectedScrollTop) > 2) {
-          requestAnimationFrame(() => {
-            container.scrollTop = expectedScrollTop;
-          });
-        }
       }
     };
 
@@ -343,7 +371,7 @@ export default function PreviewQuiz() {
       container.removeEventListener('scroll', handleScroll);
       clearTimeout(scrollTimeout);
     };
-  }, [currentSlide, reel, scrollToSlide, hasLockSlide]);
+  }, [currentSlide, reel, scrollToSlide, checkIfSlideIsLocked]);
 
   // Verificar se o slide atual está travado por algum botão
   useEffect(() => {
