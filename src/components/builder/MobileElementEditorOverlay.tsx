@@ -21,6 +21,7 @@ import { FormElementEditor } from '@/components/builder/elements/FormElementEdit
 import { FeedbackElementEditor } from '@/components/builder/elements/FeedbackElementEditor';
 import { DashElementEditor } from '@/components/builder/elements/DashElementEditor';
 import { ChartElementEditor } from '@/components/builder/elements/ChartElementEditor';
+import { ScoreElementEditor } from '@/components/builder/elements/ScoreElementEditor';
 import { SpacingElementEditor } from '@/components/builder/elements/SpacingElementEditor';
 import { BackgroundEditor } from '@/components/builder/BackgroundEditor';
 
@@ -211,6 +212,9 @@ export function MobileElementEditorOverlay({ onClose }: MobileElementEditorOverl
               {selectedElement.elementType === 'CHART' && (
                 <ChartElementEditor element={selectedElement} tab="content" />
               )}
+              {selectedElement.elementType === 'SCORE' && (
+                <ScoreElementEditor element={selectedElement} tab="content" />
+              )}
             </TabsContent>
 
             <TabsContent value="design" className="p-4 m-0">
@@ -267,6 +271,9 @@ export function MobileElementEditorOverlay({ onClose }: MobileElementEditorOverl
               )}
               {selectedElement.elementType === 'CHART' && (
                 <ChartElementEditor element={selectedElement} tab="design" />
+              )}
+              {selectedElement.elementType === 'SCORE' && (
+                <ScoreElementEditor element={selectedElement} tab="design" />
               )}
             </TabsContent>
           </div>

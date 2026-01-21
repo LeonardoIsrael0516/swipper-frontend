@@ -9,6 +9,7 @@ import {
   Settings,
   Menu,
   X,
+  Gift,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,11 @@ const menuItems = [
     href: '/ananindeua/broadcast',
     label: 'Broadcast',
     icon: Megaphone,
+  },
+  {
+    href: '/ananindeua/affiliates',
+    label: 'Afiliados',
+    icon: Gift,
   },
   {
     href: '/ananindeua/settings',
@@ -114,7 +120,7 @@ export function AdminSidebar() {
                     'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
                     active
                       ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                      : 'text-muted-foreground hover:bg-gray-100 hover:text-foreground'
                   )}
                 >
                   <Icon className="h-5 w-5" />

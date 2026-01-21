@@ -8,6 +8,10 @@ import { ReelQuestion } from '@/components/reels/ReelQuestion';
 import { ReelProgressBar } from '@/components/reels/ReelProgressBar';
 import { SwipeHint } from '@/components/reels/SwipeHint';
 import { SwipeHintSubtle } from '@/components/reels/SwipeHintSubtle';
+import { ReelSocialActionsTikTok } from '@/components/reels/ReelSocialActionsTikTok';
+import { ReelUsername } from '@/components/reels/ReelUsername';
+import { ReelCaption } from '@/components/reels/ReelCaption';
+import { ReelAudioTag } from '@/components/reels/ReelAudioTag';
 import { TextElement } from '@/components/builder/elements/TextElement';
 import { ImageElement } from '@/components/builder/elements/ImageElement';
 import { AudioElement } from '@/components/builder/elements/AudioElement';
@@ -21,6 +25,7 @@ import { lazy, Suspense } from 'react';
 // Lazy load componentes pesados
 const CarouselElement = lazy(() => import('@/components/builder/elements/CarouselElement').then(module => ({ default: module.CarouselElement })));
 const ChartElement = lazy(() => import('@/components/builder/elements/ChartElement').then(module => ({ default: module.ChartElement })));
+const ScoreElement = lazy(() => import('@/components/builder/elements/ScoreElement').then(module => ({ default: module.ScoreElement })));
 import { ReelVideo } from '@/components/reels/elements/ReelVideo';
 import { ReelComparativo } from '@/components/reels/elements/ReelComparativo';
 import { ReelPrice } from '@/components/reels/elements/ReelPrice';
@@ -1045,7 +1050,7 @@ export default function PublicQuiz() {
   }, [reel, currentSlide]);
 
   // Função helper para obter o próximo slide baseado em logicNext
-  const getNextSlideIndex = useCallback((slideId: string, elementId?: string, optionId?: string): number | null => {
+  const getNextSlideIndex = useCallback((slideId: string, elementId?: string, optionId?: string, itemId?: string): number | null => {
     if (!reel?.slides) return null;
     
     const slide = reel.slides.find((s) => s.id === slideId);
@@ -1053,21 +1058,31 @@ export default function PublicQuiz() {
 
     const logicNext = slide.logicNext || {};
     
-    // Se há conexão de elemento específico
+    // PRIORIDADE 1: Se há conexão de elemento específico com item (para Question/QuestionGrid)
+    if (elementId && itemId) {
+      const elementItemKey = `${elementId}-item-${itemId}`;
+      if (logicNext.elements?.[elementItemKey]) {
+        const targetSlideId = logicNext.elements[elementItemKey];
+        const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
+        return targetIndex >= 0 ? targetIndex : null;
+      }
+    }
+    
+    // PRIORIDADE 2: Se há conexão de elemento específico (sem item)
     if (elementId && logicNext.elements?.[elementId]) {
       const targetSlideId = logicNext.elements[elementId];
       const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
       return targetIndex >= 0 ? targetIndex : null;
     }
     
-    // Se há conexão de opção específica
+    // PRIORIDADE 3: Se há conexão de opção específica
     if (optionId && logicNext.options?.[optionId]) {
       const targetSlideId = logicNext.options[optionId];
       const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
       return targetIndex >= 0 ? targetIndex : null;
     }
     
-    // Se há conexão padrão (defaultNext)
+    // PRIORIDADE 4: Se há conexão padrão (defaultNext)
     if (logicNext.defaultNext) {
       const targetSlideId = logicNext.defaultNext;
       const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
@@ -1104,11 +1119,20 @@ export default function PublicQuiz() {
       if (!reel?.slides || currentSlide >= reel.slides.length) return;
       
       const currentSlideData = reel.slides[currentSlide];
-      const nextIndex = getNextSlideIndex(currentSlideData.id, elementId);
       
-      if (nextIndex !== null) {
-        scrollToSlide(nextIndex);
-      } else if (currentSlide < reel.slides.length - 1) {
+      // PRIORIDADE 1: Verificar se há conexão no fluxo (sempre verificar primeiro)
+      if (elementId) {
+        const nextIndex = getNextSlideIndex(currentSlideData.id, elementId);
+        
+        if (nextIndex !== null) {
+          // Há conexão no fluxo - usar ela (ignorar configuração do botão)
+          scrollToSlide(nextIndex);
+          return; // IMPORTANTE: retornar aqui para não executar lógica padrão
+        }
+      }
+      
+      // PRIORIDADE 2: Se não há conexão no fluxo, usar comportamento padrão (próximo slide)
+      if (currentSlide < reel.slides.length - 1) {
         scrollToSlide(currentSlide + 1);
       }
     } else if (destination === 'url' && url) {
@@ -1139,6 +1163,27 @@ export default function PublicQuiz() {
       }
     }
   }, [submitCompleteForms, reel, currentSlide, getNextSlideIndex, scrollToSlide, queueEvent]);
+
+  const handleQuestionnaireNext = useCallback((elementId: string, itemId: string) => {
+    if (!reel?.slides || currentSlide >= reel.slides.length) return;
+    
+    const currentSlideData = reel.slides[currentSlide];
+    
+    // Verificar conexão no fluxo primeiro
+    const nextIndex = getNextSlideIndex(currentSlideData.id, elementId, undefined, itemId);
+    
+    if (nextIndex !== null) {
+      // Há conexão no fluxo - usar ela
+      dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
+      scrollToSlide(nextIndex);
+    } else {
+      // Não há conexão - usar comportamento padrão (próximo slide)
+      dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
+      if (currentSlide < reel.slides.length - 1) {
+        scrollToSlide(currentSlide + 1);
+      }
+    }
+  }, [reel, currentSlide, getNextSlideIndex, scrollToSlide]);
 
   const handleOptionSelect = async (slideId: string, optionId: string) => {
     // Registrar interação
@@ -1289,6 +1334,16 @@ export default function PublicQuiz() {
             />
           )}
 
+          {/* Elementos Sociais - renderizados uma vez para manter estado entre slides */}
+          {reel?.socialConfig?.enabled && (
+            <div style={{ visibility: slides[currentSlide]?.hideSocialElements ? 'hidden' : 'visible' }}>
+              <ReelSocialActionsTikTok
+                reelId={reel.id}
+                socialConfig={reel.socialConfig}
+              />
+            </div>
+          )}
+
           {/* Main Scrollable Container */}
           <div ref={containerRef} className="reels-container-card hide-scrollbar">
         {slides.map((slide: any, index: number) => {
@@ -1368,6 +1423,7 @@ export default function PublicQuiz() {
                       display: 'flex',
                       flexDirection: 'column',
                       width: '100%',
+                      gap: '16px', // Espaçamento entre elementos
                     }}
                   >
                   {(() => {
@@ -1422,7 +1478,7 @@ export default function PublicQuiz() {
                           </div>
                         );
                       } else {
-                        // Renderizar elemento único
+                        // Renderizar elemento único com wrapper para espaçamento
                         const element = group.element;
                         // Garantir que elementType existe
                         if (!element.elementType) {
@@ -1438,243 +1494,254 @@ export default function PublicQuiz() {
                           uiConfig: getNormalizedUiConfig(element.uiConfig),
                         };
                         
-                        switch (element.elementType) {
-                          case 'TEXT':
-                            return <TextElement key={element.id} element={elementWithConfig} />;
-                          case 'IMAGE':
-                            return <ImageElement key={element.id} element={elementWithConfig} />;
-                          case 'AUDIO':
-                            return <AudioElement key={element.id} element={elementWithConfig} />;
-                          case 'VIDEO':
-                            return (
-                              <ReelVideo
-                                key={element.id}
-                                src={elementWithConfig.uiConfig?.videoUrl}
-                                youtubeUrl={elementWithConfig.uiConfig?.youtubeUrl}
-                                thumbnailUrl={elementWithConfig.uiConfig?.thumbnailUrl}
-                                autoplay={elementWithConfig.uiConfig?.autoplay !== false}
-                                loop={elementWithConfig.uiConfig?.loop !== false}
-                                muted={elementWithConfig.uiConfig?.muted !== false}
-                                controls={elementWithConfig.uiConfig?.controls === true}
-                                orientation={elementWithConfig.uiConfig?.orientation || 'vertical'}
-                                borderRadius={elementWithConfig.uiConfig?.borderRadius || 0}
-                                className="w-full"
-                                isActive={index === currentSlide}
-                              />
-                            );
-                          case 'TIMER':
-                            return <TimerElement key={element.id} element={elementWithConfig} reelId={reel?.id} />;
-                          case 'CAROUSEL':
-                            return (
-                              <Suspense key={element.id} fallback={<div className="w-full h-64 bg-white/10 rounded-lg animate-pulse" />}>
-                                <CarouselElement element={elementWithConfig} />
-                              </Suspense>
-                            );
-                          case 'BUTTON':
-                            return (
-                              <ButtonElement
-                                key={element.id}
-                                element={elementWithConfig}
-                                onButtonClick={(dest, url, openInNewTab) => handleButtonClick(dest, url, openInNewTab, element.id)}
-                                isActive={index === currentSlide}
-                              />
-                            );
-                          case 'ACCORDION':
-                            return <AccordionElement key={element.id} element={elementWithConfig} />;
-                          case 'BENEFITS':
-                          case 'COMPARATIVO':
-                            return <ReelComparativo key={element.id} element={elementWithConfig} />;
-                          case 'PRICE':
-                            return (
-                              <ReelPrice
-                                key={element.id}
-                                element={elementWithConfig}
-                                onButtonClick={(url, openInNewTab) => {
-                                  // Desbloquear slide ao clicar no botão
-                                  dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
-                                  // Abrir URL
-                                  let finalUrl = url.trim();
-                                  if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
-                                    finalUrl = `https://${finalUrl}`;
-                                  }
-                                  try {
-                                    const urlObj = new URL(finalUrl);
-                                    if (openInNewTab) {
-                                      window.open(urlObj.href, '_blank', 'noopener,noreferrer');
-                                    } else {
-                                      window.location.href = urlObj.href;
+                        // Wrapper para elementos que precisam de espaçamento
+                        const renderElement = () => {
+                          switch (element.elementType) {
+                            case 'TEXT':
+                              return <TextElement key={element.id} element={elementWithConfig} />;
+                            case 'IMAGE':
+                              return <ImageElement key={element.id} element={elementWithConfig} />;
+                            case 'AUDIO':
+                              return <AudioElement key={element.id} element={elementWithConfig} />;
+                            case 'VIDEO':
+                              return (
+                                <ReelVideo
+                                  key={element.id}
+                                  src={elementWithConfig.uiConfig?.videoUrl}
+                                  youtubeUrl={elementWithConfig.uiConfig?.youtubeUrl}
+                                  thumbnailUrl={elementWithConfig.uiConfig?.thumbnailUrl}
+                                  autoplay={elementWithConfig.uiConfig?.autoplay !== false}
+                                  loop={elementWithConfig.uiConfig?.loop !== false}
+                                  muted={elementWithConfig.uiConfig?.muted !== false}
+                                  controls={elementWithConfig.uiConfig?.controls === true}
+                                  orientation={elementWithConfig.uiConfig?.orientation || 'vertical'}
+                                  borderRadius={elementWithConfig.uiConfig?.borderRadius || 0}
+                                  className="w-full"
+                                  isActive={index === currentSlide}
+                                />
+                              );
+                            case 'TIMER':
+                              return <TimerElement key={element.id} element={elementWithConfig} reelId={reel?.id} />;
+                            case 'CAROUSEL':
+                              return (
+                                <Suspense key={element.id} fallback={<div className="w-full h-64 bg-white/10 rounded-lg animate-pulse" />}>
+                                  <CarouselElement element={elementWithConfig} />
+                                </Suspense>
+                              );
+                            case 'BUTTON':
+                              return (
+                                <ButtonElement
+                                  key={element.id}
+                                  element={elementWithConfig}
+                                  onButtonClick={(dest, url, openInNewTab) => handleButtonClick(dest, url, openInNewTab, element.id)}
+                                  isActive={index === currentSlide}
+                                />
+                              );
+                            case 'ACCORDION':
+                              return <AccordionElement key={element.id} element={elementWithConfig} />;
+                            case 'BENEFITS':
+                            case 'COMPARATIVO':
+                              return <ReelComparativo key={element.id} element={elementWithConfig} />;
+                            case 'PRICE':
+                              return (
+                                <ReelPrice
+                                  key={element.id}
+                                  element={elementWithConfig}
+                                  onButtonClick={(url, openInNewTab) => {
+                                    // Desbloquear slide ao clicar no botão
+                                    dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
+                                    // Abrir URL
+                                    let finalUrl = url.trim();
+                                    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+                                      finalUrl = `https://${finalUrl}`;
                                     }
-                                  } catch (error) {
-                                    console.error('URL inválida:', error);
-                                    if (openInNewTab) {
-                                      window.open(finalUrl, '_blank', 'noopener,noreferrer');
-                                    } else {
-                                      window.location.href = finalUrl;
+                                    try {
+                                      const urlObj = new URL(finalUrl);
+                                      if (openInNewTab) {
+                                        window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+                                      } else {
+                                        window.location.href = urlObj.href;
+                                      }
+                                    } catch (error) {
+                                      console.error('URL inválida:', error);
+                                      if (openInNewTab) {
+                                        window.open(finalUrl, '_blank', 'noopener,noreferrer');
+                                      } else {
+                                        window.location.href = finalUrl;
+                                      }
                                     }
-                                  }
-                                }}
-                              />
-                            );
-                          case 'PLANS':
-                            return (
-                              <ReelPlans
-                                key={element.id}
-                                element={elementWithConfig}
-                                onButtonClick={(url, openInNewTab) => {
-                                  // Desbloquear slide ao clicar no botão
-                                  dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
-                                  // Abrir URL
-                                  let finalUrl = url.trim();
-                                  if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
-                                    finalUrl = `https://${finalUrl}`;
-                                  }
-                                  try {
-                                    const urlObj = new URL(finalUrl);
-                                    if (openInNewTab) {
-                                      window.open(urlObj.href, '_blank', 'noopener,noreferrer');
-                                    } else {
-                                      window.location.href = urlObj.href;
+                                  }}
+                                />
+                              );
+                            case 'PLANS':
+                              return (
+                                <ReelPlans
+                                  key={element.id}
+                                  element={elementWithConfig}
+                                  onButtonClick={(url, openInNewTab) => {
+                                    // Desbloquear slide ao clicar no botão
+                                    dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
+                                    // Abrir URL
+                                    let finalUrl = url.trim();
+                                    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+                                      finalUrl = `https://${finalUrl}`;
                                     }
-                                  } catch (error) {
-                                    console.error('URL inválida:', error);
-                                    if (openInNewTab) {
-                                      window.open(finalUrl, '_blank', 'noopener,noreferrer');
-                                    } else {
-                                      window.location.href = finalUrl;
+                                    try {
+                                      const urlObj = new URL(finalUrl);
+                                      if (openInNewTab) {
+                                        window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+                                      } else {
+                                        window.location.href = urlObj.href;
+                                      }
+                                    } catch (error) {
+                                      console.error('URL inválida:', error);
+                                      if (openInNewTab) {
+                                        window.open(finalUrl, '_blank', 'noopener,noreferrer');
+                                      } else {
+                                        window.location.href = finalUrl;
+                                      }
                                     }
-                                  }
-                                }}
-                              />
-                            );
-                          case 'QUESTIONNAIRE':
-                            return (
-                              <ReelQuestionnaire
-                                key={element.id}
-                                element={elementWithConfig}
-                                isActive={index === currentSlide}
-                                onNextSlide={() => {
-                                  // Desbloquear slide ao avançar
-                                  dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
-                                  if (currentSlide < (reel?.slides?.length || 0) - 1) {
-                                    scrollToSlide(currentSlide + 1);
-                                  }
-                                }}
-                                onSelectionChange={(selectedIds) => {
-                                  // Registrar interação de questionário
-                                  if (visitIdRef.current && reel && reel.slides?.[currentSlide]) {
-                                    queueEvent({
-                                      visitId: visitIdRef.current,
-                                      eventType: 'interaction',
-                                      slideId: reel.slides[currentSlide].id,
-                                      metadata: { type: 'questionnaire_selection', elementId: element.id, selectedIds },
-                                    });
-                                  }
+                                  }}
+                                />
+                              );
+                            case 'QUESTIONNAIRE':
+                              return (
+                                <ReelQuestionnaire
+                                  key={element.id}
+                                  element={elementWithConfig}
+                                  isActive={index === currentSlide}
+                                  onNextSlide={handleQuestionnaireNext}
+                                  onSelectionChange={(selectedIds) => {
+                                    // Registrar interação de questionário
+                                    if (visitIdRef.current && reel && reel.slides?.[currentSlide]) {
+                                      queueEvent({
+                                        visitId: visitIdRef.current,
+                                        eventType: 'interaction',
+                                        slideId: reel.slides[currentSlide].id,
+                                        metadata: { type: 'questionnaire_selection', elementId: element.id, selectedIds },
+                                      });
+                                    }
 
-                                  // Atualizar estado de respostas do questionário
-                                  // O useEffect que verifica lockSlide será acionado automaticamente
-                                  setQuestionnaireResponses((prev) => ({
-                                    ...prev,
-                                    [element.id]: selectedIds,
-                                  }));
-                                }}
-                              />
-                            );
-                          case 'QUESTION_GRID':
-                            return (
-                              <ReelQuestionGrid
-                                key={element.id}
-                                element={elementWithConfig}
-                                isActive={index === currentSlide}
-                                onNextSlide={() => {
-                                  // Desbloquear slide ao avançar
-                                  dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
-                                  if (currentSlide < (reel?.slides?.length || 0) - 1) {
-                                    scrollToSlide(currentSlide + 1);
-                                  }
-                                }}
-                                onSelectionChange={(selectedIds) => {
-                                  // Atualizar estado de respostas do question grid
-                                  // O useEffect que verifica lockSlide será acionado automaticamente
-                                  setQuestionnaireResponses((prev) => ({
-                                    ...prev,
-                                    [element.id]: selectedIds,
-                                  }));
-                                }}
-                              />
-                            );
-                          case 'PROGRESS':
-                            return (
-                              <ReelProgress
-                                key={element.id}
-                                element={elementWithConfig}
-                                isActive={index === currentSlide}
-                                onComplete={() => {
-                                  const config = getNormalizedUiConfig(elementWithConfig.uiConfig);
-                                  handleProgressComplete(
-                                    config.destination || 'next-slide',
-                                    config.url,
-                                    config.openInNewTab !== false
-                                  );
-                                }}
-                                onProgressChange={(progress) => {
-                                  setProgressStates((prev) => ({
-                                    ...prev,
-                                    [element.id]: progress,
-                                  }));
-                                }}
-                              />
-                            );
-                          case 'FORM':
-                            return (
-                              <ReelForm
-                                key={element.id}
-                                ref={(ref) => {
-                                  if (ref) {
-                                    formRefs.current[element.id] = ref;
-                                  } else {
-                                    delete formRefs.current[element.id];
-                                  }
-                                }}
-                                element={elementWithConfig}
-                                onNextSlide={() => {
-                                  dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
-                                  if (currentSlide < (reel?.slides?.length || 0) - 1) {
-                                    scrollToSlide(currentSlide + 1);
-                                  }
-                                }}
-                                onFormSubmit={(data) => handleFormSubmit(element.id, data)}
-                                onValidationChange={(isValid) => handleFormValidationChange(element.id, isValid)}
-                                isActive={index === currentSlide}
-                                reelId={reel?.id}
-                                slideId={slide.id}
-                              />
-                            );
-                          case 'FEEDBACK':
-                            return (
-                              <ReelFeedback
-                                key={element.id}
-                                element={elementWithConfig}
-                              />
-                            );
-                          case 'CIRCULAR':
-                            return <DashElement key={element.id} element={elementWithConfig} isActive={index === currentSlide} />;
-                          case 'CHART':
-                            return (
-                              <Suspense key={element.id} fallback={<div className="w-full h-64 bg-white/10 rounded-lg animate-pulse" />}>
-                                <ChartElement element={elementWithConfig} />
-                              </Suspense>
-                            );
-                          case 'SPACING':
-                            return <SpacingElement key={element.id} element={elementWithConfig} />;
-                          default:
-                            return (
-                              <div key={element.id} className="p-4 bg-white/20 rounded-lg backdrop-blur-sm">
-                                <p className="text-sm text-white/80">
-                                  Elemento {element.elementType} - Não implementado ainda
-                                </p>
-                              </div>
-                            );
+                                    // Atualizar estado de respostas do questionário
+                                    // O useEffect que verifica lockSlide será acionado automaticamente
+                                    setQuestionnaireResponses((prev) => ({
+                                      ...prev,
+                                      [element.id]: selectedIds,
+                                    }));
+                                  }}
+                                />
+                              );
+                            case 'QUESTION_GRID':
+                              return (
+                                <ReelQuestionGrid
+                                  key={element.id}
+                                  element={elementWithConfig}
+                                  isActive={index === currentSlide}
+                                  onNextSlide={handleQuestionnaireNext}
+                                  onSelectionChange={(selectedIds) => {
+                                    // Atualizar estado de respostas do question grid
+                                    // O useEffect que verifica lockSlide será acionado automaticamente
+                                    setQuestionnaireResponses((prev) => ({
+                                      ...prev,
+                                      [element.id]: selectedIds,
+                                    }));
+                                  }}
+                                />
+                              );
+                            case 'PROGRESS':
+                              return (
+                                <ReelProgress
+                                  key={element.id}
+                                  element={elementWithConfig}
+                                  isActive={index === currentSlide}
+                                  onComplete={() => {
+                                    const config = getNormalizedUiConfig(elementWithConfig.uiConfig);
+                                    handleProgressComplete(
+                                      config.destination || 'next-slide',
+                                      config.url,
+                                      config.openInNewTab !== false
+                                    );
+                                  }}
+                                  onProgressChange={(progress) => {
+                                    setProgressStates((prev) => ({
+                                      ...prev,
+                                      [element.id]: progress,
+                                    }));
+                                  }}
+                                />
+                              );
+                            case 'FORM':
+                              return (
+                                <ReelForm
+                                  key={element.id}
+                                  ref={(ref) => {
+                                    if (ref) {
+                                      formRefs.current[element.id] = ref;
+                                    } else {
+                                      delete formRefs.current[element.id];
+                                    }
+                                  }}
+                                  element={elementWithConfig}
+                                  onNextSlide={() => {
+                                    dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
+                                    if (currentSlide < (reel?.slides?.length || 0) - 1) {
+                                      scrollToSlide(currentSlide + 1);
+                                    }
+                                  }}
+                                  onFormSubmit={(data) => handleFormSubmit(element.id, data)}
+                                  onValidationChange={(isValid) => handleFormValidationChange(element.id, isValid)}
+                                  isActive={index === currentSlide}
+                                  reelId={reel?.id}
+                                  slideId={slide.id}
+                                />
+                              );
+                            case 'FEEDBACK':
+                              return (
+                                <ReelFeedback
+                                  key={element.id}
+                                  element={elementWithConfig}
+                                />
+                              );
+                            case 'CIRCULAR':
+                              return <DashElement key={element.id} element={elementWithConfig} isActive={index === currentSlide} />;
+                            case 'CHART':
+                              return (
+                                <Suspense key={element.id} fallback={<div className="w-full h-64 bg-white/10 rounded-lg animate-pulse" />}>
+                                  <ChartElement element={elementWithConfig} />
+                                </Suspense>
+                              );
+                            case 'SCORE':
+                              return (
+                                <Suspense key={element.id} fallback={<div className="w-full h-64 bg-white/10 rounded-lg animate-pulse" />}>
+                                  <ScoreElement element={elementWithConfig} isActive={index === currentSlide} />
+                                </Suspense>
+                              );
+                            case 'SPACING':
+                              return <SpacingElement key={element.id} element={elementWithConfig} />;
+                            default:
+                              return (
+                                <div key={element.id} className="p-4 bg-white/20 rounded-lg backdrop-blur-sm">
+                                  <p className="text-sm text-white/80">
+                                    Elemento {element.elementType} - Não implementado ainda
+                                  </p>
+                                </div>
+                              );
+                          }
+                        };
+
+                        // Elementos que não precisam de wrapper (já têm espaçamento próprio)
+                        const elementsWithoutWrapper = ['TEXT', 'IMAGE', 'VIDEO', 'SPACING'];
+                        
+                        if (elementsWithoutWrapper.includes(element.elementType)) {
+                          return renderElement();
                         }
+                        
+                        // Outros elementos precisam de wrapper para espaçamento
+                        return (
+                          <div key={element.id} style={{ width: '100%' }}>
+                            {renderElement()}
+                          </div>
+                        );
                       }
                     });
                   })()}
@@ -1694,6 +1761,15 @@ export default function PublicQuiz() {
                   selectedOptionId={selectedAnswers[slide.id]}
                   onOptionSelect={(optionId) => handleOptionSelect(slide.id, optionId)}
                 />
+              )}
+
+              {/* Elementos Sociais - renderizados apenas no slide atual */}
+              {reel?.socialConfig?.enabled && index === currentSlide && !slide.hideSocialElements && (
+                <>
+                  <ReelUsername socialConfig={reel.socialConfig} />
+                  <ReelCaption slide={slide} socialConfig={reel.socialConfig} />
+                  <ReelAudioTag slide={slide} />
+                </>
               )}
             </ReelSlide>
           );

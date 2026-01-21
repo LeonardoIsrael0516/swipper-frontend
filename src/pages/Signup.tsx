@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTracking } from '@/contexts/TrackingContext';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { validateEmail } from '@/lib/email-validator';
@@ -22,8 +23,31 @@ export default function Signup() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const { theme, toggleTheme } = useTheme();
   const { isAuthenticated, refreshUser } = useAuth();
+  const { trackEvent, sendCapiEvent, getUtmParams } = useTracking();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [affiliateToken, setAffiliateToken] = useState<string | null>(null);
+
+  // Rastrear afiliado via query param ou cookie
+  useEffect(() => {
+    // Verificar query param
+    const refParam = searchParams.get('ref');
+    if (refParam) {
+      // Salvar no cookie (30 dias)
+      const expires = new Date();
+      expires.setDate(expires.getDate() + 30);
+      document.cookie = `affiliateToken=${refParam}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
+      setAffiliateToken(refParam);
+    } else {
+      // Verificar cookie existente
+      const cookies = document.cookie.split(';');
+      const affiliateCookie = cookies.find((c) => c.trim().startsWith('affiliateToken='));
+      if (affiliateCookie) {
+        const token = affiliateCookie.split('=')[1];
+        setAffiliateToken(token);
+      }
+    }
+  }, [searchParams]);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -58,6 +82,7 @@ export default function Signup() {
         email,
         password,
         acceptedTerms: true,
+        affiliateToken: affiliateToken || undefined,
       });
 
       const data = (response as any).data || response;
@@ -76,6 +101,17 @@ export default function Signup() {
       await refreshUser();
 
       toast.success('Conta criada com sucesso!');
+      
+      // Tracking: CompleteRegistration e SignUp
+      const utmParams = getUtmParams();
+      trackEvent('CompleteRegistration', utmParams);
+      trackEvent('SignUp', utmParams);
+
+      // Enviar evento CAPI
+      await sendCapiEvent('CompleteRegistration', {
+        email: data.user?.email,
+        userId: data.user?.id,
+      });
       
       // Se email não está verificado, mostrar mensagem
       if (data.user && !data.user.emailVerified) {
@@ -100,11 +136,11 @@ export default function Signup() {
   return (
     <div className="min-h-screen flex bg-background">
       {/* Left Side - Signup Form */}
-      <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 lg:px-16 xl:px-24 relative bg-background">
+      <div className="w-full lg:w-1/2 flex flex-col justify-center lg:justify-center py-6 lg:py-0 px-4 sm:px-8 lg:px-16 xl:px-24 relative bg-background">
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
-          className="absolute top-6 right-6 p-2 rounded-lg hover:bg-surface-hover transition-colors"
+          className="absolute top-4 right-4 lg:top-6 lg:right-6 p-2 rounded-lg hover:bg-surface-hover transition-colors"
         >
           {theme === 'dark' ? (
             <Sun className="w-5 h-5 text-muted-foreground" />
@@ -115,26 +151,26 @@ export default function Signup() {
 
         <div className="max-w-md w-full mx-auto">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 mb-12 group">
+          <Link to="/" className="flex items-center gap-2 mb-6 lg:mb-12 group">
             <img
               src={theme === 'dark' ? '/logo-dark.png' : '/logo-white.png'}
               alt="ReelQuiz"
-              className="h-10 transition-all duration-300 group-hover:opacity-80"
+              className="h-8 lg:h-10 transition-all duration-300 group-hover:opacity-80"
             />
           </Link>
 
           {/* Welcome Text */}
-          <div className="mb-8">
-            <h1 className="font-display text-3xl lg:text-4xl font-bold mb-3 text-foreground">
+          <div className="mb-6 lg:mb-8">
+            <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 lg:mb-3 text-foreground">
               Crie sua conta
             </h1>
-            <p className="text-muted-foreground text-lg">
+            <p className="text-muted-foreground text-base sm:text-lg">
               Comece a criar swippers incríveis hoje mesmo
             </p>
           </div>
 
           {/* Signup Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-6">
             {error && (
               <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
@@ -261,11 +297,11 @@ export default function Signup() {
                 className="text-sm text-muted-foreground leading-relaxed cursor-pointer"
               >
                 Eu aceito os{' '}
-                <Link to="/terms" className="text-primary hover:text-primary/80 underline font-medium">
+                <Link to="/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-gray-600 underline font-medium">
                   Termos de Uso
                 </Link>
                 {' '}e a{' '}
-                <Link to="/privacy" className="text-primary hover:text-primary/80 underline font-medium">
+                <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-gray-600 underline font-medium">
                   Política de Privacidade
                 </Link>
               </Label>
@@ -288,7 +324,7 @@ export default function Signup() {
           </form>
 
           {/* Divider */}
-          <div className="relative my-8">
+          <div className="relative my-6 lg:my-8">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-border" />
             </div>
@@ -329,9 +365,12 @@ export default function Signup() {
           </Button>
 
           {/* Login Link */}
-          <p className="text-center mt-8 text-muted-foreground">
+          <p className="text-center mt-6 lg:mt-8 text-muted-foreground text-sm sm:text-base">
             Já tem uma conta?{' '}
-            <Link to="/login" className="text-primary font-medium hover:text-primary/80 transition-colors">
+            <Link 
+              to={searchParams.get('redirect') ? `/login?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : '/login'} 
+              className="text-primary font-medium hover:text-gray-600 transition-colors"
+            >
               Entrar
             </Link>
           </p>
@@ -339,7 +378,7 @@ export default function Signup() {
       </div>
 
       {/* Right Side - Visual */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-purple-600 via-pink-600 to-purple-800 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-purple-600 via-gray-700 to-purple-800 relative overflow-hidden">
         {/* Decorative Elements */}
         <div className="absolute inset-0">
           <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-white/10 rounded-full blur-3xl animate-float" />

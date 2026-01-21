@@ -169,7 +169,7 @@ export default function Reels() {
             Imagem com Efeitos
           </ReelText>
           <div className="w-full max-w-sm mx-auto h-64 rounded-2xl overflow-hidden">
-            <div className="w-full h-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
+            <div className="w-full h-full bg-gradient-to-br from-purple-400 to-gray-700 flex items-center justify-center">
               <ReelText size="6xl">🎭</ReelText>
             </div>
           </div>
@@ -589,7 +589,7 @@ export default function Reels() {
             backgroundGradient: {
               type: 'linear',
               direction: 'to bottom right',
-              colors: ['#ec4899', '#a855f7', '#6366f1'],
+              colors: ['#E91E63', '#a855f7', '#6366f1'],
             },
           }}
         >

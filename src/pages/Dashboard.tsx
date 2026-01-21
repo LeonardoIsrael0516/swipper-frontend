@@ -23,11 +23,17 @@ import {
   ChevronRight,
   Mail,
   X,
-  Share2
+  Share2,
+  AlertTriangle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from '@/components/ui/alert';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -102,9 +108,15 @@ export default function Dashboard() {
   const { data: reelsData, isLoading: isLoadingReels } = useQuery({
     queryKey: ['user-reels'],
     queryFn: async () => {
-      const response = await api.get('/reels?limit=100');
-      const data = (response as any).data || response;
-      return data;
+      try {
+        const response = await api.get('/reels?limit=100');
+        // A resposta pode vir como { data: [...], meta: {...} } ou diretamente como array
+        // O backend retorna: { data: reels, meta: {...} }
+        return response;
+      } catch (error) {
+        console.error('Error fetching reels:', error);
+        throw error;
+      }
     },
   });
 
@@ -117,12 +129,44 @@ export default function Dashboard() {
     },
   });
 
-
-  const allReels = reelsData?.data || [];
+  // Extrair reels da resposta - o backend retorna { data: [...], meta: {...} }
+  // Mas a resposta pode vir já parseada ou não
+  const allReels = (() => {
+    if (!reelsData) return [];
+    
+    const data = reelsData as any;
+    
+    // Se é um array direto
+    if (Array.isArray(data)) {
+      return data;
+    }
+    
+    // Se tem propriedade data que é array
+    if (data.data && Array.isArray(data.data)) {
+      return data.data;
+    }
+    
+    // Se data.data existe (resposta aninhada)
+    if (data.data?.data && Array.isArray(data.data.data)) {
+      return data.data.data;
+    }
+    
+    return [];
+  })();
   
   // Separar reels próprios dos compartilhados
-  const myReels = allReels.filter((reel: any) => reel.userId === user?.id);
-  const sharedReels = allReels.filter((reel: any) => reel.userId !== user?.id);
+  // Comparar userId como string para evitar problemas de tipo
+  const myReels = allReels.filter((reel: any) => {
+    const reelUserId = String(reel.userId || '');
+    const currentUserId = String(user?.id || '');
+    return reelUserId === currentUserId && reelUserId !== '';
+  });
+  
+  const sharedReels = allReels.filter((reel: any) => {
+    const reelUserId = String(reel.userId || '');
+    const currentUserId = String(user?.id || '');
+    return reelUserId !== currentUserId && reelUserId !== '';
+  });
   
   // Usar reels da aba ativa
   const reels = activeTab === 'meus' ? myReels : sharedReels;
@@ -328,12 +372,36 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Banner de Limite de Visitas */}
+        {userStats?.visitLimitReached && (
+          <Alert className="mb-6 border-yellow-500/50 bg-yellow-500/10">
+            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+            <AlertTitle className="text-yellow-800 dark:text-yellow-200">
+              Limite de Visitas Atingido
+            </AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p className="text-yellow-700 dark:text-yellow-300">
+                {userStats.visitLimitWarning
+                  ? `Você atingiu o limite de ${userStats.visitLimit || 0} visitas. Faça upgrade para não desativar.`
+                  : `Você atingiu o limite de ${userStats.visitLimit || 0} visitas (+500 extras). Faça upgrade para continuar recebendo visitas.`}
+              </p>
+              <Button
+                size="sm"
+                onClick={() => navigate('/plans')}
+                className="mt-2"
+              >
+                Fazer Upgrade
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {stats.map((stat, index) => (
             <Card 
               key={stat.title} 
-              className="glass-card border-border/50 hover:border-primary/30 transition-all duration-300 animate-slide-up"
+              className="glass-card border-border/50 hover:border-gray-300 transition-all duration-300 animate-slide-up"
               style={{ animationDelay: `${index * 100}ms` }}
             >
               <CardContent className={isMobile ? "p-4" : "p-6"}>
@@ -404,7 +472,7 @@ export default function Dashboard() {
             ) : reels.length === 0 ? (
               <div className="flex items-center justify-center py-8">
                 <div className="w-full max-w-2xl">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-xl bg-surface border-2 border-dashed border-primary/20 hover:border-primary/40 transition-all duration-300 group">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-xl bg-surface border-2 border-dashed border-primary/20 hover:border-gray-400 transition-all duration-300 group">
                     <div className="flex items-center gap-4 flex-1 min-w-0">
                       <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0">
                         <img src="/favicon.png" alt="" className="w-8 h-8" />
@@ -414,8 +482,8 @@ export default function Dashboard() {
                           <h4 className="font-medium text-foreground">Swipper</h4>
                           <div className="flex items-center gap-3 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
-                              <Users className="w-3 h-3" />
-                              0 respostas
+                              <Eye className="w-3 h-3" />
+                              0 views
                             </span>
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
@@ -461,13 +529,13 @@ export default function Dashboard() {
                           <img src="/favicon.png" alt="" className="w-8 h-8" />
                         </div>
                         <div>
-                          <h4 className="font-medium mb-1 group-hover:text-primary transition-colors">
+                          <h4 className="font-medium mb-1 group-hover:text-gray-700 transition-colors">
                             {quiz.title}
                           </h4>
                           <div className="flex items-center gap-3 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
-                              <Users className="w-3 h-3" />
-                              {quiz._count?.responses || 0} respostas
+                              <Eye className="w-3 h-3" />
+                              {quiz._count?.visits || 0} views
                             </span>
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
@@ -542,7 +610,7 @@ export default function Dashboard() {
                   return (
                     <Card
                       key={quiz.id}
-                      className="glass-card border-border/50 hover:border-primary/30 transition-all duration-200 group relative"
+                      className="glass-card border-border/50 hover:border-gray-300 transition-all duration-200 group relative"
                     >
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between mb-3">
@@ -554,7 +622,7 @@ export default function Dashboard() {
                               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0">
                                 <img src="/favicon.png" alt="" className="w-6 h-6" />
                               </div>
-                              <h4 className="font-medium text-sm line-clamp-2 group-hover:text-primary transition-colors">
+                              <h4 className="font-medium text-sm line-clamp-2 group-hover:text-gray-700 transition-colors">
                                 {quiz.title}
                               </h4>
                             </div>
@@ -603,8 +671,8 @@ export default function Dashboard() {
                         >
                           <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
                             <span className="flex items-center gap-1">
-                              <Users className="w-3 h-3" />
-                              {quiz._count?.responses || 0} respostas
+                              <Eye className="w-3 h-3" />
+                              {quiz._count?.visits || 0} views
                             </span>
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
@@ -689,14 +757,14 @@ export default function Dashboard() {
                                   <img src="/favicon.png" alt="" className="w-8 h-8" />
                                 </div>
                                 <div>
-                                  <h4 className="font-medium mb-1 group-hover:text-primary transition-colors">
+                                  <h4 className="font-medium mb-1 group-hover:text-gray-700 transition-colors">
                                     {quiz.title}
                                   </h4>
-                                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                                    <span className="flex items-center gap-1">
-                                      <Users className="w-3 h-3" />
-                                      {quiz._count?.responses || 0} respostas
-                                    </span>
+                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Eye className="w-3 h-3" />
+                              {quiz._count?.visits || 0} views
+                            </span>
                                     <span className="flex items-center gap-1">
                                       <Clock className="w-3 h-3" />
                                       {timeAgo}
@@ -755,7 +823,7 @@ export default function Dashboard() {
                           return (
                             <Card
                               key={quiz.id}
-                              className="glass-card border-border/50 hover:border-primary/30 transition-all duration-200 group relative"
+                              className="glass-card border-border/50 hover:border-gray-300 transition-all duration-200 group relative"
                             >
                               <CardContent className="p-4">
                                 <div className="flex items-start justify-between mb-3">
@@ -767,7 +835,7 @@ export default function Dashboard() {
                                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0">
                                         <img src="/favicon.png" alt="" className="w-6 h-6" />
                                       </div>
-                                      <h4 className="font-medium text-sm line-clamp-2 group-hover:text-primary transition-colors">
+                                      <h4 className="font-medium text-sm line-clamp-2 group-hover:text-gray-700 transition-colors">
                                         {quiz.title}
                                       </h4>
                                     </div>
@@ -794,11 +862,11 @@ export default function Dashboard() {
                                   className="cursor-pointer"
                                   onClick={() => handleEdit(quiz.id)}
                                 >
-                                  <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
-                                    <span className="flex items-center gap-1">
-                                      <Users className="w-3 h-3" />
-                                      {quiz._count?.responses || 0} respostas
-                                    </span>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+                            <span className="flex items-center gap-1">
+                              <Eye className="w-3 h-3" />
+                              {quiz._count?.visits || 0} views
+                            </span>
                                     <span className="flex items-center gap-1">
                                       <Clock className="w-3 h-3" />
                                       {timeAgo}

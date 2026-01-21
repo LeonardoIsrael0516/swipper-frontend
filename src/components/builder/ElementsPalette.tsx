@@ -22,6 +22,7 @@ import {
   Grid3x3,
   GripVertical,
   Paintbrush,
+  Minus,
 } from 'lucide-react';
 import { useBuilder } from '@/contexts/BuilderContext';
 
@@ -44,6 +45,7 @@ const elements = [
   { type: 'FEEDBACK', icon: Star, label: 'Reviews' },
   { type: 'CIRCULAR', icon: Circle, label: 'Dash' },
   { type: 'CHART', icon: BarChart3, label: 'Gráfico' },
+  { type: 'SCORE', icon: Minus, label: 'Score' },
   { type: 'SPACING', icon: GripVertical, label: 'Espaçamento' },
 ];
 

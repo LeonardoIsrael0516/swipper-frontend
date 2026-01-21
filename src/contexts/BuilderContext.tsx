@@ -67,6 +67,9 @@ export interface Slide {
   backgroundConfig?: BackgroundConfig; // Novo campo (também pode estar em uiConfig.backgroundConfig)
   uiConfig?: any;
   logicNext?: Record<string, any>;
+  caption?: string;
+  audioTag?: string;
+  hideSocialElements?: boolean;
   elements: SlideElement[];
   options?: Array<{
     id: string;
@@ -96,6 +99,21 @@ export interface PixelsConfig {
   };
 }
 
+export interface SocialConfig {
+  enabled?: boolean;
+  showAvatar?: boolean;
+  showLike?: boolean;
+  showComment?: boolean;
+  showShare?: boolean;
+  showUsername?: boolean;
+  showCaptions?: boolean;
+  username?: string;
+  avatarUrl?: string;
+  initialLikes?: number;
+  initialComments?: number;
+  incrementInterval?: number; // em segundos
+}
+
 export interface Reel {
   id: string;
   title: string;
@@ -107,6 +125,7 @@ export interface Reel {
   faviconUrl?: string;
   showProgressBar?: boolean;
   pixelsConfig?: PixelsConfig;
+  socialConfig?: SocialConfig;
   slides: Slide[];
 }
 
@@ -131,6 +150,7 @@ interface BuilderContextType {
   addSlide: () => Promise<void>;
   duplicateSlide: (slideId: string) => Promise<void>;
   removeSlide: (slideId: string) => Promise<void>;
+  reorderSlides: (activeId: string, overId: string) => Promise<void>;
   saveReel: () => Promise<void>;
   publishReel: () => Promise<void>;
   saveDraft: () => Promise<void>;
@@ -718,6 +738,25 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
           showGrid: true,
           backgroundColor: 'transparent',
           textColor: '#000000',
+        };
+      } else if (elementType === 'SCORE') {
+        const generateId = () => `score-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        uiConfig = {
+          title: 'HOJE',
+          showImage: true,
+          imageUrl: null,
+          titleColor: '#22c55e', // verde
+          items: [
+            {
+              id: generateId(),
+              title: 'Nível de Potência Vocal',
+              value: 'Fraco',
+              percentage: 20,
+              progressColor: '#ef4444', // vermelho
+              backgroundColor: '#e5e7eb',
+              textColor: '#ffffff',
+            }
+          ],
         };
       } else if (elementType === 'SPACING') {
         uiConfig = {
@@ -1344,6 +1383,78 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     }
   }, [reel, selectedSlide]);
 
+  const reorderSlides = useCallback(async (activeId: string, overId: string) => {
+    if (!reel) return;
+    if (activeId === overId) return;
+
+    const activeIndex = reel.slides.findIndex((s) => s.id === activeId);
+    const overIndex = reel.slides.findIndex((s) => s.id === overId);
+
+    if (activeIndex === -1 || overIndex === -1) return;
+
+    // Criar nova ordem dos slides
+    const newSlides = [...reel.slides];
+    const [movedSlide] = newSlides.splice(activeIndex, 1);
+    newSlides.splice(overIndex, 0, movedSlide);
+
+    // Atualizar ordem de cada slide
+    const updatedSlides = newSlides.map((slide, index) => ({
+      ...slide,
+      order: index + 1,
+    }));
+
+    // Atualizar estado local imediatamente
+    const updatedReel = {
+      ...reel,
+      slides: updatedSlides,
+    };
+    setReel(updatedReel);
+
+    // Atualizar selectedSlide se necessário
+    if (selectedSlide?.id === activeId) {
+      const updatedSelectedSlide = updatedSlides.find((s) => s.id === activeId);
+      if (updatedSelectedSlide) {
+        setSelectedSlide(updatedSelectedSlide);
+      }
+    }
+
+    // Salvar no backend usando endpoint de reordenar
+    setIsLoading(true);
+    try {
+      // Enviar todos os slides com suas novas ordens em uma única requisição
+      await api.patch(`/reels/${reel.id}/slides/reorder`, {
+        slides: updatedSlides.map((slide) => ({
+          id: slide.id,
+          order: slide.order,
+        })),
+      });
+
+      // Se estiver em DRAFT, marcar como salvo após salvar no backend
+      // Se estiver ACTIVE, manter hasUnsavedChanges = true para indicar mudanças não publicadas
+      if (reel.status === 'DRAFT') {
+        setHasUnsavedChanges(false);
+        setLastSavedAt(new Date());
+      } else {
+        setHasUnsavedChanges(true);
+      }
+      
+      toast.success('Slides reordenados com sucesso!');
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Erro desconhecido';
+      toast.error('Erro ao reordenar slides: ' + errorMessage);
+      // Reverter mudanças em caso de erro
+      setReel(reel);
+      if (selectedSlide?.id === activeId) {
+        const originalSelectedSlide = reel.slides.find((s) => s.id === activeId);
+        if (originalSelectedSlide) {
+          setSelectedSlide(originalSelectedSlide);
+        }
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [reel, selectedSlide]);
+
   const saveReel = useCallback(async () => {
     if (!reel || isLoading) return;
 
@@ -1515,6 +1626,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
       addSlide,
       duplicateSlide,
       removeSlide,
+      reorderSlides,
       saveReel,
       publishReel,
       saveDraft,

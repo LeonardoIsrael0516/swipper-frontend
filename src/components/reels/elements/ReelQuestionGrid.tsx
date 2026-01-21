@@ -20,7 +20,7 @@ const normalizeUiConfig = (uiConfig: any): any => {
 
 interface ReelQuestionGridProps {
   element: SlideElement;
-  onNextSlide?: () => void;
+  onNextSlide?: (elementId: string, itemId: string) => void;
   onSelectionChange?: (selectedIds: string[]) => void;
   isActive?: boolean;
 }
@@ -117,7 +117,7 @@ export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNext
       if (!lockSlide && onNextSlide) {
         // Pequeno delay para feedback visual
         setTimeout(() => {
-          onNextSlide();
+          onNextSlide(element.id, itemId);
         }, 300);
       }
     }

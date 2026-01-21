@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
-import { Palette, Layers, Image as ImageIcon, Video, Plus, X, Upload, Loader2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Palette, Layers, Image as ImageIcon, Video, Plus, X, Upload, Loader2, Music } from 'lucide-react';
 import { useBuilder, BackgroundConfig } from '@/contexts/BuilderContext';
 import { uploadFile } from '@/lib/media';
 import { useVideoUpload } from '@/hooks/useVideoUpload';
@@ -18,6 +19,16 @@ export function BackgroundEditor() {
   const { selectedSlide, updateSlide, reel } = useBuilder();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  
+  // Estados para legenda e tag de áudio
+  const [caption, setCaption] = useState(selectedSlide?.caption || '');
+  const [audioTag, setAudioTag] = useState(selectedSlide?.audioTag || '');
+  
+  // Sincronizar quando slide mudar
+  useEffect(() => {
+    setCaption(selectedSlide?.caption || '');
+    setAudioTag(selectedSlide?.audioTag || '');
+  }, [selectedSlide?.id, selectedSlide?.caption, selectedSlide?.audioTag]);
 
   // Inicializar backgroundConfig a partir do backgroundColor ou uiConfig ou criar novo
   const getInitialConfig = useCallback((): BackgroundConfig => {
@@ -86,6 +97,8 @@ export function BackgroundEditor() {
     const colorInputRef = useRef<HTMLInputElement>(null);
     const colorPickerRef = useRef<HTMLInputElement>(null);
     const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isColorPickerInteracting = useRef(false);
+    const colorPickerWrapperRef = useRef<HTMLDivElement>(null);
 
     // Sincronizar quando config mudar externamente
     useEffect(() => {
@@ -146,19 +159,113 @@ export function BackgroundEditor() {
       <Accordion type="single" collapsible className="w-full" defaultValue="config">
         <AccordionItem value="config">
           <AccordionTrigger>Configurações de Cor</AccordionTrigger>
-          <AccordionContent>
+          <AccordionContent data-accordion-content>
             <div className="space-y-4">
               <div>
                 <Label htmlFor="color">Cor</Label>
-                <div className="flex gap-2 mt-2">
-                  <Input
-                    ref={colorPickerRef}
-                    id="color"
-                    type="color"
-                    value={localColor}
-                    onChange={handleColorPickerChange}
-                    className="w-20 h-10 p-1 cursor-pointer"
-                  />
+                <div 
+                  ref={colorPickerWrapperRef}
+                  className="flex gap-2 mt-2"
+                  onMouseDown={(e) => {
+                    // Prevenir que cliques no container fechem o accordion
+                    const target = e.target as HTMLElement;
+                    if (target.closest('input[type="color"]') || target === colorPickerRef.current) {
+                      e.stopPropagation();
+                      // Não usar preventDefault para permitir que o color picker nativo abra
+                    }
+                  }}
+                  onClick={(e) => {
+                    const target = e.target as HTMLElement;
+                    if (target.closest('input[type="color"]') || target === colorPickerRef.current) {
+                      e.stopPropagation();
+                    }
+                  }}
+                  onPointerDown={(e) => {
+                    const target = e.target as HTMLElement;
+                    if (target.closest('input[type="color"]') || target === colorPickerRef.current) {
+                      e.stopPropagation();
+                    }
+                  }}
+                >
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    <Input
+                      ref={colorPickerRef}
+                      id="color"
+                      type="color"
+                      value={localColor}
+                      onChange={handleColorPickerChange}
+                      onFocus={(e) => {
+                        e.stopPropagation();
+                        isColorPickerInteracting.current = true;
+                      }}
+                      onBlur={(e) => {
+                        e.stopPropagation();
+                        // Aguardar antes de permitir interação normal
+                        setTimeout(() => {
+                          isColorPickerInteracting.current = false;
+                        }, 500);
+                      }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        // Não usar preventDefault aqui para permitir que o color picker nativo abra
+                        isColorPickerInteracting.current = true;
+                        
+                        // Listener global para mouseup - capturar em qualquer lugar
+                        const handleMouseUp = (event: MouseEvent) => {
+                          // Se o mouseup foi no color picker ou dentro do accordion, não fazer nada ainda
+                          const target = event.target as HTMLElement;
+                          if (target.closest('[data-accordion-content]') || 
+                              target.closest('input[type="color"]') ||
+                              target === colorPickerRef.current ||
+                              colorPickerWrapperRef.current?.contains(target)) {
+                            return;
+                          }
+                          
+                          // Aguardar um pouco antes de permitir interação normal
+                          setTimeout(() => {
+                            isColorPickerInteracting.current = false;
+                          }, 500);
+                          document.removeEventListener('mouseup', handleMouseUp, true);
+                        };
+                        document.addEventListener('mouseup', handleMouseUp, true);
+                      }}
+                      onTouchStart={(e) => {
+                        e.stopPropagation();
+                        // Não usar preventDefault aqui para permitir que o color picker nativo abra
+                        isColorPickerInteracting.current = true;
+                        
+                        const handleTouchEnd = (event: TouchEvent) => {
+                          const target = event.target as HTMLElement;
+                          if (target.closest('[data-accordion-content]') || 
+                              target.closest('input[type="color"]') ||
+                              target === colorPickerRef.current ||
+                              colorPickerWrapperRef.current?.contains(target)) {
+                            return;
+                          }
+                          
+                          setTimeout(() => {
+                            isColorPickerInteracting.current = false;
+                          }, 500);
+                          document.removeEventListener('touchend', handleTouchEnd, true);
+                        };
+                        document.addEventListener('touchend', handleTouchEnd, true);
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                      }}
+                      className="w-20 h-10 p-1 cursor-pointer"
+                    />
+                  </div>
                   <Input
                     ref={colorInputRef}
                     type="text"
@@ -176,7 +283,7 @@ export function BackgroundEditor() {
               <Label className="text-xs mb-2 block">Cores Predefinidas</Label>
               <div className="grid grid-cols-6 gap-2">
                 {[
-                  '#9333ea', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
+                  '#9333ea', '#E91E63', '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
                   '#8b5cf6', '#f97316', '#06b6d4', '#84cc16', '#6366f1', '#14b8a6',
                 ].map((color) => (
                   <button
@@ -202,6 +309,7 @@ export function BackgroundEditor() {
   const GradientStopColorInput = ({ stop, index, onUpdate }: { stop: { color: string; position: number }; index: number; onUpdate: (color: string) => void }) => {
     const [localColor, setLocalColor] = useState(stop.color);
     const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isColorPickerInteracting = useRef(false);
 
     // Sincronizar quando stop.color mudar externamente
     useEffect(() => {
@@ -260,6 +368,62 @@ export function BackgroundEditor() {
           type="color"
           value={localColor}
           onChange={handleColorPickerChange}
+          onFocus={(e) => {
+            e.stopPropagation();
+            isColorPickerInteracting.current = true;
+          }}
+          onBlur={(e) => {
+            e.stopPropagation();
+            // Aguardar antes de permitir interação normal
+            setTimeout(() => {
+              isColorPickerInteracting.current = false;
+            }, 300);
+          }}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            isColorPickerInteracting.current = true;
+            
+            // Listener global para mouseup - capturar em qualquer lugar
+            const handleMouseUp = (event: MouseEvent) => {
+              // Se o mouseup foi no color picker ou dentro do accordion, não fazer nada ainda
+              const target = event.target as HTMLElement;
+              if (target.closest('[data-accordion-content]') || target.closest('input[type="color"]')) {
+                return;
+              }
+              
+              // Aguardar um pouco antes de permitir interação normal
+              setTimeout(() => {
+                isColorPickerInteracting.current = false;
+              }, 500);
+              document.removeEventListener('mouseup', handleMouseUp, true);
+            };
+            document.addEventListener('mouseup', handleMouseUp, true);
+          }}
+          onTouchStart={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            isColorPickerInteracting.current = true;
+            
+            const handleTouchEnd = (event: TouchEvent) => {
+              const target = event.target as HTMLElement;
+              if (target.closest('[data-accordion-content]') || target.closest('input[type="color"]')) {
+                return;
+              }
+              
+              setTimeout(() => {
+                isColorPickerInteracting.current = false;
+              }, 500);
+              document.removeEventListener('touchend', handleTouchEnd, true);
+            };
+            document.addEventListener('touchend', handleTouchEnd, true);
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+          }}
           className="w-16 h-8 p-1"
         />
         <Input
@@ -281,7 +445,7 @@ export function BackgroundEditor() {
       angle: 90,
       stops: [
         { color: '#9333ea', position: 0 },
-        { color: '#ec4899', position: 100 },
+        { color: '#E91E63', position: 100 },
       ],
     };
 
@@ -1004,6 +1168,81 @@ export function BackgroundEditor() {
         {config.type === 'image' && <ImageTab />}
         {config.type === 'video' && <VideoTab />}
       </div>
+
+      {/* Legenda */}
+      {reel?.socialConfig?.showCaptions && (
+        <div className="mt-6 pt-6 border-t border-border/50 space-y-2">
+          <Label htmlFor="caption">Legenda do Slide</Label>
+          <Textarea
+            id="caption"
+            value={caption}
+            onChange={(e) => {
+              setCaption(e.target.value);
+            }}
+            onBlur={() => {
+              if (selectedSlide) {
+                updateSlide(selectedSlide.id, { caption: caption || undefined });
+              }
+            }}
+            placeholder="Adicione uma legenda para este slide... (use #hashtags)"
+            rows={3}
+            className="w-full resize-none"
+            maxLength={40}
+          />
+          <p className="text-xs text-muted-foreground">
+            {caption.length}/40 caracteres. Use #hashtags para destacar palavras-chave.
+          </p>
+        </div>
+      )}
+
+      {/* Tag de Áudio (apenas para slides com vídeo) */}
+      {(config.type === 'video' || selectedSlide?.backgroundConfig?.type === 'video' || selectedSlide?.uiConfig?.backgroundConfig?.type === 'video') && (
+        <div className="mt-6 pt-6 border-t border-border/50 space-y-2">
+          <div className="flex items-center gap-2">
+            <Music className="w-4 h-4 text-muted-foreground" />
+            <Label htmlFor="audioTag">Tag de Áudio</Label>
+          </div>
+          <Input
+            id="audioTag"
+            value={audioTag}
+            onChange={(e) => {
+              setAudioTag(e.target.value);
+            }}
+            onBlur={() => {
+              if (selectedSlide) {
+                updateSlide(selectedSlide.id, { audioTag: audioTag || undefined });
+              }
+            }}
+            placeholder="Nome do som original"
+            className="w-full"
+            maxLength={100}
+          />
+          <p className="text-xs text-muted-foreground">
+            {audioTag.length}/100 caracteres. Nome do som que aparece abaixo do nome de usuário.
+          </p>
+        </div>
+      )}
+
+      {/* Ocultar Elementos Sociais */}
+      {reel?.socialConfig?.enabled && (
+        <div className="mt-6 pt-6 border-t border-border/50 space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="hideSocialElements">Ocultar Elementos Sociais neste Slide</Label>
+            <Switch
+              id="hideSocialElements"
+              checked={selectedSlide?.hideSocialElements || false}
+              onCheckedChange={(checked) => {
+                if (selectedSlide) {
+                  updateSlide(selectedSlide.id, { hideSocialElements: checked });
+                }
+              }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Quando habilitado, os elementos sociais (avatar, curtidas, comentários, compartilhar, nome de usuário, legenda, tag de áudio) ficarão ocultos apenas neste slide.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

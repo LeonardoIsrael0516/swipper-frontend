@@ -604,7 +604,7 @@ class ApiClient {
     return this.get<T>(`/admin/users/${id}`);
   }
 
-  async updateAdminUser<T>(id: string, data: { name?: string; email?: string; role?: string; emailVerified?: boolean }): Promise<T> {
+  async updateAdminUser<T>(id: string, data: { name?: string; email?: string; role?: string; emailVerified?: boolean; planId?: string | null }): Promise<T> {
     return this.put<T>(`/admin/users/${id}`, data);
   }
 
@@ -666,6 +666,11 @@ class ApiClient {
     return this.patch<T>('/admin/settings', data);
   }
 
+  // Tracking methods
+  async sendTrackingEvent<T>(data: any): Promise<T> {
+    return this.post<T>('/tracking/event', data);
+  }
+
   // Plans methods (public)
   async getPlans<T>(): Promise<T> {
     return this.publicGet<T>('/plans');
@@ -674,6 +679,14 @@ class ApiClient {
   // Plans methods (admin)
   async getAdminPlans<T>(): Promise<T> {
     return this.get<T>('/plans/admin');
+  }
+
+  async checkWebhookLimit<T>(): Promise<T> {
+    return this.get<T>('/plans/limits/webhooks');
+  }
+
+  async checkCustomDomainLimit<T>(): Promise<T> {
+    return this.get<T>('/plans/limits/domains');
   }
 
   async getAdminPlan<T>(id: string): Promise<T> {
@@ -694,6 +707,44 @@ class ApiClient {
 
   async togglePlanActive<T>(id: string): Promise<T> {
     return this.patch<T>(`/plans/admin/${id}/toggle-active`, {});
+  }
+
+  // Payments methods
+  async createCheckout<T>(planId: string): Promise<T> {
+    return this.get<T>(`/payments/checkout/${planId}`);
+  }
+
+  async processPayment<T>(planId: string, data: any): Promise<T> {
+    return this.post<T>(`/payments/checkout/${planId}/process`, data);
+  }
+
+  async getMyPayments<T>(): Promise<T> {
+    return this.get<T>('/payments/my-payments');
+  }
+
+  async checkPaymentStatus<T>(txid: string): Promise<T> {
+    return this.post<T>(`/payments/check-payment/${txid}`, {});
+  }
+
+  // Gateway methods (admin)
+  async getGateways<T>(): Promise<T> {
+    return this.get<T>('/admin/gateways');
+  }
+
+  async getGateway<T>(id: string): Promise<T> {
+    return this.get<T>(`/admin/gateways/${id}`);
+  }
+
+  async createGateway<T>(data: any): Promise<T> {
+    return this.post<T>('/admin/gateways', data);
+  }
+
+  async updateGateway<T>(id: string, data: any): Promise<T> {
+    return this.put<T>(`/admin/gateways/${id}`, data);
+  }
+
+  async testGateway<T>(id: string): Promise<T> {
+    return this.get<T>(`/admin/gateways/${id}/test`);
   }
 
   // Custom Domains methods

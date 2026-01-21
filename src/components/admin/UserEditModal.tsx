@@ -18,9 +18,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface User {
   id: string;
@@ -28,6 +29,10 @@ interface User {
   name: string | null;
   role: string;
   emailVerified: boolean;
+  plan?: {
+    id: string;
+    title: string;
+  } | null;
 }
 
 interface UserEditModalProps {
@@ -41,7 +46,18 @@ export function UserEditModal({ user, open, onOpenChange }: UserEditModalProps) 
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'USER' | 'REELS'>('USER');
   const [emailVerified, setEmailVerified] = useState(false);
+  const [planId, setPlanId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  // Buscar planos disponíveis
+  const { data: plans, isLoading: plansLoading } = useQuery({
+    queryKey: ['admin-plans'],
+    queryFn: async () => {
+      const response = await api.getAdminPlans<any>();
+      return (response as any).data || response;
+    },
+    enabled: open, // Só buscar quando o modal estiver aberto
+  });
 
   useEffect(() => {
     if (user) {
@@ -49,6 +65,7 @@ export function UserEditModal({ user, open, onOpenChange }: UserEditModalProps) 
       setEmail(user.email);
       setRole(user.role as 'USER' | 'REELS');
       setEmailVerified(user.emailVerified);
+      setPlanId(user.plan?.id || null);
     }
   }, [user]);
 
@@ -58,6 +75,7 @@ export function UserEditModal({ user, open, onOpenChange }: UserEditModalProps) 
       email?: string;
       role?: string;
       emailVerified?: boolean;
+      planId?: string | null;
     }) => {
       if (!user) throw new Error('User not found');
       const response = await api.updateAdminUser(user.id, data);
@@ -80,6 +98,7 @@ export function UserEditModal({ user, open, onOpenChange }: UserEditModalProps) 
       email,
       role,
       emailVerified,
+      planId: planId || null,
     });
   };
 
@@ -135,6 +154,29 @@ export function UserEditModal({ user, open, onOpenChange }: UserEditModalProps) 
                 checked={emailVerified}
                 onCheckedChange={setEmailVerified}
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="plan">Plano</Label>
+              {plansLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <Select
+                  value={planId || 'none'}
+                  onValueChange={(value) => setPlanId(value === 'none' ? null : value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sem plano" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem plano</SelectItem>
+                    {(plans || []).map((plan: any) => (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        {plan.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
           <DialogFooter>

@@ -20,7 +20,7 @@ const normalizeUiConfig = (uiConfig: any): any => {
 
 interface ReelQuestionnaireProps {
   element: SlideElement;
-  onNextSlide?: () => void;
+  onNextSlide?: (elementId: string, itemId: string) => void;
   onSelectionChange?: (selectedIds: string[]) => void;
   isActive?: boolean;
 }
@@ -265,7 +265,7 @@ export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNe
       if (!lockSlide && onNextSlide) {
         // Pequeno delay para feedback visual
         setTimeout(() => {
-          onNextSlide();
+          onNextSlide(element.id, itemId);
         }, 300);
       }
     }

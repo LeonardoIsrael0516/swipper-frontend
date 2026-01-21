@@ -122,7 +122,7 @@ export default function VerifyEmail() {
               </p>
               <Button
                 onClick={() => navigate('/dashboard')}
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:opacity-90"
+                className="w-full bg-gradient-to-r from-purple-600 to-gray-700 text-white hover:opacity-90"
               >
                 Ir para Dashboard
                 <ArrowRight className="w-4 h-4 ml-2" />
@@ -147,7 +147,7 @@ export default function VerifyEmail() {
                 <Button
                   onClick={handleResend}
                   disabled={isResending}
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:opacity-90 disabled:opacity-50"
+                  className="w-full bg-gradient-to-r from-purple-600 to-gray-700 text-white hover:opacity-90 disabled:opacity-50"
                 >
                   {isResending ? (
                     <>
@@ -176,7 +176,7 @@ export default function VerifyEmail() {
         {/* Footer */}
         <p className="text-center mt-6 text-sm text-gray-500">
           Precisa de ajuda?{' '}
-          <Link to="/" className="text-purple-600 hover:text-purple-700 font-medium">
+          <Link to="/" className="text-gray-600 hover:text-gray-700 font-medium">
             Entre em contato
           </Link>
         </p>

@@ -16,6 +16,8 @@ import { useBuilder } from '@/contexts/BuilderContext';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronUp, Code, Eye } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CreateWebhookDto,
   UpdateWebhookDto,
@@ -48,9 +50,23 @@ interface WebhookFormProps {
 
 export function WebhookForm({ webhook, onSuccess, onCancel }: WebhookFormProps) {
   const { reel } = useBuilder();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [showAdvancedConditions, setShowAdvancedConditions] = useState(false);
   const [conditionsJson, setConditionsJson] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+
+  // Verificar limite de webhooks do plano antes de criar
+  const { data: webhookLimitCheck } = useQuery({
+    queryKey: ['webhook-limit-check'],
+    queryFn: async () => {
+      const response = await api.checkWebhookLimit<any>();
+      return (response as any).data || response;
+    },
+    enabled: !webhook, // Só verificar ao criar novo webhook, não ao editar
+  });
+
+  const canCreateWebhooks = webhookLimitCheck?.allowed === true;
 
   const {
     register,
@@ -106,6 +122,27 @@ export function WebhookForm({ webhook, onSuccess, onCancel }: WebhookFormProps) 
       return;
     }
 
+    // Verificar limite antes de criar (só para novos webhooks)
+    if (!webhook && !canCreateWebhooks) {
+      toast.error(
+        <div className="flex flex-col items-start gap-2">
+          <span>{webhookLimitCheck?.message || 'Seu plano não permite webhooks. Faça upgrade para usar esta funcionalidade.'}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            onClick={() => {
+              navigate('/plans');
+            }}
+          >
+            Fazer Upgrade
+          </Button>
+        </div>,
+        { duration: 5000 }
+      );
+      return;
+    }
+
     try {
       let conditions: any = null;
       if (showAdvancedConditions && conditionsJson.trim()) {
@@ -138,9 +175,34 @@ export function WebhookForm({ webhook, onSuccess, onCancel }: WebhookFormProps) 
         toast.success('Webhook criado com sucesso!');
       }
 
+      // Invalidar query para atualizar a lista de webhooks
+      queryClient.invalidateQueries({ queryKey: ['webhooks', reel?.id] });
+      // Invalidar também a verificação de limite para atualizar canCreateWebhooks
+      queryClient.invalidateQueries({ queryKey: ['webhook-limit-check'] });
+      
       onSuccess();
     } catch (error: any) {
-      toast.error(error.message || 'Erro ao salvar webhook');
+      // Verificar se é erro de limite de plano (403)
+      if (error.statusCode === 403 && error.message) {
+        toast.error(
+          <div className="flex flex-col items-start gap-2">
+            <span>{error.message}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => {
+                navigate('/plans');
+              }}
+            >
+              Fazer Upgrade
+            </Button>
+          </div>,
+          { duration: 5000 }
+        );
+      } else {
+        toast.error(error.message || 'Erro ao salvar webhook');
+      }
     }
   };
 

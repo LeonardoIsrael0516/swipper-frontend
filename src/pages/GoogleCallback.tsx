@@ -98,7 +98,7 @@ export default function GoogleCallback() {
             <div className="pt-4">
               <button
                 onClick={() => navigate('/login')}
-                className="text-primary hover:text-primary/80 underline"
+                className="text-primary hover:text-gray-600 underline"
               >
                 Voltar para o login
               </button>

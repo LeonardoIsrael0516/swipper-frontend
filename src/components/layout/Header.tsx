@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Sun, Moon, Menu, X, LayoutDashboard, User, LogOut, CreditCard } from 'lucide-react';
+import { Sun, Moon, Menu, X, LayoutDashboard, User, LogOut, CreditCard, Gift } from 'lucide-react';
 import { useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -56,7 +56,9 @@ export function Header() {
             <img
               src={theme === 'dark' ? '/logo-dark.png' : '/logo-white.png'}
               alt="ReelQuiz"
-              className="h-8 transition-all duration-300 group-hover:opacity-80"
+              className={`transition-all duration-300 group-hover:opacity-80 ${
+                !isAuthenticated ? 'h-6 md:h-8' : 'h-8'
+              }`}
             />
           </Link>
 
@@ -82,19 +84,37 @@ export function Header() {
 
           {/* Right Section */}
           <div className="flex items-center gap-3">
-            {/* Theme Toggle */}
+            {/* Theme Toggle - Desktop apenas (não mostrar no mobile quando não logado) */}
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleTheme}
-              className="relative overflow-hidden hover:bg-surface-hover hover:text-foreground"
+              className={`relative overflow-hidden hover:bg-surface-hover hover:text-foreground ${
+                !isAuthenticated ? 'hidden md:flex' : ''
+              }`}
             >
               <Sun className={`w-5 h-5 transition-all duration-300 ${theme === 'dark' ? 'rotate-90 scale-0' : 'rotate-0 scale-100'}`} />
               <Moon className={`absolute w-5 h-5 transition-all duration-300 ${theme === 'dark' ? 'rotate-0 scale-100' : '-rotate-90 scale-0'}`} />
               <span className="sr-only">Toggle theme</span>
             </Button>
 
-            {/* User Menu or Login Button - Desktop */}
+            {/* Auth Buttons - Mobile quando não logado */}
+            {!isAuthenticated && (
+              <div className="md:hidden flex items-center gap-2">
+                <Link to="/login">
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground hover:bg-surface-hover text-xs px-3 h-8">
+                    Entrar
+                  </Button>
+                </Link>
+                <Link to="/signup">
+                  <Button size="sm" className="gradient-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity text-xs px-3 h-8">
+                    Criar conta
+                  </Button>
+                </Link>
+              </div>
+            )}
+
+            {/* User Menu or Auth Buttons - Desktop */}
             {isAuthenticated && user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild className="hidden md:block">
@@ -148,6 +168,12 @@ export function Header() {
                       Planos
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="py-2.5">
+                    <Link to="/affiliates" className="flex items-center gap-2 cursor-pointer">
+                      <Gift className="w-4 h-4" />
+                      Indique e Ganhe
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer py-2.5">
                     <LogOut className="w-4 h-4 mr-2" />
@@ -156,22 +182,31 @@ export function Header() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Link to="/login" className="hidden md:block">
-                <Button variant="outline" size="sm" className="gradient-border">
-                  Entrar
-                </Button>
-              </Link>
+              <div className="hidden md:flex items-center gap-3">
+                <Link to="/login">
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground hover:bg-surface-hover">
+                    Entrar
+                  </Button>
+                </Link>
+                <Link to="/signup">
+                  <Button size="sm" className="gradient-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity">
+                    Criar conta
+                  </Button>
+                </Link>
+              </div>
             )}
 
-            {/* Mobile Menu Toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </Button>
+            {/* Mobile Menu Toggle - Apenas quando logado */}
+            {isAuthenticated && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              >
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -228,6 +263,14 @@ export function Header() {
                     <CreditCard className="w-5 h-5" />
                     Planos
                   </Link>
+                  <Link
+                    to="/affiliates"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover"
+                  >
+                    <Gift className="w-5 h-5" />
+                    Indique e Ganhe
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="w-full mt-2 flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10"
@@ -238,15 +281,26 @@ export function Header() {
                 </div>
               </>
             ) : (
-              <Link
-                to="/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="mt-2"
-              >
-                <Button variant="outline" className="w-full gradient-border">
-                  Entrar
-                </Button>
-              </Link>
+              <div className="mt-2 space-y-2">
+                <Link
+                  to="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block"
+                >
+                  <Button variant="ghost" className="w-full text-muted-foreground hover:text-foreground hover:bg-surface-hover">
+                    Entrar
+                  </Button>
+                </Link>
+                <Link
+                  to="/signup"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block"
+                >
+                  <Button className="w-full gradient-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity">
+                    Criar conta
+                  </Button>
+                </Link>
+              </div>
             )}
           </nav>
         </div>

@@ -23,7 +23,7 @@ interface DashElementProps {
 }
 
 // Componente para renderizar item circular
-const CircularItem = ({ percentage, color, description, columns, backgroundColor, transitionColor, time, isActive }: { percentage: number; color: string; description?: string; columns: number; backgroundColor?: string; transitionColor?: string; time?: number; isActive?: boolean }) => {
+const CircularItem = ({ percentage, color, description, columns, backgroundColor, transitionColor, time, isActive, textColor }: { percentage: number; color: string; description?: string; columns: number; backgroundColor?: string; transitionColor?: string; time?: number; isActive?: boolean; textColor?: string }) => {
   const [animatedPercentage, setAnimatedPercentage] = useState(0);
   const animationRef = React.useRef<number | null>(null);
   const startTimeRef = React.useRef<number | null>(null);
@@ -81,6 +81,7 @@ const CircularItem = ({ percentage, color, description, columns, backgroundColor
   }, [percentage, time, isActive]);
 
   const displayPercentage = isActive ? animatedPercentage : 0;
+  const isCompleted = displayPercentage >= percentage;
   // Ajustar tamanho baseado no número de colunas
   let size = 120;
   let radius = 50;
@@ -123,7 +124,7 @@ const CircularItem = ({ percentage, color, description, columns, backgroundColor
             cy={center}
             r={radius}
             fill="none"
-            stroke={transitionColor || color}
+            stroke={isCompleted ? color : (transitionColor || color)}
             strokeWidth={strokeWidth}
             strokeDasharray={circumference}
             strokeDashoffset={offset}
@@ -138,14 +139,14 @@ const CircularItem = ({ percentage, color, description, columns, backgroundColor
             transform: 'translate(-50%, -50%)',
             fontSize: `${fontSize}px`,
             fontWeight: 'bold',
-            color: '#000000',
+            color: textColor || '#000000',
           }}
         >
           {Math.round(Math.max(0, Math.min(100, displayPercentage)))}%
         </div>
       </div>
       {description && (
-        <div style={{ fontSize: `${descriptionFontSize}px`, color: '#000000', textAlign: 'center' }}>
+        <div style={{ fontSize: `${descriptionFontSize}px`, color: textColor || '#000000', textAlign: 'center' }}>
           {description}
         </div>
       )}
@@ -154,7 +155,7 @@ const CircularItem = ({ percentage, color, description, columns, backgroundColor
 };
 
 // Componente para renderizar item barra (vertical)
-const BarItem = ({ percentage, color, description, columns, backgroundColor, transitionColor, time, isActive }: { percentage: number; color: string; description?: string; columns: number; backgroundColor?: string; transitionColor?: string; time?: number; isActive?: boolean }) => {
+const BarItem = ({ percentage, color, description, columns, backgroundColor, transitionColor, time, isActive, textColor }: { percentage: number; color: string; description?: string; columns: number; backgroundColor?: string; transitionColor?: string; time?: number; isActive?: boolean; textColor?: string }) => {
   const [animatedPercentage, setAnimatedPercentage] = useState(0);
   const animationRef = React.useRef<number | null>(null);
   const startTimeRef = React.useRef<number | null>(null);
@@ -212,6 +213,7 @@ const BarItem = ({ percentage, color, description, columns, backgroundColor, tra
   }, [percentage, time, isActive]);
 
   const displayPercentage = isActive ? animatedPercentage : 0;
+  const isCompleted = displayPercentage >= percentage;
   // Ajustar tamanho baseado no número de colunas
   let barWidth = 60;
   let barMaxHeight = 200;
@@ -252,9 +254,9 @@ const BarItem = ({ percentage, color, description, columns, backgroundColor, tra
           style={{
             width: '100%',
             height: `${displayPercentage}%`,
-            backgroundColor: transitionColor || color,
+            backgroundColor: isCompleted ? color : (transitionColor || color),
             borderRadius: '0',
-            boxShadow: `0 0 10px ${(transitionColor || color)}40`,
+            boxShadow: `0 0 10px ${(isCompleted ? color : (transitionColor || color))}40`,
             position: 'relative',
             display: 'flex',
             alignItems: 'flex-start',
@@ -266,7 +268,7 @@ const BarItem = ({ percentage, color, description, columns, backgroundColor, tra
             textAlign: 'center', 
             fontSize: `${fontSize}px`, 
             fontWeight: 'bold', 
-            color: '#000000',
+            color: textColor || '#000000',
             width: '100%',
           }}>
             {Math.round(Math.max(0, Math.min(100, displayPercentage)))}%
@@ -274,7 +276,7 @@ const BarItem = ({ percentage, color, description, columns, backgroundColor, tra
         </div>
       </div>
       {description && (
-        <div style={{ fontSize: `${descriptionFontSize}px`, color: '#000000', textAlign: 'center' }}>
+        <div style={{ fontSize: `${descriptionFontSize}px`, color: textColor || '#000000', textAlign: 'center' }}>
           {description}
         </div>
       )}
@@ -335,6 +337,7 @@ export function DashElement({ element, isActive = true }: DashElementProps) {
           transitionColor: itemTransitionColor,
           time: item.time || 5,
           isActive,
+          textColor: item.textColor || '#000000',
         };
 
         // Usar tipo do item ou defaultType se não especificado

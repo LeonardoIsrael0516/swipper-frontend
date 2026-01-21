@@ -9,8 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { User, Camera, Lock, Loader2, Eye, EyeOff, Save } from 'lucide-react';
+import { User, Camera, Lock, Loader2, Eye, EyeOff, Save, CreditCard, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 // Helper para obter iniciais
 const getInitials = (name: string | null | undefined, email: string): string => {
@@ -227,8 +229,98 @@ export default function Profile() {
     changePasswordMutation.mutate({ currentPassword, newPassword });
   };
 
+  // Buscar histórico de pagamentos
+  const { data: paymentsData, isLoading: isLoadingPayments } = useQuery({
+    queryKey: ['user-payments'],
+    queryFn: async () => {
+      const response = await api.getMyPayments<any>();
+      return (response as any).data || response;
+    },
+    enabled: !!authUser,
+  });
+
   // Verificar se há alterações não salvas
   const hasProfileChanges = name !== (profileData?.name || '');
+
+  // Formatar valor monetário
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
+  };
+
+  // Formatar data
+  const formatDate = (date: string | Date | null) => {
+    if (!date) return '-';
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(date));
+  };
+
+  // Obter badge de status do pagamento
+  const getPaymentStatusBadge = (status: string) => {
+    switch (status) {
+      case 'PAID':
+        return (
+          <Badge variant="default" className="bg-green-500">
+            <CheckCircle2 className="w-3 h-3 mr-1" />
+            Pago
+          </Badge>
+        );
+      case 'PENDING':
+        return (
+          <Badge variant="secondary">
+            <Clock className="w-3 h-3 mr-1" />
+            Pendente
+          </Badge>
+        );
+      case 'FAILED':
+        return (
+          <Badge variant="destructive">
+            <XCircle className="w-3 h-3 mr-1" />
+            Falhou
+          </Badge>
+        );
+      case 'CANCELLED':
+        return (
+          <Badge variant="outline">
+            <XCircle className="w-3 h-3 mr-1" />
+            Cancelado
+          </Badge>
+        );
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  // Obter ícone do método de pagamento
+  const getPaymentMethodIcon = (method: string) => {
+    switch (method) {
+      case 'CREDIT_CARD':
+        return <CreditCard className="w-4 h-4" />;
+      case 'PIX_AUTOMATIC':
+        return <CreditCard className="w-4 h-4" />;
+      default:
+        return <CreditCard className="w-4 h-4" />;
+    }
+  };
+
+  // Obter nome do método de pagamento
+  const getPaymentMethodName = (method: string) => {
+    switch (method) {
+      case 'CREDIT_CARD':
+        return 'Cartão de Crédito';
+      case 'PIX_AUTOMATIC':
+        return 'PIX Automático';
+      default:
+        return method;
+    }
+  };
 
   if (isLoading) {
     return (
@@ -252,7 +344,13 @@ export default function Profile() {
           </p>
         </div>
 
-        <div className="space-y-6">
+        <Tabs defaultValue="profile" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="profile">Perfil</TabsTrigger>
+            <TabsTrigger value="payments">Pagamentos</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="profile" className="space-y-6 mt-6">
           {/* Card: Informações do Perfil */}
           <Card>
             <CardHeader>
@@ -478,7 +576,76 @@ export default function Profile() {
               </Button>
             </CardContent>
           </Card>
-        </div>
+          </TabsContent>
+
+          <TabsContent value="payments" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="w-5 h-5" />
+                  Histórico de Pagamentos
+                </CardTitle>
+                <CardDescription>
+                  Visualize todos os seus pagamentos e assinaturas
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingPayments ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                ) : paymentsData?.payments && paymentsData.payments.length > 0 ? (
+                  <div className="space-y-4">
+                    {paymentsData.payments.map((payment: any) => (
+                      <div
+                        key={payment.id}
+                        className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              {getPaymentMethodIcon(payment.method)}
+                              <span className="font-medium">
+                                {payment.subscription.plan.title}
+                              </span>
+                              {getPaymentStatusBadge(payment.status)}
+                            </div>
+                            <div className="text-sm text-muted-foreground space-y-1">
+                              <p>
+                                Método: {getPaymentMethodName(payment.method)}
+                              </p>
+                              <p>
+                                Criado em: {formatDate(payment.createdAt)}
+                              </p>
+                              {payment.paidAt && (
+                                <p>
+                                  Pago em: {formatDate(payment.paidAt)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-semibold">
+                              {formatCurrency(payment.amount)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <CreditCard className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>Nenhum pagamento encontrado</p>
+                    <p className="text-sm mt-2">
+                      Seus pagamentos aparecerão aqui quando você fizer uma assinatura
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );

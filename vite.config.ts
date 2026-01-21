@@ -8,12 +8,6 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    allowedHosts: [
-      'localhost',
-      '.ngrok.app',
-      '.ngrok-free.app',
-      '.ngrok-free.dev',
-    ],
     hmr: {
       // Desabilitar HMR via ngrok para evitar requisições excessivas e erros de WebSocket
       // O HMR só funciona bem em localhost com HTTP
@@ -49,10 +43,6 @@ export default defineConfig(({ mode }) => ({
             './src/components/reels/ReelContent.tsx',
             './src/components/reels/ReelQuestion.tsx',
             './src/components/reels/elements',
-          ],
-          // Separar elementos do builder (carregados sob demanda)
-          'builder-elements': [
-            './src/components/builder/elements',
           ],
         },
       },

@@ -8,12 +8,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Loader2, Save, Settings } from 'lucide-react';
+import { Loader2, Save, Settings, BarChart3 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 export default function AdminSettings() {
   const queryClient = useQueryClient();
   const [requireEmailVerification, setRequireEmailVerification] = useState(false);
   const [emailVerificationProviders, setEmailVerificationProviders] = useState<string[]>(['SENDGRID']);
+  const [metaPixelId, setMetaPixelId] = useState('');
+  const [metaCapiToken, setMetaCapiToken] = useState('');
+  const [metaCapiTestEventCode, setMetaCapiTestEventCode] = useState('');
+  const [googleTagId, setGoogleTagId] = useState('');
+  const [utmifyApiKey, setUtmifyApiKey] = useState('');
+  const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Fetch settings
@@ -32,6 +39,12 @@ export default function AdminSettings() {
       setEmailVerificationProviders(
         (settings.emailVerificationProviders as string[]) || ['SENDGRID']
       );
+      setMetaPixelId(settings.metaPixelId || '');
+      setMetaCapiToken(settings.metaCapiToken || '');
+      setMetaCapiTestEventCode(settings.metaCapiTestEventCode || '');
+      setGoogleTagId(settings.googleTagId || '');
+      setUtmifyApiKey(settings.utmifyApiKey || '');
+      setTrackingEnabled(settings.trackingEnabled || false);
     }
   }, [settings]);
 
@@ -41,6 +54,12 @@ export default function AdminSettings() {
       await api.updateSettings({
         requireEmailVerification,
         emailVerificationProviders,
+        metaPixelId: metaPixelId || undefined,
+        metaCapiToken: metaCapiToken || undefined,
+        metaCapiTestEventCode: metaCapiTestEventCode || undefined,
+        googleTagId: googleTagId || undefined,
+        utmifyApiKey: utmifyApiKey || undefined,
+        trackingEnabled,
       });
       
       queryClient.invalidateQueries({ queryKey: ['app-settings'] });
@@ -85,6 +104,10 @@ export default function AdminSettings() {
           <TabsTrigger value="signup">
             <Settings className="w-4 h-4 mr-2" />
             Cadastro
+          </TabsTrigger>
+          <TabsTrigger value="tracking">
+            <BarChart3 className="w-4 h-4 mr-2" />
+            Tracking
           </TabsTrigger>
         </TabsList>
 
@@ -168,6 +191,132 @@ export default function AdminSettings() {
                     SMTP será usado como fallback quando o usuário solicitar reenvio do email de verificação.
                   </p>
                 </div>
+              )}
+
+              {/* Save Button */}
+              <div className="flex justify-end pt-4 border-t">
+                <Button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="gap-2"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Salvar Configurações
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="tracking" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Configurações de Tracking</CardTitle>
+              <CardDescription>
+                Configure os serviços de tracking de marketing (Meta Pixel, Google Tag, UTMify)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Habilitar Tracking */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="tracking-enabled" className="text-base">
+                    Habilitar Tracking
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Ative o tracking de marketing na plataforma
+                  </p>
+                </div>
+                <Switch
+                  id="tracking-enabled"
+                  checked={trackingEnabled}
+                  onCheckedChange={setTrackingEnabled}
+                />
+              </div>
+
+              {trackingEnabled && (
+                <>
+                  {/* Meta Pixel ID */}
+                  <div className="space-y-2">
+                    <Label htmlFor="meta-pixel-id">Meta Pixel ID</Label>
+                    <Input
+                      id="meta-pixel-id"
+                      value={metaPixelId}
+                      onChange={(e) => setMetaPixelId(e.target.value)}
+                      placeholder="123456789012345"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      ID do seu Meta Pixel (encontrado no Gerenciador de Eventos do Meta)
+                    </p>
+                  </div>
+
+                  {/* Meta CAPI Token */}
+                  <div className="space-y-2">
+                    <Label htmlFor="meta-capi-token">Meta Conversions API Token</Label>
+                    <Input
+                      id="meta-capi-token"
+                      type="password"
+                      value={metaCapiToken}
+                      onChange={(e) => setMetaCapiToken(e.target.value)}
+                      placeholder="Seu token CAPI"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Token de acesso da Meta Conversions API (server-side)
+                    </p>
+                  </div>
+
+                  {/* Meta CAPI Test Event Code */}
+                  <div className="space-y-2">
+                    <Label htmlFor="meta-capi-test-code">Meta CAPI Test Event Code (Opcional)</Label>
+                    <Input
+                      id="meta-capi-test-code"
+                      value={metaCapiTestEventCode}
+                      onChange={(e) => setMetaCapiTestEventCode(e.target.value)}
+                      placeholder="TEST12345"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Código de teste para validar eventos (opcional)
+                    </p>
+                  </div>
+
+                  {/* Google Tag ID */}
+                  <div className="space-y-2">
+                    <Label htmlFor="google-tag-id">Google Tag (GA4) ID</Label>
+                    <Input
+                      id="google-tag-id"
+                      value={googleTagId}
+                      onChange={(e) => setGoogleTagId(e.target.value)}
+                      placeholder="G-XXXXXXXXXX"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      ID do Google Analytics 4 (formato: G-XXXXXXXXXX)
+                    </p>
+                  </div>
+
+                  {/* UTMify API Key */}
+                  <div className="space-y-2">
+                    <Label htmlFor="utmify-api-key">UTMify API Key</Label>
+                    <Input
+                      id="utmify-api-key"
+                      type="password"
+                      value={utmifyApiKey}
+                      onChange={(e) => setUtmifyApiKey(e.target.value)}
+                      placeholder="Sua chave API do UTMify"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Chave de API do UTMify para captura e persistência de UTMs
+                    </p>
+                  </div>
+                </>
               )}
 
               {/* Save Button */}

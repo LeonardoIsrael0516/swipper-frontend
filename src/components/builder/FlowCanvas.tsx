@@ -46,6 +46,7 @@ import { FormElement } from './elements/FormElement';
 import { FeedbackElement } from './elements/FeedbackElement';
 import { DashElement } from './elements/DashElement';
 import { ChartElement } from './elements/ChartElement';
+import { ScoreElement } from './elements/ScoreElement';
 import { SpacingElement } from './elements/SpacingElement';
 
 // Tipos de nós personalizados
@@ -213,6 +214,8 @@ const renderElement = (element: SlideElement, reelId?: string) => {
       return <DashElement key={element.id} element={normalizedElement} />;
     case 'CHART':
       return <ChartElement key={element.id} element={normalizedElement} />;
+    case 'SCORE':
+      return <ScoreElement key={element.id} element={normalizedElement} />;
     case 'SPACING':
       return <SpacingElement key={element.id} element={normalizedElement} />;
     default:

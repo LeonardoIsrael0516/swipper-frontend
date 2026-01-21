@@ -135,10 +135,22 @@ export function PixelsSettings() {
   const saveMetaPixel = useCallback(async () => {
     if (!reel) return;
     
+    // Validar que tem pixelId se estiver ativado
+    if (metaPixelEnabled && !metaPixelId) {
+      toast.error('Por favor, digite o Pixel ID antes de ativar');
+      return;
+    }
+
+    // Validar formato do pixelId (apenas números)
+    if (metaPixelId && !/^\d+$/.test(metaPixelId)) {
+      toast.error('Pixel ID deve conter apenas números');
+      return;
+    }
+    
     const newConfig: PixelsConfig = {
       ...reel.pixelsConfig,
-      metaPixel: metaPixelId ? {
-        enabled: metaPixelEnabled,
+      metaPixel: metaPixelId && metaPixelEnabled ? {
+        enabled: true,
         pixelId: metaPixelId,
       } : undefined,
       googleAds: reel.pixelsConfig?.googleAds,
@@ -146,7 +158,7 @@ export function PixelsSettings() {
     };
 
     await updatePixelsConfig(newConfig);
-    if (metaPixelId) {
+    if (metaPixelId && metaPixelEnabled) {
       toast.success('Pixel ID salvo com sucesso!');
     } else {
       toast.success('Pixel removido com sucesso!');
@@ -157,22 +169,42 @@ export function PixelsSettings() {
   const saveGoogleAds = useCallback(async () => {
     if (!reel) return;
     
+    // Validar formatos se estiver ativado e tiver valores
+    if (googleAdsEnabled) {
+      if (conversionId && !/^AW-\d+$/.test(conversionId)) {
+        toast.error('Formato inválido de Conversion ID (deve ser AW-XXXXXXX)');
+        return;
+      }
+      if (analyticsId && !/^G-[A-Z0-9]+$/.test(analyticsId)) {
+        toast.error('Formato inválido de Google Analytics ID (deve ser G-XXXXXXXXXX)');
+        return;
+      }
+      if (tagManagerId && !/^GTM-[A-Z0-9]+$/.test(tagManagerId)) {
+        toast.error('Formato inválido de Tag Manager ID (deve ser GTM-XXXXXXX)');
+        return;
+      }
+    }
+    
     const newConfig: PixelsConfig = {
       ...reel.pixelsConfig,
       metaPixel: reel.pixelsConfig?.metaPixel,
-      googleAds: {
-        enabled: googleAdsEnabled,
+      googleAds: googleAdsEnabled ? {
+        enabled: true,
         conversionId: conversionId || undefined,
         conversionLabel: conversionLabel || undefined,
         analyticsId: analyticsId || undefined,
         tagManagerId: tagManagerId || undefined,
         siteVerification: siteVerification || undefined,
-      },
+      } : undefined,
       customScripts: reel.pixelsConfig?.customScripts,
     };
 
     await updatePixelsConfig(newConfig);
-    toast.success('Configurações do Google salvas com sucesso!');
+    if (googleAdsEnabled) {
+      toast.success('Configurações do Google salvas com sucesso!');
+    } else {
+      toast.success('Google Ads removido com sucesso!');
+    }
   }, [reel, googleAdsEnabled, conversionId, conversionLabel, analyticsId, tagManagerId, siteVerification, updatePixelsConfig]);
 
   // Função para salvar Scripts Personalizados
@@ -219,7 +251,7 @@ export function PixelsSettings() {
   }) => (
     <Card
       className={cn(
-        'cursor-pointer transition-all hover:shadow-md hover:border-primary/50',
+        'cursor-pointer transition-all hover:shadow-md hover:border-gray-400',
         'relative group'
       )}
       onClick={() => setOpenSheet(type)}
@@ -313,18 +345,24 @@ export function PixelsSettings() {
                 checked={metaPixelEnabled}
                 onCheckedChange={async (checked) => {
                   setMetaPixelEnabled(checked);
-                  if (reel) {
+                  // Se estiver desativando, salvar no backend removendo o metaPixel
+                  if (!checked && reel) {
                     const newConfig: PixelsConfig = {
                       ...reel.pixelsConfig,
-                      metaPixel: {
-                        enabled: checked,
-                        pixelId: metaPixelId || '',
-                      },
+                      metaPixel: undefined,
                       googleAds: reel.pixelsConfig?.googleAds,
                       customScripts: reel.pixelsConfig?.customScripts,
                     };
-                    await updatePixelsConfig(newConfig);
+                    try {
+                      await updatePixelsConfig(newConfig);
+                      toast.success('Meta Pixel desativado');
+                    } catch (error) {
+                      // Reverter estado em caso de erro
+                      setMetaPixelEnabled(true);
+                    }
                   }
+                  // Se estiver ativando, apenas atualizar estado local (não salvar ainda)
+                  // O usuário precisa preencher o Pixel ID antes de salvar
                 }}
               />
             </div>
@@ -344,7 +382,7 @@ export function PixelsSettings() {
                       type="button"
                       onClick={saveMetaPixel}
                       title="Salvar Pixel ID"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-10 flex items-center justify-center rounded-md bg-primary hover:bg-primary/90 text-primary-foreground transition-all cursor-pointer active:scale-95"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-10 flex items-center justify-center rounded-md bg-primary hover:bg-gray-100 text-primary-foreground transition-all cursor-pointer active:scale-95"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                     </button>
@@ -381,22 +419,24 @@ export function PixelsSettings() {
                 checked={googleAdsEnabled}
                 onCheckedChange={async (checked) => {
                   setGoogleAdsEnabled(checked);
-                  if (reel) {
+                  // Se estiver desativando, salvar no backend removendo o googleAds
+                  if (!checked && reel) {
                     const newConfig: PixelsConfig = {
                       ...reel.pixelsConfig,
                       metaPixel: reel.pixelsConfig?.metaPixel,
-                      googleAds: {
-                        enabled: checked,
-                        conversionId: conversionId || undefined,
-                        conversionLabel: conversionLabel || undefined,
-                        analyticsId: analyticsId || undefined,
-                        tagManagerId: tagManagerId || undefined,
-                        siteVerification: siteVerification || undefined,
-                      },
+                      googleAds: undefined,
                       customScripts: reel.pixelsConfig?.customScripts,
                     };
-                    await updatePixelsConfig(newConfig);
+                    try {
+                      await updatePixelsConfig(newConfig);
+                      toast.success('Google Ads desativado');
+                    } catch (error) {
+                      // Reverter estado em caso de erro
+                      setGoogleAdsEnabled(true);
+                    }
                   }
+                  // Se estiver ativando, apenas atualizar estado local (não salvar ainda)
+                  // O usuário precisa preencher pelo menos um ID antes de salvar
                 }}
               />
             </div>
@@ -417,7 +457,7 @@ export function PixelsSettings() {
                         type="button"
                         onClick={saveGoogleAds}
                         title="Salvar"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-10 flex items-center justify-center rounded-md bg-primary hover:bg-primary/90 text-primary-foreground transition-all cursor-pointer active:scale-95"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-10 flex items-center justify-center rounded-md bg-primary hover:bg-gray-100 text-primary-foreground transition-all cursor-pointer active:scale-95"
                       >
                         <CheckCircle2 className="w-4 h-4" />
                       </button>
@@ -440,7 +480,7 @@ export function PixelsSettings() {
                         type="button"
                         onClick={saveGoogleAds}
                         title="Salvar"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-10 flex items-center justify-center rounded-md bg-primary hover:bg-primary/90 text-primary-foreground transition-all cursor-pointer active:scale-95"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-10 flex items-center justify-center rounded-md bg-primary hover:bg-gray-100 text-primary-foreground transition-all cursor-pointer active:scale-95"
                       >
                         <CheckCircle2 className="w-4 h-4" />
                       </button>
@@ -463,7 +503,7 @@ export function PixelsSettings() {
                         type="button"
                         onClick={saveGoogleAds}
                         title="Salvar"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-10 flex items-center justify-center rounded-md bg-primary hover:bg-primary/90 text-primary-foreground transition-all cursor-pointer active:scale-95"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-10 flex items-center justify-center rounded-md bg-primary hover:bg-gray-100 text-primary-foreground transition-all cursor-pointer active:scale-95"
                       >
                         <CheckCircle2 className="w-4 h-4" />
                       </button>
@@ -486,7 +526,7 @@ export function PixelsSettings() {
                         type="button"
                         onClick={saveGoogleAds}
                         title="Salvar"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-10 flex items-center justify-center rounded-md bg-primary hover:bg-primary/90 text-primary-foreground transition-all cursor-pointer active:scale-95"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-10 flex items-center justify-center rounded-md bg-primary hover:bg-gray-100 text-primary-foreground transition-all cursor-pointer active:scale-95"
                       >
                         <CheckCircle2 className="w-4 h-4" />
                       </button>
@@ -509,7 +549,7 @@ export function PixelsSettings() {
                         type="button"
                         onClick={saveGoogleAds}
                         title="Salvar"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-10 flex items-center justify-center rounded-md bg-primary hover:bg-primary/90 text-primary-foreground transition-all cursor-pointer active:scale-95"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-10 flex items-center justify-center rounded-md bg-primary hover:bg-gray-100 text-primary-foreground transition-all cursor-pointer active:scale-95"
                       >
                         <CheckCircle2 className="w-4 h-4" />
                       </button>
@@ -584,7 +624,7 @@ export function PixelsSettings() {
               <button
                 type="button"
                 onClick={saveCustomScripts}
-                className="h-10 px-4 flex items-center gap-2 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground transition-all cursor-pointer active:scale-95 text-sm font-medium"
+                className="h-10 px-4 flex items-center gap-2 rounded-md bg-primary hover:bg-gray-100 text-primary-foreground transition-all cursor-pointer active:scale-95 text-sm font-medium"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Salvar Scripts</span>

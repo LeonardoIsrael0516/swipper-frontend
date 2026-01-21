@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from '@/components/ui/alert';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -24,6 +29,7 @@ interface CreateQuizModalProps {
 export function CreateQuizModal({ open, onOpenChange }: CreateQuizModalProps) {
   const [title, setTitle] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [limitError, setLimitError] = useState<string | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
@@ -61,11 +67,21 @@ export function CreateQuizModal({ open, onOpenChange }: CreateQuizModalProps) {
       queryClient.invalidateQueries({ queryKey: ['user-reels'] });
       
       toast.success('Swipper criado com sucesso!');
+      setLimitError(null);
       onOpenChange(false);
       setTitle('');
       navigate(`/builder/${data.id}`);
     } catch (error: any) {
-      toast.error('Erro ao criar swipper: ' + (error.message || 'Erro desconhecido'));
+      // Verificar se é erro de limite de plano
+      if (error?.response?.data?.code === 'PLAN_LIMIT_EXCEEDED' || 
+          error?.response?.data?.message?.includes('limite') ||
+          error?.response?.data?.message?.includes('Limite')) {
+        const errorMessage = error?.response?.data?.message || 'Você atingiu o limite de swippers do seu plano.';
+        setLimitError(errorMessage);
+      } else {
+        toast.error('Erro ao criar swipper: ' + (error?.response?.data?.message || error.message || 'Erro desconhecido'));
+        setLimitError(null);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -81,13 +97,34 @@ export function CreateQuizModal({ open, onOpenChange }: CreateQuizModalProps) {
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
+          {limitError && (
+            <Alert variant="destructive">
+              <AlertTitle>Limite Atingido</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>{limitError}</p>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    navigate('/plans');
+                    onOpenChange(false);
+                  }}
+                  className="mt-2"
+                >
+                  Fazer Upgrade
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           <div>
             <Label htmlFor="swipper-title">Nome do Swipper</Label>
             <Input
               id="swipper-title"
               placeholder="Ex: Funil Low Ticket"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setLimitError(null);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !isLoading) {
                   handleCreate();

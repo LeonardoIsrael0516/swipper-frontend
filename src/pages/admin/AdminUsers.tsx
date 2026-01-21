@@ -16,6 +16,10 @@ interface User {
   createdAt: Date | string;
   reelsCount?: number;
   responsesCount?: number;
+  plan?: {
+    id: string;
+    title: string;
+  } | null;
 }
 
 export default function AdminUsers() {

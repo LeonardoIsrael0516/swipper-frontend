@@ -484,7 +484,7 @@ export function SettingsPage() {
 
   // Layout Desktop
   return (
-    <div className="flex h-full bg-background">
+    <div className="flex flex-1 min-h-0 bg-background">
       {/* Sidebar */}
       <div className="w-64 border-r border-border/50 bg-background flex-shrink-0">
         <div className="p-4">
@@ -496,7 +496,7 @@ export function SettingsPage() {
                 'w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors',
                 activeSection === 'general'
                   ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-gray-100 hover:text-foreground'
               )}
             >
               <div className="flex items-center gap-2">
@@ -510,7 +510,7 @@ export function SettingsPage() {
                 'w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors',
                 activeSection === 'pixels'
                   ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-gray-100 hover:text-foreground'
               )}
             >
               <div className="flex items-center gap-2">
@@ -524,7 +524,7 @@ export function SettingsPage() {
                 'w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors',
                 activeSection === 'integrations'
                   ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-gray-100 hover:text-foreground'
               )}
             >
               <div className="flex items-center gap-2">

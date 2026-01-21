@@ -89,6 +89,7 @@ export function DashElementEditor({ element, tab }: DashElementEditorProps) {
       backgroundColor: '#e5e7eb',
       transitionColor: '',
       color: '#007bff',
+      textColor: '#000000',
     };
     setItems([...items, newItem]);
   };
@@ -487,6 +488,28 @@ export function DashElementEditor({ element, tab }: DashElementEditorProps) {
                     onChange={(e) => updateItem(item.id, { color: e.target.value })}
                     className="flex-1 h-8 text-xs"
                     placeholder="#007bff"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Cor do Texto</Label>
+                <p className="text-xs text-muted-foreground mt-1 mb-2">
+                  Cor dos textos (porcentagem e descrição)
+                </p>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    type="color"
+                    value={item.textColor || '#000000'}
+                    onChange={(e) => updateItem(item.id, { textColor: e.target.value })}
+                    className="w-16 h-8"
+                  />
+                  <Input
+                    type="text"
+                    value={item.textColor || '#000000'}
+                    onChange={(e) => updateItem(item.id, { textColor: e.target.value })}
+                    className="flex-1 h-8 text-xs"
+                    placeholder="#000000"
                   />
                 </div>
               </div>

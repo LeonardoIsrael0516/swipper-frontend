@@ -166,25 +166,6 @@ export function TextElementEditor({ element, tab }: TextElementEditorProps) {
       </div>
 
       <div>
-        <Label htmlFor="textColorDesign">Cor do Texto</Label>
-        <div className="flex gap-2 mt-1">
-          <Input
-            id="textColorDesign"
-            type="color"
-            value={textColor}
-            onChange={(e) => setTextColor(e.target.value)}
-            className="w-20 h-10"
-          />
-          <Input
-            type="text"
-            value={textColor}
-            onChange={(e) => setTextColor(e.target.value)}
-            className="flex-1"
-          />
-        </div>
-      </div>
-
-      <div>
         <Label htmlFor="backgroundColorDesign">Cor de Fundo</Label>
         <div className="flex gap-2 mt-1">
           <Input

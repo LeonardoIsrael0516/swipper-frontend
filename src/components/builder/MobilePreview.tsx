@@ -37,6 +37,7 @@ import { FormElement } from '@/components/builder/elements/FormElement';
 import { FeedbackElement } from '@/components/builder/elements/FeedbackElement';
 import { DashElement } from '@/components/builder/elements/DashElement';
 import { ChartElement } from '@/components/builder/elements/ChartElement';
+import { ScoreElement } from '@/components/builder/elements/ScoreElement';
 import { SpacingElement } from '@/components/builder/elements/SpacingElement';
 import { InteractiveElement } from '@/components/builder/elements/InteractiveElement';
 import { SlideElement } from '@/contexts/BuilderContext';
@@ -44,6 +45,10 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { ReelVideoBackground } from '@/components/reels/ReelVideoBackground';
 import { ReelSoundProvider } from '@/contexts/ReelSoundContext';
+import { ReelSocialActionsTikTok } from '@/components/reels/ReelSocialActionsTikTok';
+import { ReelUsername } from '@/components/reels/ReelUsername';
+import { ReelCaption } from '@/components/reels/ReelCaption';
+import { ReelAudioTag } from '@/components/reels/ReelAudioTag';
 
 // Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
 const normalizeUiConfig = (uiConfig: any): any => {
@@ -146,6 +151,8 @@ function SortableElement({ element, reelId }: { element: SlideElement; reelId?: 
         return <DashElement element={normalizedElement} />;
       case 'CHART':
         return <ChartElement element={normalizedElement} />;
+      case 'SCORE':
+        return <ScoreElement element={normalizedElement} isActive={true} />;
       case 'SPACING':
         return <SpacingElement element={normalizedElement} isInBuilder={true} />;
       default:
@@ -476,7 +483,7 @@ export function MobilePreview() {
 
     if (!bgConfig) {
       return {
-        background: 'linear-gradient(to bottom right, #a855f7, #ec4899)',
+        background: 'linear-gradient(to bottom right, #a855f7, #E91E63)',
       };
     }
 
@@ -523,7 +530,7 @@ export function MobilePreview() {
 
     // Fallback
     return {
-      background: 'linear-gradient(to bottom right, #a855f7, #ec4899)',
+      background: 'linear-gradient(to bottom right, #a855f7, #E91E63)',
     };
   };
 
@@ -549,7 +556,7 @@ export function MobilePreview() {
     if (normalizedBgConfig?.type === 'video' && normalizedBgConfig.video?.url) {
       const { video } = normalizedBgConfig;
       return (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
+        <div className={`absolute inset-0 z-0 pointer-events-none ${!isMobile ? 'rounded-2xl overflow-hidden' : ''}`}>
           <ReelVideoBackground
             src={video.url}
             autoplay={video.autoplay !== false}
@@ -579,7 +586,7 @@ export function MobilePreview() {
     <ReelSoundProvider>
       <div ref={containerRef} className={`flex items-center justify-center h-full w-full ${isMobile ? '' : 'p-6'}`}>
         <div 
-          className="relative overflow-hidden"
+          className={`relative overflow-hidden ${!isMobile ? 'rounded-2xl' : ''}`}
           style={isMobile ? {
             width: '100%',
             height: '100%',
@@ -595,8 +602,8 @@ export function MobilePreview() {
             <div className="absolute -inset-[2px] rounded-2xl bg-gradient-to-br from-primary/40 via-accent/30 to-primary/40 blur-2xl opacity-60" />
           )}
           {/* Main content with border */}
-          <div className={`relative w-full h-full bg-white ${isMobile ? 'shadow-md' : 'rounded-2xl shadow-2xl border-2 border-primary/50 ring-2 ring-primary/20'} overflow-hidden`}>
-            <div className="relative w-full h-full overflow-hidden" style={getBackgroundStyle()}>
+          <div className={`relative w-full h-full bg-white ${isMobile ? 'shadow-md' : 'rounded-2xl shadow-2xl border-2 border-gray-300 ring-2 ring-gray-100'} overflow-hidden`}>
+            <div className={`relative w-full h-full overflow-hidden ${!isMobile ? 'rounded-2xl' : ''}`} style={getBackgroundStyle()}>
               {/* Vídeo de fundo */}
               {renderBackgroundVideo()}
               
@@ -607,9 +614,23 @@ export function MobilePreview() {
                   totalSlides={reel.slides.length} 
                 />
               )}
+
+              {/* Social Elements - sempre montados para preservar estado */}
+              {reel?.socialConfig?.enabled && selectedSlide && (
+                <div style={{ visibility: selectedSlide.hideSocialElements ? 'hidden' : 'visible' }}>
+                  <ReelSocialActionsTikTok
+                    reelId={reel.id}
+                    socialConfig={reel.socialConfig}
+                  />
+                  <ReelUsername
+                    socialConfig={reel.socialConfig}
+                    className="bottom-[64px]"
+                  />
+                </div>
+              )}
               
               {/* Conteúdo com z-index para ficar acima do vídeo */}
-              <div ref={contentRef} className="relative z-10 w-full h-full flex flex-col">
+              <div ref={contentRef} className={`relative z-10 w-full h-full flex flex-col ${!isMobile ? 'overflow-hidden' : ''}`}>
               {/* Indicador visual de espaço usado */}
               {spaceUsage > 90 && (
                 <div className="absolute top-0 left-0 right-0 h-1 bg-yellow-500/50 z-20" />
@@ -625,7 +646,7 @@ export function MobilePreview() {
                 onDragEnd={handleDragEnd}
               >
                 <SortableContext items={sortedElements.map((el) => el.id)} strategy={verticalListSortingStrategy}>
-                  <div ref={elementsContainerRef} className="p-4" style={{ maxHeight: `${availableHeight}px`, overflow: 'hidden' }}>
+                  <div ref={elementsContainerRef} className="p-4 pb-20" style={{ maxHeight: `${availableHeight}px`, overflow: 'hidden' }}>
                         {sortedElements.length > 0 ? (() => {
                           // Agrupar elementos (botões coluna consecutivos)
                           const grouped = groupElements(sortedElements);
@@ -681,6 +702,14 @@ export function MobilePreview() {
                 </SortableContext>
               </DndContext>
               </div>
+
+              {/* Social Elements per Slide */}
+              {reel?.socialConfig?.enabled && reel.socialConfig.showCaptions && selectedSlide && (
+                <ReelCaption slide={selectedSlide} socialConfig={reel.socialConfig} />
+              )}
+              {reel?.socialConfig?.enabled && selectedSlide && (selectedSlide.backgroundConfig?.type === 'video' || selectedSlide.uiConfig?.backgroundConfig?.type === 'video') && (
+                <ReelAudioTag slide={selectedSlide} />
+              )}
             </div>
           </div>
         </div>

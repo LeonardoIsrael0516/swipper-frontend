@@ -5,8 +5,9 @@ import { useBuilder } from '@/contexts/BuilderContext';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Check, Plus } from 'lucide-react';
+import { Check, Plus, ArrowUpRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useNavigate } from 'react-router-dom';
 import {
   Sheet,
   SheetContent,
@@ -23,6 +24,7 @@ type IntegrationType = 'webhook' | 'n8n' | 'evolution' | 'zapi' | null;
 
 export function IntegrationsSettings() {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const { reel } = useBuilder();
   const [openSheet, setOpenSheet] = useState<IntegrationType>(null);
   const [showWebhookForm, setShowWebhookForm] = useState(false);
@@ -39,7 +41,19 @@ export function IntegrationsSettings() {
     enabled: !!reel?.id,
   });
 
+  // Verificar limite de webhooks do plano
+  const { data: webhookLimitCheck, isLoading: isLoadingWebhookLimit } = useQuery({
+    queryKey: ['webhook-limit-check'],
+    queryFn: async () => {
+      const response = await api.checkWebhookLimit<any>();
+      return (response as any).data || response;
+    },
+  });
+
   const isWebhookConfigured = webhooks && webhooks.length > 0;
+  // canCreateWebhooks só é true se explicitamente allowed for true
+  // Se ainda estiver carregando, assumir false para não permitir criar antes da verificação
+  const canCreateWebhooks = isLoadingWebhookLimit ? false : (webhookLimitCheck?.allowed === true);
   const isN8nConfigured = false;
   const isEvolutionConfigured = false;
   const isZapiConfigured = false;
@@ -50,20 +64,26 @@ export function IntegrationsSettings() {
     title, 
     description, 
     logo, 
-    isConfigured 
+    isConfigured,
+    isDisabled,
+    upgradeMessage,
   }: { 
     type: IntegrationType; 
     title: string; 
     description: string; 
     logo: string; 
     isConfigured: boolean;
+    isDisabled?: boolean;
+    upgradeMessage?: string;
   }) => (
     <Card
       className={cn(
-        'cursor-pointer transition-all hover:shadow-md hover:border-primary/50',
-        'relative group'
+        'transition-all relative group',
+        isDisabled 
+          ? 'opacity-50 cursor-not-allowed' 
+          : 'cursor-pointer hover:shadow-md hover:border-gray-400'
       )}
-      onClick={() => setOpenSheet(type)}
+      onClick={() => !isDisabled && setOpenSheet(type)}
     >
       {isConfigured && (
         <div className="absolute -top-2 -right-2 z-20 pointer-events-none">
@@ -90,6 +110,23 @@ export function IntegrationsSettings() {
               Configurado
             </Badge>
           )}
+          {isDisabled && upgradeMessage && (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-muted-foreground">{upgradeMessage}</p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate('/plans');
+                }}
+              >
+                Fazer Upgrade
+                <ArrowUpRight className="w-3 h-3 ml-1" />
+              </Button>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -115,6 +152,7 @@ export function IntegrationsSettings() {
           description="Configure webhooks para receber notificações de eventos"
           logo="/webhook.png"
           isConfigured={isWebhookConfigured}
+          isDisabled={false}
         />
         <IntegrationCard
           type="n8n"
@@ -140,7 +178,12 @@ export function IntegrationsSettings() {
       </div>
 
       {/* Overlay Webhooks */}
-      <Sheet open={openSheet === 'webhook'} onOpenChange={(open) => !open && setOpenSheet(null)}>
+      <Sheet open={openSheet === 'webhook'} onOpenChange={(open) => {
+        if (!open) {
+          setOpenSheet(null);
+          setActiveTab('list');
+        }
+      }}>
         <SheetContent side="right" className="w-full sm:max-w-4xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Webhooks</SheetTitle>
@@ -149,35 +192,74 @@ export function IntegrationsSettings() {
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6">
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'list' | 'create')}>
+            <Tabs value={activeTab} onValueChange={(value) => {
+              // Só permitir mudar para 'create' se canCreateWebhooks for true
+              if (value === 'create' && !canCreateWebhooks) {
+                return;
+              }
+              setActiveTab(value as 'list' | 'create');
+            }}>
               <div className="flex items-center justify-between mb-4">
                 <TabsList>
                   <TabsTrigger value="list">Lista</TabsTrigger>
-                  <TabsTrigger value="create">Criar Novo</TabsTrigger>
+                  <TabsTrigger value="create" disabled={!canCreateWebhooks}>
+                    Criar Novo
+                  </TabsTrigger>
                 </TabsList>
-                {activeTab === 'list' && (
+                {activeTab === 'list' && canCreateWebhooks && (
                   <Button onClick={() => setActiveTab('create')}>
                     <Plus className="w-4 h-4 mr-2" />
                     Novo Webhook
                   </Button>
                 )}
+                {activeTab === 'list' && !canCreateWebhooks && webhookLimitCheck?.message && (
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      {webhookLimitCheck.message}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => navigate('/plans')}
+                    >
+                      Fazer Upgrade
+                      <ArrowUpRight className="w-3 h-3 ml-1" />
+                    </Button>
+                  </div>
+                )}
               </div>
               <TabsContent value="list" className="mt-4">
                 <WebhookList
-                  onAddNew={() => setActiveTab('create')}
+                  onAddNew={() => canCreateWebhooks && setActiveTab('create')}
+                  canCreate={canCreateWebhooks}
                 />
               </TabsContent>
               <TabsContent value="create" className="mt-4">
-                <WebhookForm
-                  onSuccess={() => {
-                    setActiveTab('list');
-                    setShowWebhookForm(false);
-                  }}
-                  onCancel={() => {
-                    setActiveTab('list');
-                    setShowWebhookForm(false);
-                  }}
-                />
+                {!canCreateWebhooks ? (
+                  <div className="space-y-4 py-8 text-center">
+                    <p className="text-muted-foreground">
+                      {webhookLimitCheck?.message || 'Seu plano não permite criar mais webhooks. Faça upgrade para usar esta funcionalidade.'}
+                    </p>
+                    <Button
+                      onClick={() => navigate('/plans')}
+                      className="mt-4"
+                    >
+                      Fazer Upgrade
+                      <ArrowUpRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
+                ) : (
+                  <WebhookForm
+                    onSuccess={() => {
+                      setActiveTab('list');
+                      setShowWebhookForm(false);
+                    }}
+                    onCancel={() => {
+                      setActiveTab('list');
+                      setShowWebhookForm(false);
+                    }}
+                  />
+                )}
               </TabsContent>
             </Tabs>
           </div>

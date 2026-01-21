@@ -49,9 +49,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 interface WebhookListProps {
   onAddNew: () => void;
+  canCreate?: boolean;
 }
 
-export function WebhookList({ onAddNew }: WebhookListProps) {
+export function WebhookList({ onAddNew, canCreate = true }: WebhookListProps) {
   const { reel } = useBuilder();
   const queryClient = useQueryClient();
   const [editingWebhook, setEditingWebhook] = useState<Webhook | null>(null);
@@ -87,6 +88,8 @@ export function WebhookList({ onAddNew }: WebhookListProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['webhooks', reel?.id] });
+      // Invalidar também a verificação de limite para atualizar canCreateWebhooks
+      queryClient.invalidateQueries({ queryKey: ['webhook-limit-check'] });
       toast.success('Webhook deletado');
       setDeletingWebhook(null);
     },
@@ -141,7 +144,17 @@ export function WebhookList({ onAddNew }: WebhookListProps) {
       <Card>
         <CardContent className="py-12 text-center">
           <p className="text-muted-foreground mb-4">Nenhum webhook configurado</p>
-          <Button onClick={onAddNew}>Criar Primeiro Webhook</Button>
+          <Button 
+            onClick={onAddNew}
+            disabled={!canCreate}
+          >
+            Criar Primeiro Webhook
+          </Button>
+          {!canCreate && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Seu plano não permite webhooks. Faça upgrade para usar esta funcionalidade.
+            </p>
+          )}
         </CardContent>
       </Card>
     );

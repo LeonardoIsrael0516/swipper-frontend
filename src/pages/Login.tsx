@@ -159,7 +159,7 @@ export default function Login() {
               <div className="flex justify-end">
                 <Link 
                   to="/forgot-password" 
-                  className="text-sm text-primary hover:text-primary/80 transition-colors"
+                  className="text-sm text-primary hover:text-gray-600 transition-colors"
                 >
                   Esqueceu a senha?
                 </Link>
@@ -226,7 +226,10 @@ export default function Login() {
           {/* Sign Up Link */}
           <p className="text-center mt-8 text-muted-foreground">
             Não tem uma conta?{' '}
-            <Link to="/signup" className="text-primary font-medium hover:text-primary/80 transition-colors">
+            <Link 
+              to={searchParams.get('redirect') ? `/signup?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : '/signup'} 
+              className="text-primary font-medium hover:text-gray-600 transition-colors"
+            >
               Criar conta
             </Link>
           </p>

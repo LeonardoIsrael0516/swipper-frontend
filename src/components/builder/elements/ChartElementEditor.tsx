@@ -60,7 +60,7 @@ const DEFAULT_COLORS = [
   '#10b981', // verde
   '#f59e0b', // laranja
   '#8b5cf6', // roxo
-  '#ec4899', // rosa
+  '#E91E63', // rosa
   '#06b6d4', // ciano
   '#84cc16', // lima
 ];

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Roboto:wght@300;400;500;700;900&family=Open+Sans:wght@300;400;500;600;700;800&family=Montserrat:wght@300;400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800;900&family=Lato:wght@300;400;700;900&family=Raleway:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap');
 
 
 @tailwind base;
@@ -17,7 +17,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 10%;
 
-    --primary: 330 85% 60%;
+    --primary: 351.06 89.66% 54.51%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 240 5% 96%;
@@ -34,7 +34,7 @@
 
     --border: 240 6% 90%;
     --input: 240 6% 90%;
-    --ring: 330 85% 60%;
+    --ring: 351.06 89.66% 54.51%;
 
     --radius: 0.75rem;
 
@@ -49,12 +49,12 @@
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 330 85% 60%;
+    --sidebar-primary: 351.06 89.66% 54.51%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 4.8% 95.9%;
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 240 6% 90%;
-    --sidebar-ring: 330 85% 60%;
+    --sidebar-ring: 351.06 89.66% 54.51%;
   }
 
   .dark {
@@ -67,7 +67,7 @@
     --popover: 240 10% 8%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 330 85% 60%;
+    --primary: 351.06 89.66% 54.51%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 240 5% 18%;
@@ -84,7 +84,7 @@
 
     --border: 240 5% 18%;
     --input: 240 5% 18%;
-    --ring: 330 85% 60%;
+    --ring: 351.06 89.66% 54.51%;
 
     --surface: 240 10% 10%;
     --surface-elevated: 240 10% 12%;
@@ -92,12 +92,12 @@
 
     --sidebar-background: 240 10% 8%;
     --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 330 85% 60%;
+    --sidebar-primary: 351.06 89.66% 54.51%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 5% 15%;
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 240 5% 18%;
-    --sidebar-ring: 330 85% 60%;
+    --sidebar-ring: 351.06 89.66% 54.51%;
   }
 }
 
@@ -206,6 +206,9 @@
     scroll-snap-stop: always;
     height: 100vh;
     width: 100%;
+    position: relative;
+    isolation: isolate; /* Criar novo contexto de empilhamento para isolar elementos */
+    overflow: hidden; /* Garantir que elementos não escapem do slide */
   }
 
   /* Slide dentro do card 1920x1080 */
@@ -213,6 +216,9 @@
     height: 100%;
     width: 100%;
     min-height: 100%;
+    position: relative;
+    isolation: isolate; /* Criar novo contexto de empilhamento para isolar elementos */
+    overflow: hidden; /* Garantir que elementos não escapem do slide */
   }
   
   /* Wrapper para centralizar conteúdo no desktop */
@@ -264,6 +270,9 @@
     .reels-container-card .reel-slide {
       width: 100%;
       height: 100%;
+      position: relative;
+      isolation: isolate; /* Criar novo contexto de empilhamento para isolar elementos */
+      overflow: hidden; /* Garantir que elementos não escapem do slide */
     }
     
     /* Background do slide ocupa tela inteira no desktop */
@@ -458,6 +467,9 @@
       min-height: 100vh !important;
       min-height: 100svh !important;
       min-height: 100dvh !important;
+      position: relative !important;
+      isolation: isolate !important; /* Criar novo contexto de empilhamento para isolar elementos */
+      overflow: hidden !important; /* Garantir que elementos não escapem do slide */
     }
 
     /* Safe areas (iOS notch/home indicator) */
@@ -685,6 +697,66 @@
   .animate-bounce-subtle {
     animation: bounce-subtle 2s ease-in-out infinite;
   }
+
+  @keyframes scroll-infinite {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  @keyframes scroll-infinite-reverse {
+    0% {
+      transform: translateX(-50%);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  .animate-scroll-infinite {
+    animation: scroll-infinite 30s linear infinite;
+    display: flex;
+    width: fit-content;
+    white-space: nowrap;
+  }
+
+  .animate-scroll-infinite-reverse {
+    animation: scroll-infinite-reverse 30s linear infinite;
+    display: flex;
+    width: fit-content;
+    white-space: nowrap;
+  }
+
+  /* Versões mais rápidas para mobile */
+  @media (max-width: 767px) {
+    .animate-scroll-infinite {
+      animation: scroll-infinite 15s linear infinite;
+    }
+
+    .animate-scroll-infinite-reverse {
+      animation: scroll-infinite-reverse 15s linear infinite;
+    }
+  }
+
+  /* Orbiting Circles Animation */
+  @keyframes orbit {
+    0% {
+      transform: translate(-50%, -50%) rotate(calc(var(--angle) * 1deg))
+        translateY(calc(var(--radius) * -1px)) rotate(calc(var(--angle) * -1deg));
+    }
+    100% {
+      transform: translate(-50%, -50%) rotate(calc(var(--angle) * 1deg + 360deg))
+        translateY(calc(var(--radius) * -1px))
+        rotate(calc((var(--angle) * -1deg) - 360deg));
+    }
+  }
+
+  .animate-orbit {
+    animation: orbit calc(var(--duration) * 1s) linear infinite;
+  }
 }
 
 /* React Flow Controls - Dark Mode Styles */
@@ -707,4 +779,47 @@
 .dark .react-flow__controls-button svg {
   fill: hsl(var(--foreground)) !important;
   stroke: hsl(var(--foreground)) !important;
+}
+
+/* TipTap Editor Styles */
+.ProseMirror {
+  outline: none;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: hsl(var(--muted-foreground));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.ProseMirror strong {
+  font-weight: bold;
+  /* Preservar cor do texto quando negrito é aplicado */
+  color: inherit;
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
+.ProseMirror u {
+  text-decoration: underline;
+}
+
+.ProseMirror mark {
+  background-color: var(--highlight-color, #ffcc00);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* Centralizar parágrafos por padrão no editor quando não têm alinhamento definido */
+.ProseMirror p:not([style*="text-align"]) {
+  text-align: center;
+}
+
+.ProseMirror p[style*="text-align: center"],
+.ProseMirror p[style*="text-align:center"] {
+  text-align: center !important;
 }

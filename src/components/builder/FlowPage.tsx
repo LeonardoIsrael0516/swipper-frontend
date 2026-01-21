@@ -25,7 +25,53 @@ export function FlowPage() {
   }, [reel]);
 
   const handleConnect = useCallback((connections: Record<string, Record<string, any>>) => {
-    setPendingConnections((prev) => ({ ...prev, ...connections }));
+    setPendingConnections((prev) => {
+      // Fazer merge profundo para preservar todas as conexões existentes
+      const merged: Record<string, Record<string, any>> = { ...prev };
+      
+      // Para cada slide nas novas conexões, fazer merge profundo
+      Object.entries(connections).forEach(([slideId, newLogicNext]) => {
+        const existingLogicNext = merged[slideId] || {};
+        
+        // Fazer merge profundo do logicNext
+        const mergedLogicNext: Record<string, any> = {
+          ...existingLogicNext,
+        };
+        
+        // Preservar elementos existentes e adicionar/atualizar novos
+        if (newLogicNext.elements) {
+          mergedLogicNext.elements = {
+            ...(existingLogicNext.elements || {}),
+            ...newLogicNext.elements,
+          };
+        } else if (existingLogicNext.elements) {
+          // Se não há novos elementos, preservar os existentes
+          mergedLogicNext.elements = existingLogicNext.elements;
+        }
+        
+        // Preservar opções existentes e adicionar/atualizar novas
+        if (newLogicNext.options) {
+          mergedLogicNext.options = {
+            ...(existingLogicNext.options || {}),
+            ...newLogicNext.options,
+          };
+        } else if (existingLogicNext.options) {
+          // Se não há novas opções, preservar as existentes
+          mergedLogicNext.options = existingLogicNext.options;
+        }
+        
+        // defaultNext pode ser sobrescrito se vier nas novas conexões
+        if (newLogicNext.defaultNext !== undefined) {
+          mergedLogicNext.defaultNext = newLogicNext.defaultNext;
+        } else if (existingLogicNext.defaultNext !== undefined) {
+          mergedLogicNext.defaultNext = existingLogicNext.defaultNext;
+        }
+        
+        merged[slideId] = mergedLogicNext;
+      });
+      
+      return merged;
+    });
     setHasUnsavedChanges(true);
   }, []);
 

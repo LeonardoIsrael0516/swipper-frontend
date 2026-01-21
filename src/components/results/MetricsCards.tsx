@@ -53,8 +53,8 @@ export function MetricsCards({ metrics, isLoading }: MetricsCardsProps) {
       value: metrics.completedFunnel,
       icon: Target,
       description: `${metrics.totalVisitors > 0 ? Math.round((metrics.completedFunnel / metrics.totalVisitors) * 100) : 0}% dos visitantes`,
-      color: 'text-pink-600',
-      bgColor: 'bg-pink-50 dark:bg-pink-950',
+      color: 'text-gray-700',
+      bgColor: 'bg-gray-100 dark:bg-gray-800',
     },
     {
       title: 'Total de Leads',
