@@ -139,35 +139,45 @@ export function ReelVideoBackground({
         setShowSoundButton(shouldBeMuted);
       }
 
-      // Só tentar tocar se:
-      // 1. O slide acabou de ficar ativo (não estava ativo antes)
-      // 2. E o vídeo está pausado
-      // Isso evita tocar múltiplas vezes quando já está tocando
-      if (!wasActive && video.paused) {
-        const playPromise = video.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              setIsPlaying(true);
-            })
-            .catch(() => {
-              // Autoplay bloqueado - manter botão visível se necessário
-              if (!isBlurVersion && !isSoundUnlocked) {
-                setShowSoundButton(true);
-              }
-            });
-        }
-      } else if (wasActive && !video.paused) {
-        // Se já estava ativo e está tocando, apenas garantir muted está correto
-        if (isBlurVersion) {
-          video.muted = true;
-          setIsMuted(true);
+      // Sempre tentar tocar se estiver pausado (garante que toca mesmo após atualizar página)
+      // Usar setTimeout para garantir que o vídeo está pronto
+      const tryPlay = () => {
+        if (video.paused) {
+          const playPromise = video.play();
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                setIsPlaying(true);
+              })
+              .catch(() => {
+                // Autoplay bloqueado - manter botão visível se necessário
+                if (!isBlurVersion && !isSoundUnlocked) {
+                  setShowSoundButton(true);
+                }
+              });
+          }
         } else {
-          const shouldBeMuted = !isSoundUnlocked;
-          video.muted = shouldBeMuted;
-          setIsMuted(shouldBeMuted);
+          // Se já está tocando, apenas garantir muted está correto
+          if (isBlurVersion) {
+            video.muted = true;
+            setIsMuted(true);
+          } else {
+            const shouldBeMuted = !isSoundUnlocked;
+            video.muted = shouldBeMuted;
+            setIsMuted(shouldBeMuted);
+          }
         }
-      }
+      };
+      
+      // Tentar tocar imediatamente
+      tryPlay();
+      
+      // Tentar novamente após um pequeno delay (para casos onde o vídeo ainda está carregando)
+      const timeoutId = setTimeout(tryPlay, 100);
+      
+      return () => {
+        clearTimeout(timeoutId);
+      };
     } else {
       // Vídeo não está ativo - apenas pausar (não resetar currentTime para evitar re-buffer)
       if (!video.paused) {

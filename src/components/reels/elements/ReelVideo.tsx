@@ -111,9 +111,9 @@ export const ReelVideo = memo(function ReelVideo({
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
 
-    // Tentar autoplay APENAS se vídeo está ativo
-    if (autoplay && isActive) {
-      // Só tocar com som se som está desbloqueado E vídeo está ativo
+    // Controlar play/pause baseado em isActive
+    if (isActive && autoplay) {
+      // Vídeo está ativo - configurar muted
       if (isSoundUnlocked) {
         video.muted = false;
         setIsMuted(false);
@@ -125,33 +125,55 @@ export const ReelVideo = memo(function ReelVideo({
         setShowVideoPlayButton(shouldShowSoundButton);
       }
       
-      const playPromise = video.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            // Autoplay funcionou
-            setIsPlaying(true);
-            // Se som está desbloqueado, esconder botão
-            if (isSoundUnlocked) {
-              setShowVideoPlayButton(false);
-            }
-          })
-          .catch(() => {
-            // Autoplay bloqueado - manter botão visível se necessário
-            if (!isSoundUnlocked) {
-              setShowVideoPlayButton(true);
-            }
-          });
-      }
+      // Sempre tentar tocar se estiver pausado (garante que toca mesmo após atualizar página)
+      // Usar setTimeout para garantir que o vídeo está pronto
+      const tryPlay = () => {
+        if (video.paused) {
+          const playPromise = video.play();
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                setIsPlaying(true);
+              })
+              .catch(() => {
+                // Autoplay bloqueado - manter botão visível se necessário
+                if (!isSoundUnlocked) {
+                  setShowVideoPlayButton(true);
+                }
+              });
+          }
+        }
+      };
+      
+      // Tentar tocar imediatamente
+      tryPlay();
+      
+      // Tentar novamente após um pequeno delay (para casos onde o vídeo ainda está carregando)
+      const timeoutId = setTimeout(tryPlay, 100);
+      
+      return () => {
+        clearTimeout(timeoutId);
+        video.removeEventListener('play', handlePlay);
+        video.removeEventListener('pause', handlePause);
+        video.removeEventListener('ended', handleEnded);
+      };
     } else if (!isActive) {
       // Se vídeo não está ativo, apenas pausar (não resetar currentTime para evitar re-buffer)
-      video.pause();
-      setIsPlaying(false);
+      if (!video.paused) {
+        video.pause();
+        setIsPlaying(false);
+      }
       // Manter muted se não está ativo
       video.muted = true;
       setIsMuted(true);
+      
+      return () => {
+        video.removeEventListener('play', handlePlay);
+        video.removeEventListener('pause', handlePause);
+        video.removeEventListener('ended', handleEnded);
+      };
     }
-
+    
     return () => {
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
@@ -225,89 +247,54 @@ export const ReelVideo = memo(function ReelVideo({
     }
   };
   
-  // Atualizar estado quando isSoundUnlocked ou isActive mudarem
+  // Atualizar estado quando isSoundUnlocked mudar (para reiniciar com som)
   useEffect(() => {
-    if (isActive) {
-      // Vídeo está ativo - iniciar play
-      if (isSoundUnlocked) {
-        // Esconder botões de som quando som é desbloqueado e vídeo está ativo
-        setShowYouTubePlayButton(false);
-        setShowVideoPlayButton(false);
-        
-        // Desmutar e tocar vídeo ativo
-        if (isYouTube && iframeRef.current) {
-          // Para YouTube, recarregar iframe sem muted
-          const videoId = extractYouTubeId(youtubeUrl || '');
-          if (videoId) {
-            const params = new URLSearchParams();
-            params.append('autoplay', '1');
-            params.append('loop', loop ? '1' : '0');
-            if (loop) {
-              params.append('playlist', videoId);
-            }
-            params.append('modestbranding', '1');
-            params.append('playsinline', '1');
-            params.append('rel', '0');
-            params.append('iv_load_policy', '3');
-            params.append('fs', '0');
-            params.append('cc_load_policy', '0');
-            params.append('disablekb', '1');
-            params.append('enablejsapi', '1');
-            if (controls === false) {
-              params.append('controls', '0');
-            }
-            if (typeof window !== 'undefined') {
-              params.append('origin', window.location.origin);
-            }
-            // NÃO adicionar mute=1
-            const newUrl = `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
-            iframeRef.current.src = newUrl;
+    if (isActive && isSoundUnlocked) {
+      // Som foi desbloqueado e vídeo está ativo - reiniciar com som
+      if (isYouTube && iframeRef.current) {
+        // Para YouTube, recarregar iframe sem muted
+        const videoId = extractYouTubeId(youtubeUrl || '');
+        if (videoId) {
+          const params = new URLSearchParams();
+          params.append('autoplay', '1');
+          params.append('loop', loop ? '1' : '0');
+          if (loop) {
+            params.append('playlist', videoId);
           }
-        } else {
-          // Para vídeo local
-          const video = videoRef.current;
-          if (video) {
-            video.muted = false;
-            setIsMuted(false);
-            // Tentar tocar
-            video.play().catch(() => {
-              // Ignorar erro se autoplay falhar
-            });
+          params.append('modestbranding', '1');
+          params.append('playsinline', '1');
+          params.append('rel', '0');
+          params.append('iv_load_policy', '3');
+          params.append('fs', '0');
+          params.append('cc_load_policy', '0');
+          params.append('disablekb', '1');
+          params.append('enablejsapi', '1');
+          if (controls === false) {
+            params.append('controls', '0');
           }
+          if (typeof window !== 'undefined') {
+            params.append('origin', window.location.origin);
+          }
+          // NÃO adicionar mute=1
+          const newUrl = `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
+          iframeRef.current.src = newUrl;
         }
       } else {
-        // Som não está desbloqueado, mas vídeo está ativo - tocar muted
-        if (!isYouTube) {
-          const video = videoRef.current;
-          if (video && autoplay) {
-            video.muted = true;
-            setIsMuted(true);
-            video.play().catch(() => {
-              // Ignorar erro se autoplay falhar
-            });
-          }
-        }
-      }
-    } else {
-      // Vídeo não está ativo - apenas pausar (não resetar currentTime para evitar re-buffer)
-      if (!isYouTube) {
+        // Para vídeo local - reiniciar do início com som
         const video = videoRef.current;
         if (video) {
-          video.pause();
-          setIsPlaying(false);
-          // Manter muted se não está ativo
-          video.muted = true;
-          setIsMuted(true);
+          video.currentTime = 0; // Reiniciar do início quando desbloquear som
+          video.muted = false;
+          setIsMuted(false);
+          setShowVideoPlayButton(false);
+          // Tentar tocar
+          video.play().catch(() => {
+            // Ignorar erro se autoplay falhar
+          });
         }
       }
-      
-      // Se som está desbloqueado mas vídeo não está ativo, esconder botão
-      if (isSoundUnlocked) {
-        setShowYouTubePlayButton(false);
-        setShowVideoPlayButton(false);
-      }
     }
-  }, [isSoundUnlocked, isActive, isYouTube, youtubeUrl, loop, controls, autoplay]);
+  }, [isSoundUnlocked, isActive, isYouTube, youtubeUrl, loop, controls]);
 
 
   // Se for YouTube, renderizar iframe
