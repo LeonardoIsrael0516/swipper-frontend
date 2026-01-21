@@ -290,6 +290,21 @@ export default function PreviewQuiz() {
       const scrollTop = container.scrollTop;
       const slideHeight = container.clientHeight;
       const newSlide = Math.round(scrollTop / slideHeight);
+      const expectedScrollTop = newSlide * slideHeight;
+
+      // Se estiver em um slide travado, garantir que o scroll está completo
+      if (newSlide >= 0 && newSlide < reel.slides.length && hasLockSlide(newSlide)) {
+        // Se o scroll não está exatamente no final do slide (com margem de erro de 2px)
+        if (Math.abs(scrollTop - expectedScrollTop) > 2) {
+          // Forçar scroll completo imediatamente (sem smooth para ser instantâneo)
+          container.scrollTop = expectedScrollTop;
+          // Atualizar currentSlide se necessário
+          if (newSlide !== currentSlide) {
+            setCurrentSlide(newSlide);
+          }
+          return;
+        }
+      }
 
       // Limpar timeout anterior
       clearTimeout(scrollTimeout);
@@ -314,23 +329,8 @@ export default function PreviewQuiz() {
           }
         }
 
-        // Atualizar currentSlide primeiro para renderizar os elementos
+        // Scroll normal
         setCurrentSlide(newSlide);
-
-        // Se o novo slide tem lockSlide, garantir que o scroll vá completo até o final
-        if (newSlide > currentSlide && hasLockSlide(newSlide)) {
-          const expectedScrollTop = newSlide * slideHeight;
-          // Se o scroll não está exatamente no final do slide (com margem de erro de 5px)
-          if (Math.abs(scrollTop - expectedScrollTop) > 5) {
-            // Forçar scroll completo para o slide travado (sem smooth para ser instantâneo)
-            scrollTimeout = setTimeout(() => {
-              container.scrollTo({
-                top: expectedScrollTop,
-                behavior: 'auto', // Usar 'auto' para ser instantâneo
-              });
-            }, 10);
-          }
-        }
       }
     };
 
