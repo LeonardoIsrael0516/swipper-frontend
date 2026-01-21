@@ -27,7 +27,7 @@ interface SpacingElementEditorProps {
 }
 
 // Limite máximo fixo de espaçamento
-const MAX_SPACING = 400;
+const MAX_SPACING = 500;
 
 export function SpacingElementEditor({ element, tab }: SpacingElementEditorProps) {
   const { updateElement } = useBuilder();
