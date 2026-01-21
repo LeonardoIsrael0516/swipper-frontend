@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { VolumeX } from 'lucide-react';
+import { VolumeX, Loader2 } from 'lucide-react';
 import { useReelSound } from '@/contexts/ReelSoundContext';
 import Hls from 'hls.js';
 
@@ -50,6 +50,9 @@ export function ReelVideoBackground({
   // Estado para rastrear se o buffer inicial está carregado (para evitar re-buffer ao desmutar)
   const [initialBufferLoaded, setInitialBufferLoaded] = useState(false);
   
+  // Estado para rastrear se o vídeo está carregando pela primeira vez
+  const [isLoading, setIsLoading] = useState(true);
+  
   // Mostrar botão de som apenas se:
   // 1. Autoplay está ativo
   // 2. Som não está desbloqueado
@@ -77,6 +80,11 @@ export function ReelVideoBackground({
       setShowSoundButton(false);
     }
   }, [isSoundUnlocked, autoplay, isBlurVersion, isPlaying, hasAttemptedPlay]);
+
+  // Resetar loading quando src mudar
+  useEffect(() => {
+    setIsLoading(true);
+  }, [src]);
 
   // Configurar HLS se necessário
   useEffect(() => {
@@ -129,12 +137,30 @@ export function ReelVideoBackground({
           }
         };
         
-        video.addEventListener('loadeddata', attemptPlay, { once: true });
-        video.addEventListener('canplay', attemptPlay, { once: true });
+        const handleReady = () => {
+          setIsLoading(false);
+          attemptPlay();
+        };
+        
+        video.addEventListener('loadeddata', handleReady, { once: true });
+        video.addEventListener('canplay', handleReady, { once: true });
         
         // Tentar imediatamente se já estiver pronto
         if (video.readyState >= 2) {
+          setIsLoading(false);
           attemptPlay();
+        }
+      } else {
+        // Se não está ativo, verificar se já está carregado
+        const handleReady = () => {
+          setIsLoading(false);
+        };
+        
+        video.addEventListener('loadeddata', handleReady, { once: true });
+        video.addEventListener('canplay', handleReady, { once: true });
+        
+        if (video.readyState >= 2) {
+          setIsLoading(false);
         }
       }
       
@@ -277,8 +303,10 @@ export function ReelVideoBackground({
         }
       });
       
-      // Também tentar tocar quando nível estiver carregado
+      // Quando HLS estiver pronto para tocar, remover loading
       hls.on(Hls.Events.LEVEL_LOADED, () => {
+        setIsLoading(false);
+        
         if (isActive && autoplay) {
           // Garantir muted antes de tentar tocar
           if (isBlurVersion) {
@@ -295,8 +323,18 @@ export function ReelVideoBackground({
           });
         }
       });
+      
+      // Listener para quando HLS estiver pronto para tocar
+      const handleCanPlay = () => {
+        setIsLoading(false);
+      };
+      
+      video.addEventListener('canplay', handleCanPlay, { once: true });
+      video.addEventListener('loadeddata', handleCanPlay, { once: true });
 
       return () => {
+        video.removeEventListener('canplay', handleCanPlay);
+        video.removeEventListener('loadeddata', handleCanPlay);
         if (hlsRef.current) {
           hlsRef.current.destroy();
           hlsRef.current = null;
@@ -396,17 +434,31 @@ export function ReelVideoBackground({
     const handleLoadedData = () => {
       // Quando dados carregarem, verificar buffer
       handleProgress();
+      // Quando dados carregarem, vídeo não está mais em loading inicial
+      if (video.readyState >= 2) {
+        setIsLoading(false);
+      }
+    };
+    
+    const handleCanPlay = () => {
+      // Quando vídeo pode começar a tocar, não está mais em loading
+      setIsLoading(false);
     };
 
     video.addEventListener('progress', handleProgress);
     video.addEventListener('loadeddata', handleLoadedData);
+    video.addEventListener('canplay', handleCanPlay);
     
     // Verificar imediatamente se já está carregado
     handleProgress();
+    if (video.readyState >= 2) {
+      setIsLoading(false);
+    }
 
     return () => {
       video.removeEventListener('progress', handleProgress);
       video.removeEventListener('loadeddata', handleLoadedData);
+      video.removeEventListener('canplay', handleCanPlay);
     };
   }, [src, isHLS]);
 
@@ -826,6 +878,18 @@ export function ReelVideoBackground({
           backgroundColor: '#000', // Fundo preto enquanto carrega para evitar branco
         }}
       />
+      
+      {/* Loading spinner - mostrar apenas quando vídeo está carregando pela primeira vez */}
+      {isLoading && isActive && !isBlurVersion && (
+        <div 
+          className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10"
+          style={{
+            transition: 'opacity 0.3s ease-in-out',
+          }}
+        >
+          <Loader2 className="w-12 h-12 text-white animate-spin" />
+        </div>
+      )}
       
       {/* Botão de som removido - agora renderizado diretamente no ReelSlide para ficar acima do ReelContent */}
     </div>
