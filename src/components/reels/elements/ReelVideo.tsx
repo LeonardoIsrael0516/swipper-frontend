@@ -119,6 +119,19 @@ export const ReelVideo = memo(function ReelVideo({
         enableWorker: true,
         lowLatencyMode: false,
         backBufferLength: 90,
+        xhrSetup: (xhr, url) => {
+          // Garantir que todas as requisições sejam HTTPS
+          if (url.startsWith('http://')) {
+            url = url.replace('http://', 'https://');
+          }
+          // Configurar CORS se necessário
+          xhr.withCredentials = false;
+        },
+        // Configurações adicionais para lidar com SSL
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        maxBufferSize: 60 * 1000 * 1000, // 60MB
+        maxBufferHole: 0.5,
       });
 
       hls.loadSource(videoSrc);
@@ -128,6 +141,44 @@ export const ReelVideo = memo(function ReelVideo({
       if (!isSoundUnlocked) {
         video.muted = true;
       }
+
+      // Tratamento de erros
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              // Tentar recuperar de erros de rede
+              console.warn('HLS network error, attempting to recover...', data);
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              // Tentar recuperar de erros de mídia
+              console.warn('HLS media error, attempting to recover...', data);
+              hls.recoverMediaError();
+              break;
+            default:
+              // Erro fatal, recriar instância
+              console.error('HLS fatal error, destroying and recreating...', data);
+              hls.destroy();
+              // Tentar novamente após um delay
+              setTimeout(() => {
+                if (video && isActive && autoplay) {
+                  const newHls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: false,
+                    backBufferLength: 90,
+                  });
+                  newHls.loadSource(videoSrc);
+                  newHls.attachMedia(video);
+                }
+              }, 1000);
+              break;
+          }
+        } else {
+          // Erro não fatal, apenas logar
+          console.warn('HLS non-fatal error:', data);
+        }
+      });
 
       // Tentar tocar quando HLS estiver pronto
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
