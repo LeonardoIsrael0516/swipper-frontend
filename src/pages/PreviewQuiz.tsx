@@ -198,8 +198,8 @@ export default function PreviewQuiz() {
     // Formulário já foi submetido pelo próprio componente, apenas atualizar estado se necessário
   }, []);
 
-  // Função helper para verificar se um slide está travado
-  const checkIfSlideIsLocked = useCallback((slideIndex: number): boolean => {
+  // Função helper para verificar se um slide tem lockSlide habilitado
+  const hasLockSlide = useCallback((slideIndex: number): boolean => {
     if (!reel?.slides || slideIndex >= reel.slides.length || slideIndex < 0) {
       return false;
     }
@@ -209,29 +209,25 @@ export default function PreviewQuiz() {
       return false;
     }
 
-    // Verificar elementos que podem travar o slide
+    // Verificar se algum elemento tem lockSlide habilitado
     for (const element of slideData.elements) {
       const config = normalizeUiConfig(element.uiConfig);
       
-      // BUTTON com lockSlide
       if (element.elementType === 'BUTTON' && config.lockSlide === true) {
         return true;
       }
       
-      // QUESTIONNAIRE/QUESTION_GRID com lockSlide (sempre travado até responder)
       if ((element.elementType === 'QUESTIONNAIRE' || element.elementType === 'QUESTION_GRID') 
           && config.lockSlide === true) {
-        return true; // Sempre travado até ter resposta
+        return true;
       }
       
-      // PROGRESS com lockSlide (sempre travado até completar)
       if (element.elementType === 'PROGRESS' && config.lockSlide === true) {
-        return true; // Sempre travado até completar
+        return true;
       }
       
-      // FORM com lockSlide (sempre travado até validar)
       if (element.elementType === 'FORM' && config.lockSlide === true) {
-        return true; // Sempre travado até validar
+        return true;
       }
     }
 
@@ -239,11 +235,6 @@ export default function PreviewQuiz() {
   }, [reel]);
 
   const scrollToSlide = useCallback(async (slideIndex: number) => {
-    // Verificar se o slide destino está travado (apenas se for para frente)
-    if (slideIndex > currentSlide && checkIfSlideIsLocked(slideIndex)) {
-      return; // Não fazer scroll se estiver travado
-    }
-
     // Enviar formulários completos antes de avançar
     if (reel?.slides && currentSlide < reel.slides.length) {
       const currentSlideData = reel.slides[currentSlide];
@@ -268,7 +259,7 @@ export default function PreviewQuiz() {
         behavior: 'smooth',
       });
     }
-  }, [reel, currentSlide, checkIfSlideIsLocked]);
+  }, [reel, currentSlide]);
 
   // Inicializar renderedSlides quando os slides carregarem
   useEffect(() => {
@@ -304,15 +295,6 @@ export default function PreviewQuiz() {
       clearTimeout(scrollTimeout);
 
       if (newSlide !== currentSlide && newSlide < reel.slides.length && newSlide >= 0) {
-        // Se tentando ir para frente e o próximo slide está travado, bloquear
-        if (newSlide > currentSlide && checkIfSlideIsLocked(newSlide)) {
-          // Forçar scroll de volta para o slide atual
-          scrollTimeout = setTimeout(() => {
-            scrollToSlide(currentSlide);
-          }, 10);
-          return;
-        }
-
         // Verificar se há uma conexão defaultNext no slide atual
         const currentSlideData = reel.slides[currentSlide];
         if (currentSlideData && newSlide === currentSlide + 1) {
@@ -332,7 +314,23 @@ export default function PreviewQuiz() {
           }
         }
 
-        // Scroll normal (só chega aqui se não estiver travado)
+        // Se o novo slide tem lockSlide, garantir que o scroll vá completo até o final
+        if (newSlide > currentSlide && hasLockSlide(newSlide)) {
+          const expectedScrollTop = newSlide * slideHeight;
+          // Se o scroll não está exatamente no final do slide (com margem de erro de 5px)
+          if (Math.abs(scrollTop - expectedScrollTop) > 5) {
+            // Forçar scroll completo para o slide travado
+            scrollTimeout = setTimeout(() => {
+              container.scrollTo({
+                top: expectedScrollTop,
+                behavior: 'smooth',
+              });
+            }, 10);
+            return;
+          }
+        }
+
+        // Scroll normal
         setCurrentSlide(newSlide);
       }
     };
@@ -342,7 +340,7 @@ export default function PreviewQuiz() {
       container.removeEventListener('scroll', handleScroll);
       clearTimeout(scrollTimeout);
     };
-  }, [currentSlide, reel, scrollToSlide, checkIfSlideIsLocked]);
+  }, [currentSlide, reel, scrollToSlide, hasLockSlide]);
 
   // Verificar se o slide atual está travado por algum botão
   useEffect(() => {
