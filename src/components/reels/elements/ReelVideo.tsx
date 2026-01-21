@@ -38,6 +38,7 @@ export const ReelVideo = memo(function ReelVideo({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const [hasAttemptedPlay, setHasAttemptedPlay] = useState(false); // Rastrear se já tentamos tocar
   
   // Contexto global de som
   const { isSoundUnlocked, unlockSound } = useReelSound();
@@ -62,11 +63,11 @@ export const ReelVideo = memo(function ReelVideo({
   
   // Atualizar estado dos botões baseado em se o vídeo está tocando
   useEffect(() => {
-    // Só mostrar botão se autoplay está ativo, som não está desbloqueado, E vídeo não está tocando
-    const shouldShow = autoplay && !isSoundUnlocked && !isPlaying;
+    // Só mostrar botão se autoplay está ativo, som não está desbloqueado, vídeo não está tocando, E já tentamos tocar
+    const shouldShow = autoplay && !isSoundUnlocked && !isPlaying && hasAttemptedPlay;
     setShowYouTubePlayButton(shouldShow);
     setShowVideoPlayButton(shouldShow);
-  }, [isSoundUnlocked, autoplay, isPlaying]);
+  }, [isSoundUnlocked, autoplay, isPlaying, hasAttemptedPlay]);
   
   // Mostrar botão de play:
   // - YouTube: quando autoplay falhou (vídeo não está tocando)
@@ -90,6 +91,8 @@ export const ReelVideo = memo(function ReelVideo({
 
     const handlePlay = () => {
       setIsPlaying(true);
+      // Quando vídeo começa a tocar, resetar hasAttemptedPlay para esconder botão
+      setHasAttemptedPlay(false);
       // Não esconder botão aqui - ele só deve ser escondido quando som for desbloqueado
       // O useEffect já gerencia isso baseado em isSoundUnlocked
       onPlay?.();
@@ -117,6 +120,9 @@ export const ReelVideo = memo(function ReelVideo({
     // Função para tentar tocar o vídeo
     const tryPlay = () => {
       if (!video || !isActive || !autoplay) return;
+      
+      // Marcar que tentamos tocar
+      setHasAttemptedPlay(true);
       
       // Configurar muted antes de tentar tocar
       if (isSoundUnlocked) {
@@ -190,6 +196,8 @@ export const ReelVideo = memo(function ReelVideo({
       // Manter muted se não está ativo
       video.muted = true;
       setIsMuted(true);
+      // Resetar hasAttemptedPlay quando slide não está ativo
+      setHasAttemptedPlay(false);
     }
     
     return () => {
@@ -204,7 +212,16 @@ export const ReelVideo = memo(function ReelVideo({
   // Efeito específico: quando isActive muda para true, forçar play imediatamente
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || isYouTube || !isActive || !autoplay) return;
+    if (!video || isYouTube || !isActive || !autoplay) {
+      // Resetar hasAttemptedPlay quando não está ativo
+      if (!isActive) {
+        setHasAttemptedPlay(false);
+      }
+      return;
+    }
+
+    // Marcar que tentamos tocar
+    setHasAttemptedPlay(true);
 
     // Garantir muted antes de tentar tocar
     if (!isSoundUnlocked) {

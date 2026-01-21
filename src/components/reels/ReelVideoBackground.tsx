@@ -29,6 +29,7 @@ export function ReelVideoBackground({
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const lastActiveStateRef = useRef<boolean>(false); // Rastrear último estado de isActive
+  const [hasAttemptedPlay, setHasAttemptedPlay] = useState(false); // Rastrear se já tentamos tocar
   
   // Contexto global de som
   const { isSoundUnlocked, unlockSound } = useReelSound();
@@ -50,10 +51,10 @@ export function ReelVideoBackground({
   
   // Atualizar estado do botão baseado em se o vídeo está tocando
   useEffect(() => {
-    // Só mostrar botão se autoplay está ativo, som não está desbloqueado, não é blur, E vídeo não está tocando
-    const shouldShow = autoplay && !isSoundUnlocked && !isBlurVersion && !isPlaying;
+    // Só mostrar botão se autoplay está ativo, som não está desbloqueado, não é blur, vídeo não está tocando, E já tentamos tocar
+    const shouldShow = autoplay && !isSoundUnlocked && !isBlurVersion && !isPlaying && hasAttemptedPlay;
     setShowSoundButton(shouldShow);
-  }, [isSoundUnlocked, autoplay, isBlurVersion, isPlaying]);
+  }, [isSoundUnlocked, autoplay, isBlurVersion, isPlaying, hasAttemptedPlay]);
 
   // Setup event listeners uma vez
   useEffect(() => {
@@ -62,6 +63,8 @@ export function ReelVideoBackground({
 
     const handlePlay = () => {
       setIsPlaying(true);
+      // Quando vídeo começa a tocar, resetar hasAttemptedPlay para esconder botão
+      setHasAttemptedPlay(false);
     };
 
     const handlePause = () => {
@@ -129,6 +132,9 @@ export function ReelVideoBackground({
     const tryPlay = () => {
       if (!video || !isActive || !autoplay) return;
       
+      // Marcar que tentamos tocar
+      setHasAttemptedPlay(true);
+      
       // Configurar muted antes de tentar tocar
       if (isBlurVersion) {
         video.muted = true;
@@ -137,7 +143,6 @@ export function ReelVideoBackground({
         const shouldBeMuted = !isSoundUnlocked;
         video.muted = shouldBeMuted;
         setIsMuted(shouldBeMuted);
-        setShowSoundButton(shouldBeMuted);
       }
       
       // Tentar tocar se estiver pausado
@@ -205,6 +210,8 @@ export function ReelVideoBackground({
         video.pause();
         setIsPlaying(false);
       }
+      // Resetar hasAttemptedPlay quando slide não está ativo
+      setHasAttemptedPlay(false);
       
       return () => {
         video.removeEventListener('canplay', handleCanPlay);
@@ -216,7 +223,16 @@ export function ReelVideoBackground({
   // Garantir que vídeo sempre tente tocar quando estiver ativo (para iOS e outros casos)
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !isActive || !autoplay) return;
+    if (!video || !isActive || !autoplay) {
+      // Resetar hasAttemptedPlay quando não está ativo
+      if (!isActive) {
+        setHasAttemptedPlay(false);
+      }
+      return;
+    }
+
+    // Marcar que tentamos tocar
+    setHasAttemptedPlay(true);
 
     // Função para tentar tocar o vídeo (sempre muted se som não desbloqueado)
     const attemptPlay = () => {
