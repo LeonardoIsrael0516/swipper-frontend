@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { SlideElement } from '@/contexts/BuilderContext';
 import { useBuilder } from '@/contexts/BuilderContext';
@@ -416,13 +417,17 @@ export function QuestionGridElementEditor({ element, tab }: QuestionGridElementE
     
     lastSyncedConfigRef.current = configStr;
     
-    // Normalizar items - apenas imageUrl, title, description
+    // Normalizar items - incluindo campos de ação
     const normalizedItems = Array.isArray(normalizedConfig.items) 
       ? normalizedConfig.items.map((item: any) => ({
           id: item.id || generateId(),
           imageUrl: item.imageUrl && typeof item.imageUrl === 'string' ? item.imageUrl.trim() : undefined,
           title: item.title && typeof item.title === 'string' ? item.title.trim() : '',
           description: item.description && typeof item.description === 'string' ? item.description.trim() : '',
+          actionType: item.actionType || 'none',
+          slideId: item.slideId,
+          url: item.url,
+          openInNewTab: item.openInNewTab !== false,
         }))
       : [];
     
@@ -454,6 +459,10 @@ export function QuestionGridElementEditor({ element, tab }: QuestionGridElementE
           imageUrl: item.imageUrl,
           title: item.title || '',
           description: item.description || '',
+          actionType: item.actionType || 'none',
+          slideId: item.slideId,
+          url: item.url,
+          openInNewTab: item.openInNewTab !== false,
         })),
         layout: 'grid', // Fixo
         multipleSelection,

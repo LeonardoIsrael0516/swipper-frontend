@@ -505,13 +505,18 @@ export function QuestionnaireElementEditor({ element, tab }: QuestionnaireElemen
             }
           }
           
-          return {
-            ...item,
-            iconType: detectedIconType || 'emoji',
-            // Limpar campo icon (opção removida)
-            icon: '',
-          };
-        })
+        return {
+          ...item,
+          iconType: detectedIconType || 'emoji',
+          // Limpar campo icon (opção removida)
+          icon: '',
+          // Campos de ação
+          actionType: item.actionType || 'none',
+          slideId: item.slideId,
+          url: item.url,
+          openInNewTab: item.openInNewTab !== false,
+        };
+      })
       : [];
     
     setItems(normalizedItems);
@@ -564,6 +569,11 @@ export function QuestionnaireElementEditor({ element, tab }: QuestionnaireElemen
           iconType: detectedIconType || 'emoji',
           // Limpar campo icon (opção removida)
           icon: '',
+          // Campos de ação - garantir que estão incluídos
+          actionType: item.actionType || 'none',
+          slideId: item.slideId,
+          url: item.url,
+          openInNewTab: item.openInNewTab !== false,
         };
       });
       
