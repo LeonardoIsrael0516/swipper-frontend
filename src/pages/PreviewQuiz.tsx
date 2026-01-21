@@ -492,9 +492,8 @@ export default function PreviewQuiz() {
         const currentScrollTop = container.scrollTop;
         const expectedScrollTop = currentSlide * slideHeight;
         
-        // Se o scrollTop está além do esperado para o slide atual, reverter
-        // Usar uma pequena tolerância (2px) para evitar microajustes
-        if (currentScrollTop > expectedScrollTop + 2) {
+        // Bloquear qualquer movimento além da posição exata (sem tolerância)
+        if (currentScrollTop > expectedScrollTop) {
           container.scrollTop = expectedScrollTop;
         }
         
@@ -509,8 +508,9 @@ export default function PreviewQuiz() {
         const expectedScrollTop = currentSlide * slideHeight;
         const currentScrollTop = container.scrollTop;
         
-        // Verificar se está no slide travado (com tolerância de 5px)
-        if (Math.abs(currentScrollTop - expectedScrollTop) < 5) {
+        // Verificar se está no slide travado (com tolerância de 10px para detectar que está no slide)
+        // Mas bloquear qualquer movimento para frente
+        if (Math.abs(currentScrollTop - expectedScrollTop) < 10) {
           // Permitir scroll para cima (voltar), bloquear apenas para baixo (avançar)
           if (e.deltaY > 0) {
             e.preventDefault();
@@ -519,6 +519,12 @@ export default function PreviewQuiz() {
             container.scrollTop = expectedScrollTop;
             return false;
           }
+        } else if (currentScrollTop > expectedScrollTop) {
+          // Se já passou da posição, reverter imediatamente
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          container.scrollTop = expectedScrollTop;
+          return false;
         }
       }
     };
@@ -542,8 +548,9 @@ export default function PreviewQuiz() {
         const expectedScrollTop = currentSlide * slideHeight;
         const currentScrollTop = container.scrollTop;
         
-        // Verificar se está no slide travado (com tolerância de 5px)
-        if (Math.abs(currentScrollTop - expectedScrollTop) < 5) {
+        // Verificar se está no slide travado (com tolerância de 10px para detectar que está no slide)
+        // Mas bloquear qualquer movimento para frente
+        if (Math.abs(currentScrollTop - expectedScrollTop) < 10) {
           const touchY = e.touches[0].clientY;
           const deltaY = touchY - touchStartY;
           
@@ -556,6 +563,12 @@ export default function PreviewQuiz() {
             container.scrollTop = expectedScrollTop;
             return false;
           }
+        } else if (currentScrollTop > expectedScrollTop) {
+          // Se já passou da posição, reverter imediatamente
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          container.scrollTop = expectedScrollTop;
+          return false;
         }
       }
     };
@@ -574,9 +587,8 @@ export default function PreviewQuiz() {
         const expectedScrollTop = currentSlide * slideHeight;
         const currentScrollTop = container.scrollTop;
         
-        // Se tentou ir além da posição esperada do slide atual, reverter
-        // Usar tolerância de 2px para evitar loops
-        if (currentScrollTop > expectedScrollTop + 2) {
+        // Bloquear qualquer movimento além da posição exata (sem tolerância)
+        if (currentScrollTop > expectedScrollTop) {
           container.scrollTop = expectedScrollTop;
         }
       }
