@@ -976,32 +976,28 @@ export default function PublicQuiz() {
     const container = containerRef.current;
     if (!container) return;
 
-    // Guardar scrollTop atual quando slide fica travado
+    // Guardar scrollTop exato quando slide fica travado
     let lockedScrollTop = container.scrollTop;
     const slideHeight = container.clientHeight;
-    let currentLockedSlide = Math.floor(lockedScrollTop / slideHeight);
     
     // Atualizar valores quando o slide travar
     if (isSlideLocked) {
       lockedScrollTop = container.scrollTop;
-      currentLockedSlide = Math.floor(lockedScrollTop / slideHeight);
     }
 
     // Monitor contínuo para manter scroll travado
     let lockMonitor: number | null = null;
     
     const monitorLock = () => {
-      if (isSlideLocked && !isProgrammaticScrollRef.current) {
+      // Só monitorar se realmente estiver no slide travado (usar currentSlide do estado)
+      if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
         const currentScrollTop = container.scrollTop;
-        const currentSlideIndex = Math.floor(currentScrollTop / slideHeight);
+        const expectedScrollTop = currentSlide * slideHeight;
         
-        // Só bloquear se realmente estiver no slide travado
-        // Verificar se está no slide correto E se tentou avançar além da posição travada
-        if (currentSlideIndex === currentLockedSlide) {
-          // Se tentou ir além da posição travada (mesmo que ainda esteja no mesmo slide), reverter
-          if (currentScrollTop > lockedScrollTop + 1) {
-            container.scrollTop = lockedScrollTop;
-          }
+        // Se o scrollTop está além do esperado para o slide atual, reverter
+        // Usar uma pequena tolerância (2px) para evitar microajustes
+        if (currentScrollTop > expectedScrollTop + 2) {
+          container.scrollTop = expectedScrollTop;
         }
         
         // Continuar monitorando
@@ -1010,18 +1006,19 @@ export default function PublicQuiz() {
     };
 
     const preventWheel = (e: WheelEvent) => {
-      if (isSlideLocked && !isProgrammaticScrollRef.current) {
+      // Só bloquear se realmente estiver no slide travado (usar currentSlide do estado)
+      if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
+        const expectedScrollTop = currentSlide * slideHeight;
         const currentScrollTop = container.scrollTop;
-        const currentSlideIndex = Math.floor(currentScrollTop / slideHeight);
         
-        // Só bloquear se realmente estiver no slide travado
-        if (currentSlideIndex === currentLockedSlide) {
+        // Verificar se está no slide travado (com tolerância de 5px)
+        if (Math.abs(currentScrollTop - expectedScrollTop) < 5) {
           // Permitir scroll para cima (voltar), bloquear apenas para baixo (avançar)
           if (e.deltaY > 0) {
             e.preventDefault();
             e.stopImmediatePropagation();
             // Forçar scrollTop de volta imediatamente
-            container.scrollTop = lockedScrollTop;
+            container.scrollTop = expectedScrollTop;
             return false;
           }
         }
@@ -1034,20 +1031,21 @@ export default function PublicQuiz() {
     let isScrollingForward = false;
     
     const handleTouchStart = (e: TouchEvent) => {
-      if (isSlideLocked && !isProgrammaticScrollRef.current) {
+      if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
         touchStartY = e.touches[0].clientY;
-        touchStartScrollTop = container.scrollTop;
+        touchStartScrollTop = currentSlide * slideHeight;
         isScrollingForward = false;
       }
     };
 
     const preventTouch = (e: TouchEvent) => {
-      if (isSlideLocked && !isProgrammaticScrollRef.current) {
+      // Só bloquear se realmente estiver no slide travado (usar currentSlide do estado)
+      if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
+        const expectedScrollTop = currentSlide * slideHeight;
         const currentScrollTop = container.scrollTop;
-        const currentSlideIndex = Math.floor(currentScrollTop / slideHeight);
         
-        // Só bloquear se realmente estiver no slide travado
-        if (currentSlideIndex === currentLockedSlide) {
+        // Verificar se está no slide travado (com tolerância de 5px)
+        if (Math.abs(currentScrollTop - expectedScrollTop) < 5) {
           const touchY = e.touches[0].clientY;
           const deltaY = touchY - touchStartY;
           
@@ -1057,7 +1055,7 @@ export default function PublicQuiz() {
             e.preventDefault();
             e.stopImmediatePropagation();
             // Forçar scrollTop de volta imediatamente
-            container.scrollTop = touchStartScrollTop;
+            container.scrollTop = expectedScrollTop;
             return false;
           }
         }
@@ -1065,28 +1063,24 @@ export default function PublicQuiz() {
     };
 
     const handleTouchEnd = () => {
-      if (isSlideLocked && isScrollingForward) {
+      if (isSlideLocked && isScrollingForward && reel?.slides) {
         // Garantir que voltou para a posição inicial
-        container.scrollTop = lockedScrollTop;
+        container.scrollTop = currentSlide * slideHeight;
         isScrollingForward = false;
       }
     };
 
     const preventScroll = () => {
-      if (isSlideLocked && !isProgrammaticScrollRef.current) {
-        // Verificar se o scroll tentou ir para frente
+      // Só bloquear se realmente estiver no slide travado (usar currentSlide do estado)
+      if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
+        const expectedScrollTop = currentSlide * slideHeight;
         const currentScrollTop = container.scrollTop;
-        const currentSlideIndex = Math.floor(currentScrollTop / slideHeight);
         
-        // Só bloquear se realmente estiver no slide travado (mesmo índice)
-        // E se tentou ir além da posição travada
-        if (currentSlideIndex === currentLockedSlide) {
-          // Bloquear qualquer movimento além da posição travada (tolerância de 1px para evitar loops)
-          if (currentScrollTop > lockedScrollTop + 1) {
-            container.scrollTop = lockedScrollTop;
-          }
+        // Se tentou ir além da posição esperada do slide atual, reverter
+        // Usar tolerância de 2px para evitar loops
+        if (currentScrollTop > expectedScrollTop + 2) {
+          container.scrollTop = expectedScrollTop;
         }
-        // Se está em um slide diferente, pode ser que esteja chegando ou saindo - não bloquear aqui
       }
     };
 
@@ -1125,7 +1119,7 @@ export default function PublicQuiz() {
       container.removeEventListener('scroll', preventScroll, { capture: true } as EventListenerOptions);
       document.removeEventListener('keydown', preventKeys, { capture: true } as EventListenerOptions);
     };
-  }, [isSlideLocked]);
+  }, [isSlideLocked, currentSlide, reel?.slides]);
 
   // Handler para mudança de validação do formulário
   const handleFormValidationChange = useCallback((elementId: string, isValid: boolean) => {
