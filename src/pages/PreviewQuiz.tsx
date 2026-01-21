@@ -500,9 +500,13 @@ export default function PreviewQuiz() {
         const currentScrollTop = container.scrollTop;
         const currentSlideIndex = Math.floor(currentScrollTop / slideHeight);
         
-        // Se tentou ir para frente, reverter imediatamente
-        if (currentSlideIndex > currentLockedSlide || currentScrollTop > lockedScrollTop + 5) {
-          container.scrollTop = lockedScrollTop;
+        // Só bloquear se realmente estiver no slide travado
+        // Verificar se está no slide correto E se tentou avançar além da posição travada
+        if (currentSlideIndex === currentLockedSlide) {
+          // Se tentou ir além da posição travada (mesmo que ainda esteja no mesmo slide), reverter
+          if (currentScrollTop > lockedScrollTop + 1) {
+            container.scrollTop = lockedScrollTop;
+          }
         }
         
         // Continuar monitorando
@@ -512,13 +516,19 @@ export default function PreviewQuiz() {
 
     const preventWheel = (e: WheelEvent) => {
       if (isSlideLocked && !isProgrammaticScrollRef.current) {
-        // Permitir scroll para cima (voltar), bloquear apenas para baixo (avançar)
-        if (e.deltaY > 0) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          // Forçar scrollTop de volta imediatamente
-          container.scrollTop = lockedScrollTop;
-          return false;
+        const currentScrollTop = container.scrollTop;
+        const currentSlideIndex = Math.floor(currentScrollTop / slideHeight);
+        
+        // Só bloquear se realmente estiver no slide travado
+        if (currentSlideIndex === currentLockedSlide) {
+          // Permitir scroll para cima (voltar), bloquear apenas para baixo (avançar)
+          if (e.deltaY > 0) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            // Forçar scrollTop de volta imediatamente
+            container.scrollTop = lockedScrollTop;
+            return false;
+          }
         }
       }
     };
@@ -538,17 +548,23 @@ export default function PreviewQuiz() {
 
     const preventTouch = (e: TouchEvent) => {
       if (isSlideLocked && !isProgrammaticScrollRef.current) {
-        const touchY = e.touches[0].clientY;
-        const deltaY = touchY - touchStartY;
+        const currentScrollTop = container.scrollTop;
+        const currentSlideIndex = Math.floor(currentScrollTop / slideHeight);
         
-        // Se está tentando deslizar para baixo (deltaY positivo = swipe down = avançar), bloquear
-        if (deltaY > 10) {
-          isScrollingForward = true;
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          // Forçar scrollTop de volta imediatamente
-          container.scrollTop = touchStartScrollTop;
-          return false;
+        // Só bloquear se realmente estiver no slide travado
+        if (currentSlideIndex === currentLockedSlide) {
+          const touchY = e.touches[0].clientY;
+          const deltaY = touchY - touchStartY;
+          
+          // Se está tentando deslizar para baixo (deltaY positivo = swipe down = avançar), bloquear
+          if (deltaY > 10) {
+            isScrollingForward = true;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            // Forçar scrollTop de volta imediatamente
+            container.scrollTop = touchStartScrollTop;
+            return false;
+          }
         }
       }
     };
@@ -567,10 +583,15 @@ export default function PreviewQuiz() {
         const currentScrollTop = container.scrollTop;
         const currentSlideIndex = Math.floor(currentScrollTop / slideHeight);
         
-        // Se tentou ir para um slide à frente, reverter imediatamente
-        if (currentSlideIndex > currentLockedSlide || currentScrollTop > lockedScrollTop + 5) {
-          container.scrollTop = lockedScrollTop;
+        // Só bloquear se realmente estiver no slide travado (mesmo índice)
+        // E se tentou ir além da posição travada
+        if (currentSlideIndex === currentLockedSlide) {
+          // Bloquear qualquer movimento além da posição travada (tolerância de 1px para evitar loops)
+          if (currentScrollTop > lockedScrollTop + 1) {
+            container.scrollTop = lockedScrollTop;
+          }
         }
+        // Se está em um slide diferente, pode ser que esteja chegando ou saindo - não bloquear aqui
       }
     };
 
