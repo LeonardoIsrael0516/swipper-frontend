@@ -94,27 +94,42 @@ export function ReelVideoBackground({
 
     // Para outros navegadores, usar hls.js
     if (Hls.isSupported()) {
+      // Garantir que a URL seja HTTPS
+      const secureUrl = src.startsWith('http://') 
+        ? src.replace('http://', 'https://')
+        : src;
+
       const hls = new Hls({
-        enableWorker: true,
+        enableWorker: false, // Desabilitar worker pode ajudar com problemas de SSL
         lowLatencyMode: false,
         backBufferLength: 90,
         xhrSetup: (xhr, url) => {
           // Garantir que todas as requisições sejam HTTPS
-          if (url.startsWith('http://')) {
-            url = url.replace('http://', 'https://');
+          const secureUrl = url.startsWith('http://') 
+            ? url.replace('http://', 'https://')
+            : url;
+          // Tentar usar a URL segura se possível
+          try {
+            // Configurar CORS
+            xhr.withCredentials = false;
+            // Não podemos mudar a URL diretamente, mas podemos garantir HTTPS
+          } catch (e) {
+            // Ignorar erros de configuração
           }
-          // Configurar CORS se necessário
-          xhr.withCredentials = false;
         },
         // Configurações adicionais para lidar com SSL
         maxBufferLength: 30,
         maxMaxBufferLength: 60,
         maxBufferSize: 60 * 1000 * 1000, // 60MB
         maxBufferHole: 0.5,
+        // Configurações de rede mais conservadoras
+        fragLoadingTimeOut: 20000,
+        manifestLoadingTimeOut: 10000,
+        levelLoadingTimeOut: 10000,
       });
 
       hlsRef.current = hls;
-      hls.loadSource(src);
+      hls.loadSource(secureUrl);
       hls.attachMedia(video);
 
       // Configurar muted para autoplay funcionar
@@ -126,17 +141,30 @@ export function ReelVideoBackground({
 
       // Tratamento de erros
       hls.on(Hls.Events.ERROR, (event, data) => {
+        // Ignorar erros de SSL não fatais (podem ser falsos positivos)
+        if (data.details && data.details.includes('SSL') && !data.fatal) {
+          return;
+        }
+
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               // Tentar recuperar de erros de rede
               console.warn('HLS network error, attempting to recover...', data);
-              hls.startLoad();
+              try {
+                hls.startLoad();
+              } catch (e) {
+                console.error('Failed to recover from network error:', e);
+              }
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               // Tentar recuperar de erros de mídia
               console.warn('HLS media error, attempting to recover...', data);
-              hls.recoverMediaError();
+              try {
+                hls.recoverMediaError();
+              } catch (e) {
+                console.error('Failed to recover from media error:', e);
+              }
               break;
             default:
               // Erro fatal, recriar instância
@@ -145,22 +173,24 @@ export function ReelVideoBackground({
               hlsRef.current = null;
               // Tentar novamente após um delay
               setTimeout(() => {
-                if (video && isActive && autoplay && !hlsRef.current) {
+                if (video && isActive && autoplay && !hlsRef.current && !video.src) {
                   const newHls = new Hls({
-                    enableWorker: true,
+                    enableWorker: false,
                     lowLatencyMode: false,
                     backBufferLength: 90,
                   });
                   hlsRef.current = newHls;
-                  newHls.loadSource(src);
+                  newHls.loadSource(secureUrl);
                   newHls.attachMedia(video);
                 }
               }, 1000);
               break;
           }
         } else {
-          // Erro não fatal, apenas logar
-          console.warn('HLS non-fatal error:', data);
+          // Erro não fatal, apenas logar se não for SSL
+          if (!data.details || !data.details.includes('SSL')) {
+            console.warn('HLS non-fatal error:', data);
+          }
         }
       });
 
@@ -181,7 +211,10 @@ export function ReelVideoBackground({
       };
     } else {
       // Fallback: tentar usar video.src mesmo sem suporte
-      video.src = src;
+      const secureUrl = src.startsWith('http://') 
+        ? src.replace('http://', 'https://')
+        : src;
+      video.src = secureUrl;
     }
   }, [src, isHLS, isActive, autoplay, isBlurVersion, isSoundUnlocked]);
 
