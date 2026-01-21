@@ -102,7 +102,10 @@ export default function PreviewQuiz() {
   const { data: reel, isLoading, error } = useQuery({
     queryKey: ['preview-reel', slug],
     queryFn: async () => {
-      const response = await api.get(`/reels/preview/${slug}`);
+      // Sempre adicionar timestamp para forçar bypass de cache do navegador
+      // Isso garante que sempre busque dados atualizados
+      const cacheBuster = `?t=${Date.now()}`;
+      const response = await api.get(`/reels/preview/${slug}${cacheBuster}`);
       const reelData = (response as any).data || response;
       
       // Extrair backgroundConfig do uiConfig para cada slide
@@ -145,11 +148,11 @@ export default function PreviewQuiz() {
       return reelData;
     },
     enabled: !!slug,
-    staleTime: 5 * 60 * 1000, // 5 minutos
-    gcTime: 15 * 60 * 1000, // 15 minutos em cache
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
+    staleTime: 0, // Sempre considerar dados como stale - sempre buscar dados frescos
+    gcTime: 0, // Não manter em cache - sempre buscar do servidor
+    refetchOnWindowFocus: true, // Refazer ao focar na janela
+    refetchOnMount: true, // Sempre refazer ao montar para garantir dados atualizados
+    refetchOnReconnect: true, // Refazer ao reconectar
     refetchInterval: false, // Desabilitar refetch automático completamente
   });
 

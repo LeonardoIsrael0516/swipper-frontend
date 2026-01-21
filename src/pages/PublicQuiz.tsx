@@ -238,8 +238,9 @@ export default function PublicQuiz() {
   const { data: reel, isLoading, error } = useQuery({
     queryKey: ['public-reel', slug],
     queryFn: async () => {
-      // Adicionar timestamp para forçar bypass de cache do navegador em desenvolvimento
-      const cacheBuster = import.meta.env.DEV ? `?t=${Date.now()}` : '';
+      // Sempre adicionar timestamp para forçar bypass de cache do navegador
+      // Isso garante que sempre busque dados atualizados
+      const cacheBuster = `?t=${Date.now()}`;
       const response = await api.publicGet(`/reels/public/${slug}${cacheBuster}`);
       const reelData = (response as any).data || response;
       
@@ -262,9 +263,9 @@ export default function PublicQuiz() {
       return reelData;
     },
     enabled: !!slug,
-    staleTime: import.meta.env.DEV ? 0 : 2 * 60 * 1000, // Em desenvolvimento: sempre buscar dados frescos. Em produção: 2 minutos
-    gcTime: import.meta.env.DEV ? 0 : 5 * 60 * 1000, // Em desenvolvimento: não cachear. Em produção: 5 minutos
-    refetchOnWindowFocus: import.meta.env.DEV, // Em desenvolvimento: refazer ao focar
+    staleTime: 0, // Sempre considerar dados como stale - sempre buscar dados frescos
+    gcTime: 0, // Não manter em cache - sempre buscar do servidor
+    refetchOnWindowFocus: true, // Refazer ao focar na janela
     refetchOnMount: true, // Sempre refazer ao montar para garantir dados atualizados
     refetchOnReconnect: true, // Refazer ao reconectar
     refetchInterval: false, // Desabilitar refetch automático completamente
