@@ -52,21 +52,25 @@ export const ReelVideo = memo(function ReelVideo({
   // Inicializar sempre como muted para garantir autoplay funciona
   const [isMuted, setIsMuted] = useState(true); // Sempre começar muted para autoplay funcionar
   
-  // Mostrar botão de som apenas se autoplay está ativo E som não está desbloqueado
-  const shouldShowSoundButton = autoplay && !isSoundUnlocked;
-  const [showYouTubePlayButton, setShowYouTubePlayButton] = useState(shouldShowSoundButton);
-  const [showVideoPlayButton, setShowVideoPlayButton] = useState(shouldShowSoundButton);
+  // Mostrar botão de som apenas se:
+  // 1. Autoplay está ativo
+  // 2. Som não está desbloqueado
+  // 3. E vídeo NÃO está tocando (ou seja, autoplay falhou)
+  // Se o vídeo está tocando mutado, não mostrar botão
+  const [showYouTubePlayButton, setShowYouTubePlayButton] = useState(false);
+  const [showVideoPlayButton, setShowVideoPlayButton] = useState(false);
   
-  // Sincronizar estado dos botões quando isSoundUnlocked ou autoplay mudarem
+  // Atualizar estado dos botões baseado em se o vídeo está tocando
   useEffect(() => {
-    const shouldShow = autoplay && !isSoundUnlocked;
+    // Só mostrar botão se autoplay está ativo, som não está desbloqueado, E vídeo não está tocando
+    const shouldShow = autoplay && !isSoundUnlocked && !isPlaying;
     setShowYouTubePlayButton(shouldShow);
     setShowVideoPlayButton(shouldShow);
-  }, [isSoundUnlocked, autoplay]);
+  }, [isSoundUnlocked, autoplay, isPlaying]);
   
   // Mostrar botão de play:
-  // - YouTube: quando autoplay está ativo (mesmo que esteja tocando)
-  // - Vídeo local: quando autoplay está ativo (mesma lógica)
+  // - YouTube: quando autoplay falhou (vídeo não está tocando)
+  // - Vídeo local: quando autoplay falhou (vídeo não está tocando)
   const showPlayButton = isYouTube 
     ? showYouTubePlayButton
     : showVideoPlayButton;
@@ -123,7 +127,6 @@ export const ReelVideo = memo(function ReelVideo({
         // Se som não está desbloqueado, tocar muted
         video.muted = true;
         setIsMuted(true);
-        setShowVideoPlayButton(shouldShowSoundButton);
       }
       
       // Tentar tocar se estiver pausado
@@ -135,10 +138,8 @@ export const ReelVideo = memo(function ReelVideo({
               setIsPlaying(true);
             })
             .catch((error) => {
-              // Autoplay bloqueado - manter botão visível se necessário
-              if (!isSoundUnlocked) {
-                setShowVideoPlayButton(true);
-              }
+              // Autoplay bloqueado - o useEffect vai atualizar o botão baseado em isPlaying
+              // Não fazer nada aqui, o estado isPlaying já vai estar false
             });
         }
       }
@@ -198,7 +199,7 @@ export const ReelVideo = memo(function ReelVideo({
       video.removeEventListener('canplay', handleCanPlay);
       video.removeEventListener('loadeddata', handleLoadedData);
     };
-  }, [autoplay, loop, hasUserInteracted, isYouTube, isSoundUnlocked, isActive, shouldShowSoundButton, onPlay, onPause]);
+  }, [autoplay, loop, hasUserInteracted, isYouTube, isSoundUnlocked, isActive, onPlay, onPause]);
 
   // Efeito específico: quando isActive muda para true, forçar play imediatamente
   useEffect(() => {

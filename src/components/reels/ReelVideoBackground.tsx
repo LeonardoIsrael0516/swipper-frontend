@@ -40,16 +40,20 @@ export function ReelVideoBackground({
   const effectiveMuted = shouldStartMuted ? true : (isSoundUnlocked ? false : muted);
   const [isMuted, setIsMuted] = useState(effectiveMuted);
   
-  // Mostrar botão de som apenas se autoplay está ativo E som não está desbloqueado
-  // E não é a versão blur (só mostrar na versão nítida)
-  const shouldShowSoundButton = autoplay && !isSoundUnlocked && !isBlurVersion;
-  const [showSoundButton, setShowSoundButton] = useState(shouldShowSoundButton);
+  // Mostrar botão de som apenas se:
+  // 1. Autoplay está ativo
+  // 2. Som não está desbloqueado
+  // 3. Não é a versão blur (só mostrar na versão nítida)
+  // 4. E vídeo NÃO está tocando (ou seja, autoplay falhou)
+  // Se o vídeo está tocando mutado, não mostrar botão
+  const [showSoundButton, setShowSoundButton] = useState(false);
   
-  // Sincronizar estado do botão quando isSoundUnlocked ou autoplay mudarem
+  // Atualizar estado do botão baseado em se o vídeo está tocando
   useEffect(() => {
-    const shouldShow = autoplay && !isSoundUnlocked && !isBlurVersion;
+    // Só mostrar botão se autoplay está ativo, som não está desbloqueado, não é blur, E vídeo não está tocando
+    const shouldShow = autoplay && !isSoundUnlocked && !isBlurVersion && !isPlaying;
     setShowSoundButton(shouldShow);
-  }, [isSoundUnlocked, autoplay, isBlurVersion]);
+  }, [isSoundUnlocked, autoplay, isBlurVersion, isPlaying]);
 
   // Setup event listeners uma vez
   useEffect(() => {
@@ -104,7 +108,6 @@ export function ReelVideoBackground({
       video.currentTime = 0;
       video.muted = false;
       setIsMuted(false);
-      setShowSoundButton(false);
       
       // Tocar novamente do início com som
       video.play()
@@ -146,10 +149,8 @@ export function ReelVideoBackground({
               setIsPlaying(true);
             })
             .catch(() => {
-              // Autoplay bloqueado - manter botão visível se necessário
-              if (!isBlurVersion && !isSoundUnlocked) {
-                setShowSoundButton(true);
-              }
+              // Autoplay bloqueado - o useEffect vai atualizar o botão baseado em isPlaying
+              // Não fazer nada aqui, o estado isPlaying já vai estar false
             });
         }
       }
@@ -230,7 +231,6 @@ export function ReelVideoBackground({
         const shouldBeMuted = !isSoundUnlocked;
         video.muted = shouldBeMuted;
         setIsMuted(shouldBeMuted);
-        setShowSoundButton(shouldBeMuted);
       }
       
       // Tentar tocar se estiver pausado (mesmo que ainda não esteja totalmente carregado)
@@ -243,10 +243,7 @@ export function ReelVideoBackground({
             })
             .catch(() => {
               // Autoplay bloqueado - isso é esperado no iOS até haver interação
-              // Mostrar botão de som se necessário
-              if (!isBlurVersion && !isSoundUnlocked) {
-                setShowSoundButton(true);
-              }
+              // O useEffect vai atualizar o botão baseado em isPlaying
             });
         }
       }
@@ -303,7 +300,6 @@ export function ReelVideoBackground({
       video.currentTime = 0;
       video.muted = false;
       setIsMuted(false);
-      setShowSoundButton(false);
       
       // Tocar do início com som
       video.play()
