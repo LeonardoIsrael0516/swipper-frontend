@@ -111,9 +111,12 @@ export function ReelVideoBackground({
       video.setAttribute('playsinline', '');
       video.playsInline = true;
       
-      video.src = src;
-      // Pré-carregar vídeo mesmo quando não está ativo
-      video.load();
+      // Só definir src se mudou, para evitar recarregamento desnecessário
+      if (video.src !== src) {
+        video.src = src;
+        // Pré-carregar vídeo mesmo quando não está ativo
+        video.load();
+      }
       
       // Tentar tocar se estiver ativo e autoplay estiver habilitado
       if (isActive && autoplay) {
@@ -422,65 +425,49 @@ export function ReelVideoBackground({
     
     // Para versão nítida: quando isSoundUnlocked muda, reiniciar do início com som
     if (isSoundUnlocked) {
+      // Verificar diretamente o buffer no momento do desmutar (não depender do estado)
+      const hasInitialBuffer = video.buffered.length > 0 && 
+                               video.buffered.start(0) === 0 && 
+                               video.buffered.end(0) >= 1.0;
+      
       // Desmutar primeiro (mantém vídeo tocando)
       video.muted = false;
       setIsMuted(false);
       
-      // Reiniciar do início apenas se o buffer inicial já estiver carregado
-      // Isso evita re-buffer e tela branca
-      if (initialBufferLoaded) {
-        // Buffer inicial está pronto, fazer seek sem causar re-buffer
+      // Se o vídeo já está tocando e o buffer inicial está carregado, fazer seek imediato
+      // Isso evita qualquer delay ou re-buffer
+      if (hasInitialBuffer && !video.paused) {
+        // Fazer seek imediatamente - buffer já está em memória, não vai causar re-buffer
         video.currentTime = 0;
-      } else {
-        // Se buffer não está pronto, aguardar um pouco antes de fazer seek
-        // Isso dá tempo para o buffer inicial carregar
-        const checkAndSeek = () => {
-          if (video.buffered.length > 0 && 
-              video.buffered.start(0) === 0 && 
-              video.buffered.end(0) >= 1.0) {
-            video.currentTime = 0;
-            setInitialBufferLoaded(true);
-          }
-        };
-        
-        // Verificar imediatamente
-        checkAndSeek();
-        
-        // Aguardar eventos de progresso
-        const handleProgress = () => {
-          checkAndSeek();
-        };
-        
-        video.addEventListener('progress', handleProgress, { once: true });
-        
-        // Timeout de segurança - após 2s, fazer seek mesmo assim
-        const timeout = setTimeout(() => {
-          if (video.readyState >= 2) {
-            video.currentTime = 0;
-            setInitialBufferLoaded(true);
-          }
-        }, 2000);
-        
-        return () => {
-          clearTimeout(timeout);
-          video.removeEventListener('progress', handleProgress);
-        };
-      }
-      
-      // Garantir que o vídeo está tocando
-      if (video.paused) {
+      } else if (hasInitialBuffer) {
+        // Buffer está pronto mas vídeo está pausado - fazer seek e tocar
+        video.currentTime = 0;
         video.play()
           .then(() => {
             setIsPlaying(true);
           })
-          .catch((error) => {
+          .catch(() => {
             // Ignorar erro
           });
       } else {
-        setIsPlaying(true);
+        // Buffer inicial não está pronto - fazer seek mesmo assim mas pode causar breve delay
+        // Para vídeos que já estão tocando há um tempo, o buffer inicial geralmente já está carregado
+        // Esta é uma situação rara, mas vamos fazer o melhor possível
+        video.currentTime = 0;
+        
+        // Garantir que o vídeo está tocando
+        if (video.paused) {
+          video.play()
+            .then(() => {
+              setIsPlaying(true);
+            })
+            .catch(() => {
+              // Ignorar erro
+            });
+        }
       }
     }
-  }, [isSoundUnlocked, isActive, isBlurVersion, initialBufferLoaded]);
+  }, [isSoundUnlocked, isActive, isBlurVersion]);
 
   // Consolidar lógica de play/pause baseada em isActive
   useEffect(() => {
