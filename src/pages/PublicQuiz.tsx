@@ -729,23 +729,6 @@ export default function PublicQuiz() {
       scrollHandlerRef.current = requestAnimationFrame(() => {
         const scrollTop = container.scrollTop;
         const slideHeight = container.clientHeight;
-        const newSlide = Math.round(scrollTop / slideHeight);
-        const expectedScrollTop = newSlide * slideHeight;
-        
-        // Se estiver em um slide travado, garantir que o scroll está completo
-        if (newSlide >= 0 && newSlide < reel.slides.length && hasLockSlide(newSlide)) {
-          // Se o scroll não está exatamente no final do slide (com margem de erro de 2px)
-          if (Math.abs(scrollTop - expectedScrollTop) > 2) {
-            // Forçar scroll completo imediatamente (sem smooth para ser instantâneo)
-            container.scrollTop = expectedScrollTop;
-            lastScrollTopRef.current = expectedScrollTop;
-            // Atualizar currentSlide se necessário
-            if (newSlide !== currentSlide) {
-              dispatchSlide({ type: 'SET_CURRENT_SLIDE', payload: newSlide });
-            }
-            return;
-          }
-        }
         
         // Evitar processar se scrollTop não mudou significativamente
         if (Math.abs(scrollTop - lastScrollTopRef.current) < slideHeight * 0.1) {
@@ -753,6 +736,8 @@ export default function PublicQuiz() {
         }
         
         lastScrollTopRef.current = scrollTop;
+        const newSlide = Math.round(scrollTop / slideHeight);
+        const expectedScrollTop = newSlide * slideHeight;
 
         // Limpar timeout anterior
         clearTimeout(scrollTimeout);
@@ -777,8 +762,26 @@ export default function PublicQuiz() {
             }
           }
 
-          // Scroll normal
+          // Atualizar currentSlide primeiro para renderizar os elementos
           dispatchSlide({ type: 'SET_CURRENT_SLIDE', payload: newSlide });
+
+          // Se o novo slide tem lockSlide e o scroll não está completo, forçar scroll completo
+          if (hasLockSlide(newSlide)) {
+            // Se o scroll não está exatamente no final do slide (com margem de erro de 2px)
+            if (Math.abs(scrollTop - expectedScrollTop) > 2) {
+              // Forçar scroll completo imediatamente (sem smooth para ser instantâneo)
+              requestAnimationFrame(() => {
+                container.scrollTop = expectedScrollTop;
+              });
+            }
+          }
+        } else if (newSlide === currentSlide && hasLockSlide(currentSlide)) {
+          // Se já está no slide travado mas o scroll não está completo, corrigir
+          if (Math.abs(scrollTop - expectedScrollTop) > 2) {
+            requestAnimationFrame(() => {
+              container.scrollTop = expectedScrollTop;
+            });
+          }
         }
       });
     };
