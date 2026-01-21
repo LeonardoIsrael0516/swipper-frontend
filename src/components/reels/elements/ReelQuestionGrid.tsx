@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, memo, useRef } from 'react';
 import { SlideElement } from '@/contexts/BuilderContext';
 import { Image } from 'lucide-react';
 
@@ -90,11 +90,17 @@ export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNext
   }, [delayEnabled, delaySeconds, isActive]);
 
   // Notificar mudanças de seleção
+  // Usar useRef para evitar loop infinito quando onSelectionChange é recriado
+  const onSelectionChangeRef = useRef(onSelectionChange);
   useEffect(() => {
-    if (onSelectionChange) {
-      onSelectionChange(selectedIds);
+    onSelectionChangeRef.current = onSelectionChange;
+  }, [onSelectionChange]);
+
+  useEffect(() => {
+    if (onSelectionChangeRef.current) {
+      onSelectionChangeRef.current(selectedIds);
     }
-  }, [selectedIds, onSelectionChange]);
+  }, [selectedIds]); // Remover onSelectionChange das dependências
 
   // Removido: Mostrar animação sutil após primeira seleção quando múltiplas seleções habilitadas
   // O hint global já aparece quando o slide é desbloqueado, então não precisamos mostrar aqui

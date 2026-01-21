@@ -102,14 +102,18 @@ export const ReelVideo = memo(function ReelVideo({
   }) : null;
 
   // Configurar HLS se necessário
+  // Pré-carregar vídeo mesmo quando não está ativo para melhorar performance
   useEffect(() => {
     const video = videoRef.current;
     if (!video || isYouTube || !isHLS || !videoSrc) return;
 
     // Verificar se o navegador suporta HLS nativamente (Safari)
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari suporta HLS nativamente
-      video.src = videoSrc;
+      // Safari suporta HLS nativamente - pré-carregar mesmo quando não está ativo
+      if (!video.src || video.src !== videoSrc) {
+        video.src = videoSrc;
+        video.load(); // Forçar carregamento para pré-carregar
+      }
       return;
     }
 
@@ -156,6 +160,9 @@ export const ReelVideo = memo(function ReelVideo({
       if (!isSoundUnlocked) {
         video.muted = true;
       }
+
+      // Pré-carregar vídeo mesmo quando não está ativo para melhorar performance
+      // O hls.js já começa a carregar quando attachMedia é chamado
 
       // Tratamento de erros
       hls.on(Hls.Events.ERROR, (event, data) => {
@@ -212,9 +219,14 @@ export const ReelVideo = memo(function ReelVideo({
 
       // Tentar tocar quando HLS estiver pronto
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Garantir muted antes de tentar tocar
+        if (!isSoundUnlocked) {
+          video.muted = true;
+        }
+        // Tentar tocar se estiver ativo, senão aguardar até ficar ativo
         if (isActive && autoplay) {
           video.play().catch(() => {
-            // Autoplay pode falhar
+            // Autoplay pode falhar, mas vamos tentar novamente quando slide ficar ativo
           });
         }
       });
@@ -227,9 +239,13 @@ export const ReelVideo = memo(function ReelVideo({
       const secureUrl = videoSrc.startsWith('http://') 
         ? videoSrc.replace('http://', 'https://')
         : videoSrc;
-      video.src = secureUrl;
+      if (!video.src || video.src !== secureUrl) {
+        video.src = secureUrl;
+        // Pré-carregar vídeo mesmo quando não está ativo para melhorar performance
+        video.load();
+      }
     }
-  }, [videoSrc, isHLS, isYouTube, isActive, autoplay, isSoundUnlocked]);
+  }, [videoSrc, isHLS, isYouTube]); // Remover isActive, autoplay, isSoundUnlocked das dependências para pré-carregar sempre
 
   useEffect(() => {
     const video = videoRef.current;
@@ -421,9 +437,10 @@ export const ReelVideo = memo(function ReelVideo({
   }, [isActive, autoplay, isSoundUnlocked, isYouTube]);
 
   // Garantir que vídeo sempre tente tocar quando estiver ativo (para iOS e outros casos)
+  // Este useEffect é para vídeos não-HLS e não-YouTube
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || isYouTube || !isActive || !autoplay) return;
+    if (!video || isYouTube || isHLS || !isActive || !autoplay) return;
 
     // Função para tentar tocar o vídeo (sempre muted se som não desbloqueado)
     const attemptPlay = () => {
@@ -442,6 +459,7 @@ export const ReelVideo = memo(function ReelVideo({
           playPromise
             .then(() => {
               setIsPlaying(true);
+              setHasAttemptedPlay(false); // Resetar quando começar a tocar
             })
             .catch(() => {
               // Autoplay bloqueado - isso é esperado no iOS até haver interação
@@ -487,7 +505,59 @@ export const ReelVideo = memo(function ReelVideo({
       document.removeEventListener('click', handleUserInteraction);
       window.removeEventListener('scroll', handleUserInteraction);
     };
-  }, [isActive, autoplay, isSoundUnlocked, isYouTube]);
+  }, [isActive, autoplay, isSoundUnlocked, isYouTube, isHLS]);
+
+  // Efeito específico para HLS: tentar tocar quando slide ficar ativo
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || isYouTube || !isHLS || !isActive || !autoplay) return;
+
+    // Função para tentar tocar o vídeo HLS
+    const attemptHLSPlay = () => {
+      if (!video || !isActive || !autoplay) return;
+      
+      // Garantir muted antes de tentar tocar
+      if (!isSoundUnlocked) {
+        video.muted = true;
+        setIsMuted(true);
+      }
+      
+      // Tentar tocar se estiver pausado
+      if (video.paused) {
+        video.play().catch(() => {
+          // Autoplay pode falhar
+        });
+      }
+    };
+
+    // Tentar imediatamente e após delays (HLS pode precisar de mais tempo)
+    attemptHLSPlay();
+    const timeout1 = setTimeout(attemptHLSPlay, 100);
+    const timeout2 = setTimeout(attemptHLSPlay, 300);
+    const timeout3 = setTimeout(attemptHLSPlay, 600);
+    const timeout4 = setTimeout(attemptHLSPlay, 1000);
+
+    // Adicionar listeners para quando HLS estiver pronto
+    const handleReady = () => {
+      attemptHLSPlay();
+    };
+
+    video.addEventListener('loadedmetadata', handleReady);
+    video.addEventListener('loadeddata', handleReady);
+    video.addEventListener('canplay', handleReady);
+    video.addEventListener('canplaythrough', handleReady);
+
+    return () => {
+      clearTimeout(timeout1);
+      clearTimeout(timeout2);
+      clearTimeout(timeout3);
+      clearTimeout(timeout4);
+      video.removeEventListener('loadedmetadata', handleReady);
+      video.removeEventListener('loadeddata', handleReady);
+      video.removeEventListener('canplay', handleReady);
+      video.removeEventListener('canplaythrough', handleReady);
+    };
+  }, [isActive, autoplay, isSoundUnlocked, isYouTube, isHLS]);
 
   const handleUnlockSound = () => {
     // Desbloquear som globalmente - isso afeta todos os vídeos
@@ -704,8 +774,9 @@ export const ReelVideo = memo(function ReelVideo({
           height: 'auto',
           maxWidth: '100%',
           maxHeight: '100%',
+          backgroundColor: 'transparent', // Evitar tela branca
         }}
-        poster={thumbnailUrl}
+        poster={thumbnailUrl || undefined}
       />
 
       {/* Botão de som minimalista no canto inferior direito */}

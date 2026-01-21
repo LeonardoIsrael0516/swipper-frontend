@@ -212,14 +212,40 @@ export function useVideoUpload(options: UseVideoUploadOptions = {}) {
       setResult(null);
 
       try {
-        // Criar FormData
-        const formData = new FormData();
-        formData.append('file', file);
-        if (orientation) {
-          formData.append('orientation', orientation);
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+        const token = localStorage.getItem('accessToken');
+
+        // 1. Obter URL de upload direto do backend
+        if (import.meta.env.DEV) {
+          console.log('[useVideoUpload] Requesting direct upload URL...');
         }
 
-        // Usar XMLHttpRequest para ter progresso real do upload
+        const uploadUrlResponse = await fetch(`${apiUrl}/media/videos/direct-upload-url`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ maxDurationSeconds: 3600 }),
+        });
+
+        if (!uploadUrlResponse.ok) {
+          const errorData = await uploadUrlResponse.json().catch(() => ({}));
+          throw new Error(errorData.message || errorData.error || 'Erro ao obter URL de upload');
+        }
+
+        const uploadUrlData = await uploadUrlResponse.json();
+        const { uploadURL, videoId } = uploadUrlData.data || uploadUrlData;
+
+        if (!uploadURL || !videoId) {
+          throw new Error('Resposta inválida do servidor: URL de upload não encontrada');
+        }
+
+        if (import.meta.env.DEV) {
+          console.log('[useVideoUpload] Direct upload URL received:', { uploadURL, videoId });
+        }
+
+        // 2. Fazer upload direto para Cloudflare Stream
         return new Promise<{ videoId: string; status: VideoUploadStatus }>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           
@@ -235,14 +261,7 @@ export function useVideoUpload(options: UseVideoUploadOptions = {}) {
           xhr.addEventListener('load', async () => {
             if (xhr.status >= 200 && xhr.status < 300) {
               try {
-                const data = JSON.parse(xhr.responseText);
-                const resultData = data.data || data;
-
-                if (!resultData.videoId) {
-                  throw new Error('Resposta inválida do servidor');
-                }
-
-                videoIdRef.current = resultData.videoId;
+                videoIdRef.current = videoId;
                 setStatus('transcoding');
                 setProgress(30); // Upload completo (30%), agora transcodificando (30-100%)
 
@@ -257,10 +276,10 @@ export function useVideoUpload(options: UseVideoUploadOptions = {}) {
 
                 // Polling imediato e depois a cada intervalo
                 if (import.meta.env.DEV) {
-                  console.log(`[useVideoUpload] Starting polling for videoId: ${resultData.videoId}, interval: ${pollInterval}ms, max attempts: ${MAX_POLL_ATTEMPTS}, max duration: ${MAX_POLL_DURATION}ms`);
+                  console.log(`[useVideoUpload] Starting polling for videoId: ${videoId}, interval: ${pollInterval}ms, max attempts: ${MAX_POLL_ATTEMPTS}, max duration: ${MAX_POLL_DURATION}ms`);
                 }
                 
-                pollVideoStatus(resultData.videoId);
+                pollVideoStatus(videoId);
                 pollIntervalRef.current = setInterval(() => {
                   if (videoIdRef.current) {
                     if (import.meta.env.DEV) {
@@ -279,7 +298,7 @@ export function useVideoUpload(options: UseVideoUploadOptions = {}) {
                 }, pollInterval);
 
                 resolve({
-                  videoId: resultData.videoId,
+                  videoId,
                   status: 'transcoding' as VideoUploadStatus,
                 });
               } catch (error: any) {
@@ -344,25 +363,23 @@ export function useVideoUpload(options: UseVideoUploadOptions = {}) {
             reject(new Error(errorMessage));
           });
 
-          // Configurar e enviar requisição
-          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-          xhr.open('POST', `${apiUrl}/media/videos/upload`);
+          // Configurar e enviar requisição diretamente para Cloudflare Stream
+          xhr.open('POST', uploadURL);
           
           // Configurar timeout de 10 minutos para arquivos grandes
           xhr.timeout = 10 * 60 * 1000; // 10 minutos
           
-          const token = localStorage.getItem('accessToken');
-          if (token) {
-            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-          }
+          // Criar FormData para upload
+          const formData = new FormData();
+          formData.append('file', file);
           
           // Adicionar listener para debug
           if (import.meta.env.DEV) {
             xhr.addEventListener('loadstart', () => {
-              console.log('Upload started:', file.name, file.size);
+              console.log('Direct upload started:', file.name, file.size);
             });
             xhr.addEventListener('loadend', () => {
-              console.log('Upload finished, status:', xhr.status);
+              console.log('Direct upload finished, status:', xhr.status);
             });
           }
           
