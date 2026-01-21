@@ -482,20 +482,42 @@ export default function PreviewQuiz() {
     if (!container) return;
 
     // Guardar scrollTop atual quando slide fica travado
-    const lockedScrollTop = container.scrollTop;
+    let lockedScrollTop = container.scrollTop;
     const slideHeight = container.clientHeight;
-    const currentLockedSlide = Math.floor(lockedScrollTop / slideHeight);
+    let currentLockedSlide = Math.floor(lockedScrollTop / slideHeight);
+    
+    // Atualizar valores quando o slide travar
+    if (isSlideLocked) {
+      lockedScrollTop = container.scrollTop;
+      currentLockedSlide = Math.floor(lockedScrollTop / slideHeight);
+    }
+
+    // Monitor contínuo para manter scroll travado
+    let lockMonitor: number | null = null;
+    
+    const monitorLock = () => {
+      if (isSlideLocked && !isProgrammaticScrollRef.current) {
+        const currentScrollTop = container.scrollTop;
+        const currentSlideIndex = Math.floor(currentScrollTop / slideHeight);
+        
+        // Se tentou ir para frente, reverter imediatamente
+        if (currentSlideIndex > currentLockedSlide || currentScrollTop > lockedScrollTop + 5) {
+          container.scrollTop = lockedScrollTop;
+        }
+        
+        // Continuar monitorando
+        lockMonitor = requestAnimationFrame(monitorLock);
+      }
+    };
 
     const preventWheel = (e: WheelEvent) => {
-      if (isSlideLocked) {
+      if (isSlideLocked && !isProgrammaticScrollRef.current) {
         // Permitir scroll para cima (voltar), bloquear apenas para baixo (avançar)
         if (e.deltaY > 0) {
           e.preventDefault();
-          e.stopPropagation();
-          // Forçar scrollTop de volta se tiver mudado
-          if (container.scrollTop > lockedScrollTop) {
-            container.scrollTop = lockedScrollTop;
-          }
+          e.stopImmediatePropagation();
+          // Forçar scrollTop de volta imediatamente
+          container.scrollTop = lockedScrollTop;
           return false;
         }
       }
@@ -504,29 +526,38 @@ export default function PreviewQuiz() {
     // Para touch, precisamos verificar a direção do swipe
     let touchStartY = 0;
     let touchStartScrollTop = 0;
+    let isScrollingForward = false;
+    
     const handleTouchStart = (e: TouchEvent) => {
-      if (isSlideLocked) {
+      if (isSlideLocked && !isProgrammaticScrollRef.current) {
         touchStartY = e.touches[0].clientY;
         touchStartScrollTop = container.scrollTop;
+        isScrollingForward = false;
       }
     };
 
     const preventTouch = (e: TouchEvent) => {
-      if (isSlideLocked) {
+      if (isSlideLocked && !isProgrammaticScrollRef.current) {
         const touchY = e.touches[0].clientY;
         const deltaY = touchY - touchStartY;
         
         // Se está tentando deslizar para baixo (deltaY positivo = swipe down = avançar), bloquear
-        // Se está tentando deslizar para cima (deltaY negativo = swipe up = voltar), permitir
-        if (deltaY > 0) {
+        if (deltaY > 10) {
+          isScrollingForward = true;
           e.preventDefault();
-          e.stopPropagation();
-          // Forçar scrollTop de volta se tiver mudado
-          if (container.scrollTop > touchStartScrollTop) {
-            container.scrollTop = touchStartScrollTop;
-          }
+          e.stopImmediatePropagation();
+          // Forçar scrollTop de volta imediatamente
+          container.scrollTop = touchStartScrollTop;
           return false;
         }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (isSlideLocked && isScrollingForward) {
+        // Garantir que voltou para a posição inicial
+        container.scrollTop = lockedScrollTop;
+        isScrollingForward = false;
       }
     };
 
@@ -537,18 +568,18 @@ export default function PreviewQuiz() {
         const currentSlideIndex = Math.floor(currentScrollTop / slideHeight);
         
         // Se tentou ir para um slide à frente, reverter imediatamente
-        if (currentSlideIndex > currentLockedSlide) {
+        if (currentSlideIndex > currentLockedSlide || currentScrollTop > lockedScrollTop + 5) {
           container.scrollTop = lockedScrollTop;
         }
       }
     };
 
     const preventKeys = (e: KeyboardEvent) => {
-      if (isSlideLocked) {
+      if (isSlideLocked && !isProgrammaticScrollRef.current) {
         // Bloquear apenas teclas que avançam para frente
         if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
           e.preventDefault();
-          e.stopPropagation();
+          e.stopImmediatePropagation();
           return false;
         }
         // Permitir ArrowUp e PageUp para voltar
@@ -556,20 +587,27 @@ export default function PreviewQuiz() {
     };
 
     if (isSlideLocked) {
-      container.addEventListener('wheel', preventWheel, { passive: false });
-      container.addEventListener('touchstart', handleTouchStart, { passive: true });
-      container.addEventListener('touchmove', preventTouch, { passive: false });
-      container.addEventListener('scroll', preventScroll, { passive: false });
-      document.addEventListener('keydown', preventKeys);
-      // Não alterar overflow - deixar scroll funcionar para voltar
+      // Iniciar monitor contínuo
+      lockMonitor = requestAnimationFrame(monitorLock);
+      
+      container.addEventListener('wheel', preventWheel, { passive: false, capture: true });
+      container.addEventListener('touchstart', handleTouchStart, { passive: true, capture: true });
+      container.addEventListener('touchmove', preventTouch, { passive: false, capture: true });
+      container.addEventListener('touchend', handleTouchEnd, { passive: false, capture: true });
+      container.addEventListener('scroll', preventScroll, { passive: false, capture: true });
+      document.addEventListener('keydown', preventKeys, { capture: true });
     }
 
     return () => {
-      container.removeEventListener('wheel', preventWheel);
-      container.removeEventListener('touchstart', handleTouchStart);
-      container.removeEventListener('touchmove', preventTouch);
-      container.removeEventListener('scroll', preventScroll);
-      document.removeEventListener('keydown', preventKeys);
+      if (lockMonitor !== null) {
+        cancelAnimationFrame(lockMonitor);
+      }
+      container.removeEventListener('wheel', preventWheel, { capture: true } as EventListenerOptions);
+      container.removeEventListener('touchstart', handleTouchStart, { capture: true } as EventListenerOptions);
+      container.removeEventListener('touchmove', preventTouch, { capture: true } as EventListenerOptions);
+      container.removeEventListener('touchend', handleTouchEnd, { capture: true } as EventListenerOptions);
+      container.removeEventListener('scroll', preventScroll, { capture: true } as EventListenerOptions);
+      document.removeEventListener('keydown', preventKeys, { capture: true } as EventListenerOptions);
     };
   }, [isSlideLocked]);
 
