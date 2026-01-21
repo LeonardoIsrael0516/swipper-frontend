@@ -201,41 +201,63 @@ export const ReelVideo = memo(function ReelVideo({
   }, [autoplay, loop, hasUserInteracted, isYouTube, isSoundUnlocked, isActive, shouldShowSoundButton, onPlay, onPause]);
 
   // Garantir que vídeo tente tocar quando estiver pronto (mesmo após montagem ou atualização)
+  // E também quando houver qualquer interação do usuário (necessário para iOS)
   useEffect(() => {
     const video = videoRef.current;
     if (!video || isYouTube || !isActive || !autoplay) return;
 
-    // Verificar se vídeo já está pronto para tocar
-    const checkAndPlay = () => {
-      if (video.readyState >= 2) { // HAVE_CURRENT_DATA ou superior
-        // Vídeo já está pronto - configurar muted e tentar tocar
-        if (!isSoundUnlocked) {
-          video.muted = true;
-          setIsMuted(true);
-        }
-        
-        if (video.paused) {
-          video.play().catch(() => {
-            // Autoplay pode falhar, isso é esperado
-          });
-        }
+    // Função para tentar tocar o vídeo
+    const attemptPlay = () => {
+      if (!video || !isActive || !autoplay) return;
+      
+      // Garantir muted para autoplay funcionar
+      if (!isSoundUnlocked) {
+        video.muted = true;
+        setIsMuted(true);
+      }
+      
+      // Tentar tocar se estiver pausado
+      if (video.paused && video.readyState >= 2) {
+        video.play().catch(() => {
+          // Autoplay pode falhar, isso é esperado
+        });
       }
     };
 
     // Verificar imediatamente
-    checkAndPlay();
+    attemptPlay();
 
-    // Adicionar listener para quando vídeo estiver pronto
+    // Adicionar listeners para quando vídeo estiver pronto
     const handleReady = () => {
-      checkAndPlay();
+      attemptPlay();
     };
 
     video.addEventListener('loadeddata', handleReady);
     video.addEventListener('canplay', handleReady);
+    video.addEventListener('loadedmetadata', handleReady);
+    video.addEventListener('canplaythrough', handleReady);
+
+    // No iOS, autoplay só funciona após interação do usuário
+    // Adicionar listener global para qualquer interação na página
+    const handleUserInteraction = () => {
+      attemptPlay();
+    };
+
+    // Adicionar listeners para diferentes tipos de interação
+    document.addEventListener('touchstart', handleUserInteraction, { once: true, passive: true });
+    document.addEventListener('touchend', handleUserInteraction, { once: true, passive: true });
+    document.addEventListener('click', handleUserInteraction, { once: true, passive: true });
+    window.addEventListener('scroll', handleUserInteraction, { once: true, passive: true });
 
     return () => {
       video.removeEventListener('loadeddata', handleReady);
       video.removeEventListener('canplay', handleReady);
+      video.removeEventListener('loadedmetadata', handleReady);
+      video.removeEventListener('canplaythrough', handleReady);
+      document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('touchend', handleUserInteraction);
+      document.removeEventListener('click', handleUserInteraction);
+      window.removeEventListener('scroll', handleUserInteraction);
     };
   }, [isActive, autoplay, isSoundUnlocked, isYouTube]);
 
@@ -454,8 +476,23 @@ export const ReelVideo = memo(function ReelVideo({
           height: 'auto',
           maxWidth: '100%',
           maxHeight: '100%',
+          backgroundColor: '#000', // Fundo preto para quando vídeo não está carregado
         }}
         poster={thumbnailUrl}
+        onLoadedData={() => {
+          // Quando vídeo carregar, tentar tocar se estiver ativo
+          if (isActive && autoplay && videoRef.current) {
+            const video = videoRef.current;
+            if (!isSoundUnlocked) {
+              video.muted = true;
+            }
+            if (video.paused) {
+              video.play().catch(() => {
+                // Autoplay pode falhar
+              });
+            }
+          }
+        }}
       />
 
       {/* Botão de som minimalista no canto inferior direito */}
