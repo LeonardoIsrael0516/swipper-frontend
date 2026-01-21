@@ -49,9 +49,8 @@ export const ReelVideo = memo(function ReelVideo({
   // Lógica de muted:
   // - Se isSoundUnlocked === true: tentar tocar com som
   // - Se isSoundUnlocked === false: sempre muted (comportamento atual dos navegadores)
-  const shouldStartMuted = !isSoundUnlocked && autoplay;
-  const effectiveMuted = shouldStartMuted ? true : (isSoundUnlocked ? false : muted);
-  const [isMuted, setIsMuted] = useState(effectiveMuted);
+  // Inicializar sempre como muted para garantir autoplay funciona
+  const [isMuted, setIsMuted] = useState(true); // Sempre começar muted para autoplay funcionar
   
   // Mostrar botão de som apenas se autoplay está ativo E som não está desbloqueado
   const shouldShowSoundButton = autoplay && !isSoundUnlocked;
@@ -77,7 +76,7 @@ export const ReelVideo = memo(function ReelVideo({
   const youtubeEmbedUrl = isYouTube && youtubeUrl ? getYouTubeEmbedUrl(extractYouTubeId(youtubeUrl) || '', {
     autoplay: autoplay && isActive, // Só autoplay se estiver ativo
     loop,
-    muted: shouldStartMuted ? true : (isSoundUnlocked && isActive ? false : effectiveMuted), // Muted apenas se som não estiver desbloqueado OU vídeo não está ativo
+    muted: !isSoundUnlocked, // Muted se som não estiver desbloqueado
     controls,
   }) : null;
 
@@ -111,9 +110,11 @@ export const ReelVideo = memo(function ReelVideo({
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
 
-    // Controlar play/pause baseado em isActive
-    if (isActive && autoplay) {
-      // Vídeo está ativo - configurar muted
+    // Função para tentar tocar o vídeo
+    const tryPlay = () => {
+      if (!video || !isActive || !autoplay) return;
+      
+      // Configurar muted antes de tentar tocar
       if (isSoundUnlocked) {
         video.muted = false;
         setIsMuted(false);
@@ -125,37 +126,59 @@ export const ReelVideo = memo(function ReelVideo({
         setShowVideoPlayButton(shouldShowSoundButton);
       }
       
-      // Sempre tentar tocar se estiver pausado (garante que toca mesmo após atualizar página)
-      // Usar setTimeout para garantir que o vídeo está pronto
-      const tryPlay = () => {
-        if (video.paused) {
-          const playPromise = video.play();
-          if (playPromise !== undefined) {
-            playPromise
-              .then(() => {
-                setIsPlaying(true);
-              })
-              .catch(() => {
-                // Autoplay bloqueado - manter botão visível se necessário
-                if (!isSoundUnlocked) {
-                  setShowVideoPlayButton(true);
-                }
-              });
-          }
+      // Tentar tocar se estiver pausado
+      if (video.paused) {
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+            })
+            .catch((error) => {
+              // Autoplay bloqueado - manter botão visível se necessário
+              if (!isSoundUnlocked) {
+                setShowVideoPlayButton(true);
+              }
+            });
         }
-      };
-      
+      }
+    };
+
+    // Listener para quando o vídeo estiver pronto para tocar
+    const handleCanPlay = () => {
+      if (isActive && autoplay) {
+        tryPlay();
+      }
+    };
+
+    const handleLoadedData = () => {
+      if (isActive && autoplay) {
+        tryPlay();
+      }
+    };
+
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('loadeddata', handleLoadedData);
+
+    // Controlar play/pause baseado em isActive
+    if (isActive && autoplay) {
       // Tentar tocar imediatamente
       tryPlay();
       
-      // Tentar novamente após um pequeno delay (para casos onde o vídeo ainda está carregando)
-      const timeoutId = setTimeout(tryPlay, 100);
+      // Tentar novamente após delays (para casos onde o vídeo ainda está carregando)
+      const timeoutId1 = setTimeout(tryPlay, 100);
+      const timeoutId2 = setTimeout(tryPlay, 500);
+      const timeoutId3 = setTimeout(tryPlay, 1000);
       
       return () => {
-        clearTimeout(timeoutId);
+        clearTimeout(timeoutId1);
+        clearTimeout(timeoutId2);
+        clearTimeout(timeoutId3);
         video.removeEventListener('play', handlePlay);
         video.removeEventListener('pause', handlePause);
         video.removeEventListener('ended', handleEnded);
+        video.removeEventListener('canplay', handleCanPlay);
+        video.removeEventListener('loadeddata', handleLoadedData);
       };
     } else if (!isActive) {
       // Se vídeo não está ativo, apenas pausar (não resetar currentTime para evitar re-buffer)
@@ -166,20 +189,55 @@ export const ReelVideo = memo(function ReelVideo({
       // Manter muted se não está ativo
       video.muted = true;
       setIsMuted(true);
-      
-      return () => {
-        video.removeEventListener('play', handlePlay);
-        video.removeEventListener('pause', handlePause);
-        video.removeEventListener('ended', handleEnded);
-      };
     }
     
     return () => {
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('loadeddata', handleLoadedData);
     };
   }, [autoplay, loop, hasUserInteracted, isYouTube, isSoundUnlocked, isActive, shouldShowSoundButton, onPlay, onPause]);
+
+  // Garantir que vídeo tente tocar quando estiver pronto (mesmo após montagem ou atualização)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || isYouTube || !isActive || !autoplay) return;
+
+    // Verificar se vídeo já está pronto para tocar
+    const checkAndPlay = () => {
+      if (video.readyState >= 2) { // HAVE_CURRENT_DATA ou superior
+        // Vídeo já está pronto - configurar muted e tentar tocar
+        if (!isSoundUnlocked) {
+          video.muted = true;
+          setIsMuted(true);
+        }
+        
+        if (video.paused) {
+          video.play().catch(() => {
+            // Autoplay pode falhar, isso é esperado
+          });
+        }
+      }
+    };
+
+    // Verificar imediatamente
+    checkAndPlay();
+
+    // Adicionar listener para quando vídeo estiver pronto
+    const handleReady = () => {
+      checkAndPlay();
+    };
+
+    video.addEventListener('loadeddata', handleReady);
+    video.addEventListener('canplay', handleReady);
+
+    return () => {
+      video.removeEventListener('loadeddata', handleReady);
+      video.removeEventListener('canplay', handleReady);
+    };
+  }, [isActive, autoplay, isSoundUnlocked, isYouTube]);
 
   const handleUnlockSound = () => {
     // Desbloquear som globalmente - isso afeta todos os vídeos
@@ -383,9 +441,9 @@ export const ReelVideo = memo(function ReelVideo({
       <video
         ref={videoRef}
         src={videoSrc}
-        autoPlay={autoplay} // Sempre tentar autoplay se configurado
+        autoPlay={false} // Sempre false - controlamos via JavaScript para garantir muted correto
         loop={loop}
-        muted={isMuted}
+        muted={isMuted || !isSoundUnlocked} // Sempre muted se som não estiver desbloqueado
         controls={controls}
         playsInline
         preload="auto"

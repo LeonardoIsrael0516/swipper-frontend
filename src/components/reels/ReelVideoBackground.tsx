@@ -122,61 +122,71 @@ export function ReelVideoBackground({
     const video = videoRef.current;
     if (!video || !autoplay) return;
 
-    // Verificar se o estado mudou de inativo para ativo
-    const wasActive = lastActiveStateRef.current;
-    lastActiveStateRef.current = isActive;
-
-    if (isActive) {
-      // Versão blur sempre fica muted
+    // Função para tentar tocar o vídeo
+    const tryPlay = () => {
+      if (!video || !isActive || !autoplay) return;
+      
+      // Configurar muted antes de tentar tocar
       if (isBlurVersion) {
         video.muted = true;
         setIsMuted(true);
       } else {
-        // Versão nítida: configurar muted conforme som desbloqueado
         const shouldBeMuted = !isSoundUnlocked;
         video.muted = shouldBeMuted;
         setIsMuted(shouldBeMuted);
         setShowSoundButton(shouldBeMuted);
       }
-
-      // Sempre tentar tocar se estiver pausado (garante que toca mesmo após atualizar página)
-      // Usar setTimeout para garantir que o vídeo está pronto
-      const tryPlay = () => {
-        if (video.paused) {
-          const playPromise = video.play();
-          if (playPromise !== undefined) {
-            playPromise
-              .then(() => {
-                setIsPlaying(true);
-              })
-              .catch(() => {
-                // Autoplay bloqueado - manter botão visível se necessário
-                if (!isBlurVersion && !isSoundUnlocked) {
-                  setShowSoundButton(true);
-                }
-              });
-          }
-        } else {
-          // Se já está tocando, apenas garantir muted está correto
-          if (isBlurVersion) {
-            video.muted = true;
-            setIsMuted(true);
-          } else {
-            const shouldBeMuted = !isSoundUnlocked;
-            video.muted = shouldBeMuted;
-            setIsMuted(shouldBeMuted);
-          }
-        }
-      };
       
+      // Tentar tocar se estiver pausado
+      if (video.paused) {
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+            })
+            .catch(() => {
+              // Autoplay bloqueado - manter botão visível se necessário
+              if (!isBlurVersion && !isSoundUnlocked) {
+                setShowSoundButton(true);
+              }
+            });
+        }
+      }
+    };
+
+    // Listener para quando o vídeo estiver pronto para tocar
+    const handleCanPlay = () => {
+      if (isActive && autoplay) {
+        tryPlay();
+      }
+    };
+
+    const handleLoadedData = () => {
+      if (isActive && autoplay) {
+        tryPlay();
+      }
+    };
+
+    // Adicionar listeners sempre (mesmo quando não está ativo, para quando ficar ativo)
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('loadeddata', handleLoadedData);
+
+    if (isActive) {
       // Tentar tocar imediatamente
       tryPlay();
       
-      // Tentar novamente após um pequeno delay (para casos onde o vídeo ainda está carregando)
-      const timeoutId = setTimeout(tryPlay, 100);
+      // Tentar novamente após delays (para casos onde o vídeo ainda está carregando)
+      const timeoutId1 = setTimeout(tryPlay, 100);
+      const timeoutId2 = setTimeout(tryPlay, 500);
+      const timeoutId3 = setTimeout(tryPlay, 1000);
       
       return () => {
-        clearTimeout(timeoutId);
+        clearTimeout(timeoutId1);
+        clearTimeout(timeoutId2);
+        clearTimeout(timeoutId3);
+        video.removeEventListener('canplay', handleCanPlay);
+        video.removeEventListener('loadeddata', handleLoadedData);
       };
     } else {
       // Vídeo não está ativo - apenas pausar (não resetar currentTime para evitar re-buffer)
@@ -184,8 +194,56 @@ export function ReelVideoBackground({
         video.pause();
         setIsPlaying(false);
       }
+      
+      return () => {
+        video.removeEventListener('canplay', handleCanPlay);
+        video.removeEventListener('loadeddata', handleLoadedData);
+      };
     }
   }, [isActive, autoplay, isBlurVersion, isSoundUnlocked]); // Incluir isSoundUnlocked para sincronizar muted inicial
+
+  // Garantir que vídeo tente tocar quando estiver pronto (mesmo após montagem ou atualização)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isActive || !autoplay) return;
+
+    // Verificar se vídeo já está pronto para tocar
+    const checkAndPlay = () => {
+      if (video.readyState >= 2) { // HAVE_CURRENT_DATA ou superior
+        // Vídeo já está pronto - configurar muted e tentar tocar
+        if (isBlurVersion) {
+          video.muted = true;
+          setIsMuted(true);
+        } else {
+          const shouldBeMuted = !isSoundUnlocked;
+          video.muted = shouldBeMuted;
+          setIsMuted(shouldBeMuted);
+        }
+        
+        if (video.paused) {
+          video.play().catch(() => {
+            // Autoplay pode falhar, isso é esperado
+          });
+        }
+      }
+    };
+
+    // Verificar imediatamente
+    checkAndPlay();
+
+    // Adicionar listener para quando vídeo estiver pronto
+    const handleReady = () => {
+      checkAndPlay();
+    };
+
+    video.addEventListener('loadeddata', handleReady);
+    video.addEventListener('canplay', handleReady);
+
+    return () => {
+      video.removeEventListener('loadeddata', handleReady);
+      video.removeEventListener('canplay', handleReady);
+    };
+  }, [isActive, autoplay, isBlurVersion, isSoundUnlocked]);
 
   const handleUnlockSound = () => {
     // Desbloquear som globalmente - isso afeta todos os vídeos
@@ -234,7 +292,7 @@ export function ReelVideoBackground({
         src={src}
         autoPlay={false} // Sempre false - controlamos via JavaScript
         loop={loop}
-        muted={isBlurVersion ? true : (isSoundUnlocked ? false : isMuted)} // Versão blur sempre muted, versão nítida conforme som desbloqueado
+        muted={isBlurVersion ? true : (!isSoundUnlocked ? true : isMuted)} // Versão blur sempre muted, versão nítida sempre muted se som não desbloqueado
         playsInline
         preload="auto"
         poster={thumbnailUrl}
