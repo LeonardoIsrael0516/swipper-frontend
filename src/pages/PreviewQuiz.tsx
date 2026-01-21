@@ -481,12 +481,21 @@ export default function PreviewQuiz() {
     const container = containerRef.current;
     if (!container) return;
 
+    // Guardar scrollTop atual quando slide fica travado
+    const lockedScrollTop = container.scrollTop;
+    const slideHeight = container.clientHeight;
+    const currentLockedSlide = Math.floor(lockedScrollTop / slideHeight);
+
     const preventWheel = (e: WheelEvent) => {
       if (isSlideLocked) {
         // Permitir scroll para cima (voltar), bloquear apenas para baixo (avançar)
         if (e.deltaY > 0) {
           e.preventDefault();
           e.stopPropagation();
+          // Forçar scrollTop de volta se tiver mudado
+          if (container.scrollTop > lockedScrollTop) {
+            container.scrollTop = lockedScrollTop;
+          }
           return false;
         }
       }
@@ -494,8 +503,12 @@ export default function PreviewQuiz() {
 
     // Para touch, precisamos verificar a direção do swipe
     let touchStartY = 0;
+    let touchStartScrollTop = 0;
     const handleTouchStart = (e: TouchEvent) => {
-      touchStartY = e.touches[0].clientY;
+      if (isSlideLocked) {
+        touchStartY = e.touches[0].clientY;
+        touchStartScrollTop = container.scrollTop;
+      }
     };
 
     const preventTouch = (e: TouchEvent) => {
@@ -508,7 +521,24 @@ export default function PreviewQuiz() {
         if (deltaY > 0) {
           e.preventDefault();
           e.stopPropagation();
+          // Forçar scrollTop de volta se tiver mudado
+          if (container.scrollTop > touchStartScrollTop) {
+            container.scrollTop = touchStartScrollTop;
+          }
           return false;
+        }
+      }
+    };
+
+    const preventScroll = () => {
+      if (isSlideLocked && !isProgrammaticScrollRef.current) {
+        // Verificar se o scroll tentou ir para frente
+        const currentScrollTop = container.scrollTop;
+        const currentSlideIndex = Math.floor(currentScrollTop / slideHeight);
+        
+        // Se tentou ir para um slide à frente, reverter imediatamente
+        if (currentSlideIndex > currentLockedSlide) {
+          container.scrollTop = lockedScrollTop;
         }
       }
     };
@@ -529,6 +559,7 @@ export default function PreviewQuiz() {
       container.addEventListener('wheel', preventWheel, { passive: false });
       container.addEventListener('touchstart', handleTouchStart, { passive: true });
       container.addEventListener('touchmove', preventTouch, { passive: false });
+      container.addEventListener('scroll', preventScroll, { passive: false });
       document.addEventListener('keydown', preventKeys);
       // Não alterar overflow - deixar scroll funcionar para voltar
     }
@@ -537,6 +568,7 @@ export default function PreviewQuiz() {
       container.removeEventListener('wheel', preventWheel);
       container.removeEventListener('touchstart', handleTouchStart);
       container.removeEventListener('touchmove', preventTouch);
+      container.removeEventListener('scroll', preventScroll);
       document.removeEventListener('keydown', preventKeys);
     };
   }, [isSlideLocked]);
