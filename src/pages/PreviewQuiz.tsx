@@ -483,8 +483,9 @@ export default function PreviewQuiz() {
 
     const slideHeight = container.clientHeight;
 
-    // Monitor contínuo para manter scroll travado
+    // Monitor contínuo para manter scroll travado - usar múltiplos monitores para garantir
     let lockMonitor: number | null = null;
+    let lockInterval: NodeJS.Timeout | null = null;
     
     const monitorLock = () => {
       // Só monitorar se realmente estiver no slide travado (usar currentSlide do estado)
@@ -494,11 +495,29 @@ export default function PreviewQuiz() {
         
         // Bloquear qualquer movimento além da posição exata (sem tolerância)
         if (currentScrollTop > expectedScrollTop) {
-          container.scrollTop = expectedScrollTop;
+          // Usar scrollTo com behavior: 'auto' para ser instantâneo
+          container.scrollTo({
+            top: expectedScrollTop,
+            behavior: 'auto'
+          });
         }
         
         // Continuar monitorando
         lockMonitor = requestAnimationFrame(monitorLock);
+      }
+    };
+    
+    // Monitor adicional com setInterval para ser ainda mais agressivo
+    const monitorLockInterval = () => {
+      if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
+        const currentScrollTop = container.scrollTop;
+        const expectedScrollTop = currentSlide * slideHeight;
+        
+        // Bloquear qualquer movimento além da posição exata
+        if (currentScrollTop > expectedScrollTop) {
+          // Forçar diretamente sem animação
+          container.scrollTop = expectedScrollTop;
+        }
       }
     };
 
@@ -589,7 +608,11 @@ export default function PreviewQuiz() {
         
         // Bloquear qualquer movimento além da posição exata (sem tolerância)
         if (currentScrollTop > expectedScrollTop) {
-          container.scrollTop = expectedScrollTop;
+          // Usar scrollTo com behavior: 'auto' para ser instantâneo
+          container.scrollTo({
+            top: expectedScrollTop,
+            behavior: 'auto'
+          });
         }
       }
     };
@@ -607,8 +630,11 @@ export default function PreviewQuiz() {
     };
 
     if (isSlideLocked) {
-      // Iniciar monitor contínuo
+      // Iniciar monitor contínuo (requestAnimationFrame - ~60fps)
       lockMonitor = requestAnimationFrame(monitorLock);
+      
+      // Monitor adicional com setInterval (mais rápido - ~120fps)
+      lockInterval = setInterval(monitorLockInterval, 8); // ~120fps
       
       container.addEventListener('wheel', preventWheel, { passive: false, capture: true });
       container.addEventListener('touchstart', handleTouchStart, { passive: true, capture: true });
@@ -621,6 +647,9 @@ export default function PreviewQuiz() {
     return () => {
       if (lockMonitor !== null) {
         cancelAnimationFrame(lockMonitor);
+      }
+      if (lockInterval !== null) {
+        clearInterval(lockInterval);
       }
       container.removeEventListener('wheel', preventWheel, { capture: true } as EventListenerOptions);
       container.removeEventListener('touchstart', handleTouchStart, { capture: true } as EventListenerOptions);
