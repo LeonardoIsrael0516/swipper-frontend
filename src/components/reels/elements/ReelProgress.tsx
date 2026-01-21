@@ -22,9 +22,10 @@ interface ReelProgressProps {
   isActive: boolean;
   onComplete?: () => void;
   onProgressChange?: (progress: number) => void;
+  isCompleted?: boolean; // Indica se o progresso já foi completado anteriormente
 }
 
-export const ReelProgress = memo(function ReelProgress({ element, isActive, onComplete, onProgressChange }: ReelProgressProps) {
+export const ReelProgress = memo(function ReelProgress({ element, isActive, onComplete, onProgressChange, isCompleted = false }: ReelProgressProps) {
   const config = normalizeUiConfig(element.uiConfig);
   const {
     title = 'Estamos criando o seu plano personalizado',
@@ -58,14 +59,33 @@ export const ReelProgress = memo(function ReelProgress({ element, isActive, onCo
   // Animar progresso quando o slide ficar ativo
   useEffect(() => {
     if (!isActive) {
-      // Reset quando desativar
-      setCurrentProgress(0);
+      // Quando desativar, manter progresso se já foi completado
+      if (isCompleted) {
+        // Manter progresso em 100% se já foi completado
+        setCurrentProgress(targetProgress);
+        hasCompletedRef.current = true;
+      } else {
+        // Reset apenas se não foi completado
+        setCurrentProgress(0);
+        hasCompletedRef.current = false;
+      }
       startTimeRef.current = null;
-      hasCompletedRef.current = false;
       isActiveRef.current = false;
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
+      }
+      return;
+    }
+
+    // Se já foi completado, não reiniciar animação
+    if (isCompleted) {
+      setCurrentProgress(targetProgress);
+      hasCompletedRef.current = true;
+      isActiveRef.current = true;
+      // Notificar progresso completo imediatamente
+      if (onProgressChangeRef.current) {
+        onProgressChangeRef.current(targetProgress);
       }
       return;
     }
@@ -75,7 +95,7 @@ export const ReelProgress = memo(function ReelProgress({ element, isActive, onCo
       return;
     }
 
-    // Iniciar animação
+    // Iniciar animação apenas se não foi completado
     setCurrentProgress(0);
     startTimeRef.current = Date.now();
     hasCompletedRef.current = false;
@@ -137,7 +157,7 @@ export const ReelProgress = memo(function ReelProgress({ element, isActive, onCo
         animationFrameRef.current = null;
       }
     };
-  }, [isActive, duration, targetProgress]);
+  }, [isActive, isCompleted, targetProgress]);
 
   const style: React.CSSProperties = {
     backgroundColor,

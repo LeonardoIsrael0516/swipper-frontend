@@ -157,6 +157,7 @@ export default function PublicQuiz() {
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [questionnaireResponses, setQuestionnaireResponses] = useState<Record<string, string[]>>({});
   const [progressStates, setProgressStates] = useState<Record<string, number>>({}); // elementId -> progress %
+  const [completedProgressElements, setCompletedProgressElements] = useState<Set<string>>(new Set()); // elementId -> já foi completado
   const [formValidStates, setFormValidStates] = useState<Record<string, boolean>>({}); // elementId -> isValid
   const [elementsHidingSocial, setElementsHidingSocial] = useState<Set<string>>(new Set()); // elementId -> should hide social
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1148,7 +1149,12 @@ export default function PublicQuiz() {
     }, 500);
   };
 
-  const handleProgressComplete = useCallback((destination: 'next-slide' | 'url', url?: string, openInNewTab?: boolean) => {
+  const handleProgressComplete = useCallback((destination: 'next-slide' | 'url', url?: string, openInNewTab?: boolean, elementId?: string) => {
+    // Marcar elemento como completado para evitar reiniciar ao voltar
+    if (elementId) {
+      setCompletedProgressElements((prev) => new Set(prev).add(elementId));
+    }
+
     // Registrar interação de progresso completo
     if (visitIdRef.current && reel && reel.slides?.[currentSlide]) {
       queueEvent({
@@ -1560,9 +1566,11 @@ export default function PublicQuiz() {
                                     handleProgressComplete(
                                       config.destination || 'next-slide',
                                       config.url,
-                                      config.openInNewTab !== false
+                                      config.openInNewTab !== false,
+                                      element.id
                                     );
                                   }}
+                                  isCompleted={completedProgressElements.has(element.id)}
                                   onProgressChange={(progress) => {
                                     setProgressStates((prev) => ({
                                       ...prev,
