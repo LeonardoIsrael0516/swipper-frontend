@@ -1104,6 +1104,11 @@ export default function PublicQuiz() {
   const handleItemAction = useCallback((itemId: string, actionType: 'none' | 'slide' | 'url', slideId?: string, url?: string, openInNewTab?: boolean) => {
     if (!reel?.slides || currentSlide >= reel.slides.length) return;
     
+    // Debug
+    if (import.meta.env.DEV) {
+      console.log('handleItemAction chamado:', { itemId, actionType, slideId, url, openInNewTab });
+    }
+    
     const currentSlideData = reel.slides[currentSlide];
     
     // Encontrar o elemento do questionário/question grid atual
@@ -1113,7 +1118,12 @@ export default function PublicQuiz() {
       return items.some((item: any) => item.id === itemId);
     });
     
-    if (!questionnaireElement) return;
+    if (!questionnaireElement) {
+      if (import.meta.env.DEV) {
+        console.error('Elemento não encontrado para itemId:', itemId);
+      }
+      return;
+    }
     
     const elementId = questionnaireElement.id;
     
@@ -1122,6 +1132,9 @@ export default function PublicQuiz() {
     
     if (nextIndex !== null) {
       // Há conexão no fluxo - usar ela (ignorar ação do item)
+      if (import.meta.env.DEV) {
+        console.log('Fluxo encontrado, usando conexão do fluxo:', nextIndex);
+      }
       dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
       scrollToSlide(nextIndex);
       return;
@@ -1132,12 +1145,20 @@ export default function PublicQuiz() {
     
     if (actionType === 'slide' && slideId) {
       // Navegar para slide específico
+      if (import.meta.env.DEV) {
+        console.log('Navegando para slide:', slideId);
+      }
       const targetSlideIndex = reel.slides.findIndex((s: any) => s.id === slideId);
       if (targetSlideIndex !== -1) {
         scrollToSlide(targetSlideIndex);
+      } else {
+        console.error('Slide não encontrado:', slideId);
       }
     } else if (actionType === 'url' && url) {
       // Abrir URL
+      if (import.meta.env.DEV) {
+        console.log('Abrindo URL:', url);
+      }
       let finalUrl = url.trim();
       if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
         finalUrl = `https://${finalUrl}`;
@@ -1157,6 +1178,10 @@ export default function PublicQuiz() {
         } else {
           window.location.href = finalUrl;
         }
+      }
+    } else {
+      if (import.meta.env.DEV) {
+        console.log('Ação não reconhecida ou parâmetros faltando:', { actionType, slideId, url });
       }
     }
     // Se actionType === 'none', não fazer nada (apenas selecionou)

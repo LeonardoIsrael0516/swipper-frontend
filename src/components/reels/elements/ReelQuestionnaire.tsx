@@ -324,6 +324,11 @@ export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNe
     const item = normalizedItems.find((it: any) => it.id === itemId);
     const itemActionType = item?.actionType || 'none';
     
+    // Debug: verificar campos de ação
+    if (import.meta.env.DEV) {
+      console.log('handleItemClick:', { itemId, item, itemActionType, onItemAction: !!onItemAction, lockSlide });
+    }
+    
     if (multipleSelection) {
       // Toggle na seleção
       setSelectedIds((prev) => {
@@ -349,6 +354,7 @@ export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNe
             item?.openInNewTab !== false
           );
         }, 300);
+        return; // IMPORTANTE: não executar comportamento padrão se tem ação
       } else if (!lockSlide && onNextSlide) {
         // Comportamento padrão: avançar (se lockSlide desabilitado)
         // Pequeno delay para feedback visual
