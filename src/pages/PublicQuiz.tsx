@@ -8,6 +8,7 @@ import { ReelQuestion } from '@/components/reels/ReelQuestion';
 import { ReelProgressBar } from '@/components/reels/ReelProgressBar';
 import { SwipeHint } from '@/components/reels/SwipeHint';
 import { SwipeHintSubtle } from '@/components/reels/SwipeHintSubtle';
+import { DesktopNavigationArrows } from '@/components/reels/DesktopNavigationArrows';
 import { ReelSocialActionsTikTok } from '@/components/reels/ReelSocialActionsTikTok';
 import { ReelUsername } from '@/components/reels/ReelUsername';
 import { ReelCaption } from '@/components/reels/ReelCaption';
@@ -985,6 +986,50 @@ export default function PublicQuiz() {
       lockedScrollTop = container.scrollTop;
     }
 
+    // Handler de wheel para garantir que scroll funcione mesmo quando mouse está sobre elementos filhos
+    // Este handler sempre aplica o scroll no container principal quando não está travado
+    const handleWheel = (e: WheelEvent) => {
+      // Se está travado, não fazer nada aqui (preventWheel vai lidar)
+      if (isSlideLocked && !isProgrammaticScrollRef.current) {
+        return;
+      }
+      
+      // Se o evento não está dentro do container, ignorar
+      const target = e.target as HTMLElement;
+      if (!container.contains(target)) {
+        return;
+      }
+      
+      // Se o evento já está no container, deixar comportamento padrão
+      if (target === container) {
+        return;
+      }
+      
+      // Se o evento está em um elemento filho, verificar se ele tem overflow próprio
+      let element = target;
+      while (element && element !== container) {
+        const computedStyle = window.getComputedStyle(element);
+        const overflowY = computedStyle.overflowY || computedStyle.overflow;
+        const hasOverflow = (overflowY === 'scroll' || overflowY === 'auto') && 
+                           computedStyle.overflow !== 'hidden';
+        
+        // Se encontrou um elemento com overflow próprio, deixar ele scrollar normalmente
+        if (hasOverflow) {
+          return;
+        }
+        
+        element = element.parentElement as HTMLElement;
+      }
+      
+      // Se chegou aqui, o elemento filho não tem overflow próprio
+      // Aplicar scroll no container principal e prevenir no elemento filho
+      e.preventDefault();
+      e.stopPropagation();
+      const currentScrollTop = container.scrollTop;
+      const scrollAmount = e.deltaY;
+      container.scrollTop = currentScrollTop + scrollAmount;
+    };
+
     // Monitor contínuo para manter scroll travado - usar múltiplos monitores para garantir
     let lockMonitor: number | null = null;
     let lockInterval: NodeJS.Timeout | null = null;
@@ -1116,6 +1161,10 @@ export default function PublicQuiz() {
       }
     };
 
+    // Sempre adicionar listener de wheel para garantir que scroll funcione sobre elementos filhos
+    // Usar capture: true para capturar antes que elementos filhos interceptem
+    container.addEventListener('wheel', handleWheel, { passive: true, capture: true });
+    
     if (isSlideLocked) {
       // Iniciar monitor contínuo (requestAnimationFrame - ~60fps)
       lockMonitor = requestAnimationFrame(monitorLock);
@@ -1138,6 +1187,7 @@ export default function PublicQuiz() {
       if (lockInterval !== null) {
         clearInterval(lockInterval);
       }
+      container.removeEventListener('wheel', handleWheel, { capture: true } as EventListenerOptions);
       container.removeEventListener('wheel', preventWheel, { capture: true } as EventListenerOptions);
       container.removeEventListener('touchstart', handleTouchStart, { capture: true } as EventListenerOptions);
       container.removeEventListener('touchmove', preventTouch, { capture: true } as EventListenerOptions);
@@ -1590,11 +1640,32 @@ export default function PublicQuiz() {
             </div>
           )}
 
+          {/* Setas de Navegação Desktop */}
+          <DesktopNavigationArrows
+            currentSlide={currentSlide}
+            totalSlides={slides.length}
+            canGoUp={currentSlide > 0}
+            canGoDown={
+              currentSlide < slides.length - 1 && 
+              !checkIfSlideIsLocked(currentSlide)
+            }
+            onNavigateUp={() => {
+              if (currentSlide > 0) {
+                scrollToSlide(currentSlide - 1);
+              }
+            }}
+            onNavigateDown={() => {
+              if (currentSlide < slides.length - 1 && !checkIfSlideIsLocked(currentSlide)) {
+                scrollToSlide(currentSlide + 1);
+              }
+            }}
+          />
+
           {/* Main Scrollable Container */}
           <div 
             ref={containerRef} 
             className="reels-container-card hide-scrollbar"
-            style={{ overflow: isSlideLocked ? 'hidden' : undefined }}
+            style={{ overflowY: isSlideLocked ? 'hidden' : 'scroll' }}
           >
         {slides.map((slide: any, index: number) => {
           // Usar slideConfig memoizado
