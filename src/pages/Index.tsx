@@ -117,10 +117,15 @@ export default function Index() {
     queryFn: async () => {
       const response = await api.getPlans<Plan[]>();
       const plansArray = Array.isArray(response) ? response : [];
-      return plansArray.map((plan) => ({
-        ...plan,
-        price: normalizePrice(plan.price),
-      }));
+      return plansArray
+        .map((plan) => ({
+          ...plan,
+          price: normalizePrice(plan.price),
+        }))
+        .filter((plan) => {
+          // Ocultar plano gratuito (preço 0)
+          return plan.price > 0;
+        });
     },
     staleTime: 5 * 60 * 1000,
   });

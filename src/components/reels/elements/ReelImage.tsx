@@ -40,7 +40,7 @@ export function ReelImage({
         } ${parallax ? 'parallax-image' : ''}`}
         style={imageStyle}
         onLoad={() => setLoaded(true)}
-        loading="eager"
+        loading="lazy"
       />
       {!loaded && (
         <div className="absolute inset-0 bg-muted animate-pulse" />

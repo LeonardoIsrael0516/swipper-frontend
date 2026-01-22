@@ -225,7 +225,7 @@ export const ImageElement = memo(function ImageElement({ element }: ImageElement
                 console.log('Image onLoadStart fired:', { elementId: element.id, imageUrl });
               }
             }}
-            loading="eager"
+            loading="lazy"
           />
           {!imageLoaded && !imageError && !forceShow && imageUrl && (
             <div className="absolute inset-0 bg-muted animate-pulse flex items-center justify-center z-10">

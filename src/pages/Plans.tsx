@@ -289,7 +289,11 @@ export default function Plans() {
             </div>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
-              {plans.map((plan) => {
+              {plans.filter((plan) => {
+                // Ocultar plano gratuito (preço 0)
+                const priceValue = normalizePrice(plan.price);
+                return priceValue > 0;
+              }).map((plan) => {
                 // Comparar planId do usuário com o ID do plano
                 // Comparar planId do usuário com o ID do plano
                 // Tentar usar planId diretamente ou de diferentes fontes

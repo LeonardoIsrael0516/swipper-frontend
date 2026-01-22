@@ -1032,6 +1032,8 @@ export default function Checkout() {
         toast.success('Pagamento processado com sucesso!');
         
         // Tracking: Purchase (cartão)
+        // NOTA: O backend já envia eventos UTMify automaticamente quando processa o pagamento
+        // Não precisamos enviar aqui para evitar duplicação
         if (plan && user) {
           const planPrice = typeof plan.price === 'number' ? plan.price : parseFloat(String(plan.price));
           const eventId = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -1044,7 +1046,8 @@ export default function Checkout() {
             event_id: eventId,
           });
 
-          // Enviar evento CAPI
+          // Enviar evento CAPI (apenas para Meta Pixel, não envia UTMify)
+          // O UTMify é enviado automaticamente pelo backend via sendUtmifyOrder
           sendCapiEvent('Purchase', {
             email: user.email,
             userId: user.id,
@@ -1056,11 +1059,8 @@ export default function Checkout() {
             planName: plan.title,
             event_id: eventId,
           });
-
-          // Enviar evento UTMify via frontend (pixel/beacon)
-          sendUtmifyEvent(eventId, planPrice, 'BRL');
           
-          console.log('Eventos de tracking disparados (CAPI + UTMify)');
+          console.log('Eventos de tracking disparados (CAPI apenas - UTMify enviado pelo backend)');
         }
 
         // Redirecionar após 2 segundos
@@ -1287,8 +1287,8 @@ export default function Checkout() {
                         <Label htmlFor="pix" className="flex-1 cursor-pointer flex items-center gap-2">
                           <QrCode className="w-5 h-5" />
                           <div>
-                            <div className="font-medium">Pix Automático</div>
-                            <div className="text-sm text-muted-foreground">Pagamento mensal automático via Pix</div>
+                            <div className="font-medium">Pix</div>
+                            <div className="text-sm text-muted-foreground">Pagamento mensal via Pix</div>
                           </div>
                         </Label>
                       </div>
