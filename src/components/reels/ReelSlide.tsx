@@ -1,6 +1,7 @@
 import { ReactNode, CSSProperties, useRef, useEffect, memo, useMemo, forwardRef } from 'react';
 import { BackgroundConfig } from '@/contexts/BuilderContext';
 import { ReelVideoBackground } from './ReelVideoBackground';
+import { VideoProgressBar } from './VideoProgressBar';
 import { useReelSound } from '@/contexts/ReelSoundContext';
 import { VolumeX } from 'lucide-react';
 
@@ -29,6 +30,7 @@ interface ReelSlideProps {
 const ReelSlideComponent = forwardRef<HTMLDivElement, ReelSlideProps>(
   ({ children, config, className = '', isActive = false, ...props }, ref) => {
   const slideRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const { isSoundUnlocked, unlockSound } = useReelSound();
   
   // Usar ref externo se fornecido, senão usar interno
@@ -297,7 +299,7 @@ const ReelSlideComponent = forwardRef<HTMLDivElement, ReelSlideProps>(
   
   
   return (
-    <>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {/* Background fixo para desktop - ocupa tela inteira */}
       {/* Apenas cores e gradientes ficam fullscreen no desktop */}
       {/* Imagens e vídeos ficam dentro do container com aspect ratio 9:15.35 */}
@@ -319,6 +321,7 @@ const ReelSlideComponent = forwardRef<HTMLDivElement, ReelSlideProps>(
           opacity={config.backgroundConfig.video.opacity !== undefined ? config.backgroundConfig.video.opacity : 1}
           isActive={isActive}
           isBlurVersion={true}
+          showProgressBar={false}
         />
       )}
       {backgroundTypes.isVideoBackground && isActive && config?.backgroundVideo && !config?.backgroundConfig && (
@@ -330,33 +333,72 @@ const ReelSlideComponent = forwardRef<HTMLDivElement, ReelSlideProps>(
           opacity={1}
           isActive={isActive}
           isBlurVersion={true}
+          showProgressBar={false}
         />
       )}
       
       <div
         ref={actualRef}
-        className={`reel-slide relative overflow-hidden ${className} ${shouldRemoveSlideBackground ? 'slide-active-desktop' : 'slide-normal-background'}`}
-        style={slideStyle}
+        className={`reel-slide relative ${className} ${shouldRemoveSlideBackground ? 'slide-active-desktop' : 'slide-normal-background'}`}
+        style={{
+          ...slideStyle,
+          // Ajustar overflow: se há barrinha de progresso, usar overflow-x: hidden mas permitir overflow-y: visible no topo
+          overflow: backgroundTypes.isVideoBackground && config?.backgroundConfig?.type === 'video' && config.backgroundConfig.video?.showProgressBar 
+            ? 'visible' 
+            : 'hidden',
+          overflowX: 'hidden', // Sempre esconder overflow horizontal
+          overflowY: backgroundTypes.isVideoBackground && config?.backgroundConfig?.type === 'video' && config.backgroundConfig.video?.showProgressBar 
+            ? 'visible' 
+            : 'hidden',
+        }}
         data-slide-index={props['data-slide-index']}
       >
+        {/* Barrinha de progresso renderizada DENTRO do container mas com position absolute e z-index alto para ficar acima */}
+        {backgroundTypes.isVideoBackground && config?.backgroundConfig?.type === 'video' && config.backgroundConfig.video?.url && config.backgroundConfig.video.showProgressBar && (
+          <div 
+            style={{ 
+              position: 'absolute', 
+              bottom: 0, 
+              left: 0, 
+              right: 0, 
+              zIndex: 1000, 
+              pointerEvents: 'none',
+            }}
+          >
+            <VideoProgressBar
+              videoRef={videoRef}
+              enabled={true}
+              fakeProgress={config.backgroundConfig.video.fakeProgress || false}
+              fakeProgressSpeed={config.backgroundConfig.video.fakeProgressSpeed || 1.5}
+              fakeProgressSlowdownStart={config.backgroundConfig.video.fakeProgressSlowdownStart || 0.9}
+            />
+          </div>
+        )}
         {/* Video background if provided - apenas renderizar se não for background fixo */}
         {!backgroundTypes.isVideoBackground && renderBackgroundVideo()}
         
         {/* Vídeo nítido dentro do slide (desktop e mobile) - deve ficar abaixo dos elementos */}
         {/* Removido pointer-events: none do container para permitir cliques no botão de som */}
         {backgroundTypes.isVideoBackground && config?.backgroundConfig?.type === 'video' && config.backgroundConfig.video?.url && (
-          <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-            <ReelVideoBackground
-              src={config.backgroundConfig.video.url}
-              thumbnailUrl={(config.backgroundConfig.video as any)?.thumbnailUrl}
-              autoplay={config.backgroundConfig.video.autoplay !== false}
-              loop={config.backgroundConfig.video.loop !== false}
-              muted={config.backgroundConfig.video.muted !== false}
-              opacity={config.backgroundConfig.video.opacity !== undefined ? config.backgroundConfig.video.opacity : 1}
-              isActive={isActive}
-              isBlurVersion={false}
-            />
-          </div>
+          <>
+            <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+              <ReelVideoBackground
+                src={config.backgroundConfig.video.url}
+                thumbnailUrl={(config.backgroundConfig.video as any)?.thumbnailUrl}
+                autoplay={config.backgroundConfig.video.autoplay !== false}
+                loop={config.backgroundConfig.video.loop !== false}
+                muted={config.backgroundConfig.video.muted !== false}
+                opacity={config.backgroundConfig.video.opacity !== undefined ? config.backgroundConfig.video.opacity : 1}
+                isActive={isActive}
+                isBlurVersion={false}
+                showProgressBar={false}
+                fakeProgress={config.backgroundConfig.video.fakeProgress || false}
+                fakeProgressSpeed={config.backgroundConfig.video.fakeProgressSpeed || 1.5}
+                fakeProgressSlowdownStart={config.backgroundConfig.video.fakeProgressSlowdownStart || 0.9}
+                videoRef={videoRef}
+              />
+            </div>
+          </>
         )}
         {backgroundTypes.isVideoBackground && config?.backgroundVideo && !config?.backgroundConfig && (
           <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
@@ -368,6 +410,7 @@ const ReelSlideComponent = forwardRef<HTMLDivElement, ReelSlideProps>(
               opacity={1}
               isActive={isActive}
               isBlurVersion={false}
+              showProgressBar={false}
             />
           </div>
         )}
@@ -407,7 +450,7 @@ const ReelSlideComponent = forwardRef<HTMLDivElement, ReelSlideProps>(
           </button>
         )}
       </div>
-    </>
+    </div>
   );
 });
 

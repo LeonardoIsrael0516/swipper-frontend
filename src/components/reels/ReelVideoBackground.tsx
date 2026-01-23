@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react';
 import { VolumeX, Loader2 } from 'lucide-react';
 import { useReelSound } from '@/contexts/ReelSoundContext';
 import Hls from 'hls.js';
+import { VideoProgressBar } from './VideoProgressBar';
 
 interface ReelVideoBackgroundProps {
   src: string;
@@ -13,6 +14,11 @@ interface ReelVideoBackgroundProps {
   isActive?: boolean;
   isBlurVersion?: boolean; // Para versão blur no desktop
   className?: string;
+  showProgressBar?: boolean;
+  fakeProgress?: boolean;
+  fakeProgressSpeed?: number;
+  fakeProgressSlowdownStart?: number;
+  videoRef?: React.RefObject<HTMLVideoElement>; // Para expor a referência do vídeo
 }
 
 export function ReelVideoBackground({
@@ -25,8 +31,14 @@ export function ReelVideoBackground({
   isActive = false,
   isBlurVersion = false,
   className = '',
+  showProgressBar = false,
+  fakeProgress = false,
+  fakeProgressSpeed = 1.5,
+  fakeProgressSlowdownStart = 0.9,
+  videoRef: externalVideoRef,
 }: ReelVideoBackgroundProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const internalVideoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = externalVideoRef || internalVideoRef;
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const lastActiveStateRef = useRef<boolean>(false); // Rastrear último estado de isActive
@@ -851,6 +863,7 @@ export function ReelVideoBackground({
       style={{ 
         zIndex: showSoundButton && !isBlurVersion && isActive ? 50 : 0, // Aumentar z-index do container quando botão está visível
         position: 'relative',
+        overflow: 'visible', // Permitir que barrinha fique visível
       }}
     >
       <video
@@ -889,6 +902,17 @@ export function ReelVideoBackground({
         >
           <Loader2 className="w-12 h-12 text-white animate-spin" />
         </div>
+      )}
+      
+      {/* Barrinha de progresso - apenas na versão nítida e quando habilitada */}
+      {!isBlurVersion && (
+        <VideoProgressBar
+          videoRef={videoRef}
+          enabled={showProgressBar}
+          fakeProgress={fakeProgress}
+          fakeProgressSpeed={fakeProgressSpeed}
+          fakeProgressSlowdownStart={fakeProgressSlowdownStart}
+        />
       )}
       
       {/* Botão de som removido - agora renderizado diretamente no ReelSlide para ficar acima do ReelContent */}

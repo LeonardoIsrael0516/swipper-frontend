@@ -565,6 +565,10 @@ export function MobilePreview() {
             opacity={video.opacity !== undefined ? video.opacity : 1}
             isActive={true} // Sempre ativo no preview do builder
             isBlurVersion={false} // Não usar blur no preview do builder
+            showProgressBar={video.showProgressBar || false}
+            fakeProgress={video.fakeProgress || false}
+            fakeProgressSpeed={video.fakeProgressSpeed || 1.5}
+            fakeProgressSlowdownStart={video.fakeProgressSlowdownStart || 0.9}
           />
         </div>
       );

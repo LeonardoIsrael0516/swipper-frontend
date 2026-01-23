@@ -860,11 +860,23 @@ export function BackgroundEditor() {
 
     const [isDragging, setIsDragging] = useState(false);
     const [opacityValue, setOpacityValue] = useState((video.opacity || 1) * 100);
+    const [fakeProgressSpeedValue, setFakeProgressSpeedValue] = useState(((video.fakeProgressSpeed || 1.5) * 100));
+    const [fakeProgressSlowdownStartValue, setFakeProgressSlowdownStartValue] = useState(((video.fakeProgressSlowdownStart || 0.9) * 100));
 
     // Sincronizar opacityValue quando video.opacity mudar externamente
     useEffect(() => {
       setOpacityValue((video.opacity || 1) * 100);
     }, [video.opacity]);
+
+    // Sincronizar fakeProgressSpeedValue quando video.fakeProgressSpeed mudar externamente
+    useEffect(() => {
+      setFakeProgressSpeedValue(((video.fakeProgressSpeed || 1.5) * 100));
+    }, [video.fakeProgressSpeed]);
+
+    // Sincronizar fakeProgressSlowdownStartValue quando video.fakeProgressSlowdownStart mudar externamente
+    useEffect(() => {
+      setFakeProgressSlowdownStartValue(((video.fakeProgressSlowdownStart || 0.9) * 100));
+    }, [video.fakeProgressSlowdownStart]);
 
     // Usar hook useVideoUpload para processamento correto de vídeos
     const { uploadVideo, status, progress: uploadProgress, isUploading, isTranscoding } = useVideoUpload({
@@ -1069,6 +1081,105 @@ export function BackgroundEditor() {
                         }}
                         className="mt-2"
                       />
+                    </div>
+
+                    {/* Configurações de Barrinha de Progresso */}
+                    <div className="space-y-4 pt-4 border-t">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="showProgressBar">Mostrar Barrinha de Progresso</Label>
+                        <Switch
+                          id="showProgressBar"
+                          checked={video.showProgressBar || false}
+                          onCheckedChange={(checked) =>
+                            updateConfig({
+                              ...config,
+                              video: { 
+                                ...video, 
+                                showProgressBar: checked,
+                                // Desabilitar fake progress se barrinha for desabilitada
+                                fakeProgress: checked ? (video.fakeProgress || false) : false,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+
+                      {video.showProgressBar && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="fakeProgress">Fake Progress</Label>
+                            <Switch
+                              id="fakeProgress"
+                              checked={video.fakeProgress || false}
+                              onCheckedChange={(checked) =>
+                                updateConfig({
+                                  ...config,
+                                  video: { 
+                                    ...video, 
+                                    fakeProgress: checked,
+                                    fakeProgressSpeed: checked ? (video.fakeProgressSpeed || 1.5) : undefined,
+                                    fakeProgressSlowdownStart: checked ? (video.fakeProgressSlowdownStart || 0.9) : undefined,
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+
+                          {video.fakeProgress && (
+                            <>
+                              <div>
+                                <Label>Velocidade do Fake Progress: {fakeProgressSpeedValue.toFixed(0)}%</Label>
+                                <Slider
+                                  min={100}
+                                  max={300}
+                                  step={10}
+                                  value={[fakeProgressSpeedValue]}
+                                  onValueChange={([value]) => {
+                                    // Atualizar apenas o estado local durante o drag (sem salvar)
+                                    setFakeProgressSpeedValue(value);
+                                  }}
+                                  onValueCommit={([value]) => {
+                                    // Salvar apenas quando soltar o slider
+                                    updateConfig({
+                                      ...config,
+                                      video: { ...video, fakeProgressSpeed: value / 100 },
+                                    });
+                                  }}
+                                  className="mt-2"
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {fakeProgressSpeedValue.toFixed(0)}% = {(fakeProgressSpeedValue / 100 - 1) * 100 > 0 ? `${((fakeProgressSpeedValue / 100) - 1) * 100}% mais rápido` : 'velocidade normal'}
+                                </p>
+                              </div>
+
+                              <div>
+                                <Label>Início da Desaceleração: {Math.round(fakeProgressSlowdownStartValue)}%</Label>
+                                <Slider
+                                  min={50}
+                                  max={100}
+                                  step={5}
+                                  value={[fakeProgressSlowdownStartValue]}
+                                  onValueChange={([value]) => {
+                                    // Atualizar apenas o estado local durante o drag (sem salvar)
+                                    setFakeProgressSlowdownStartValue(value);
+                                  }}
+                                  onValueCommit={([value]) => {
+                                    // Salvar apenas quando soltar o slider
+                                    updateConfig({
+                                      ...config,
+                                      video: { ...video, fakeProgressSlowdownStart: value / 100 },
+                                    });
+                                  }}
+                                  className="mt-2"
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  A barrinha começa a desacelerar aos {Math.round(fakeProgressSlowdownStartValue)}% do vídeo
+                                </p>
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
               )}

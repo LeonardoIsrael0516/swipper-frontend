@@ -54,6 +54,10 @@ export interface BackgroundConfig {
     loop?: boolean;
     muted?: boolean;
     opacity?: number; // 0-1
+    showProgressBar?: boolean; // Habilitar/desabilitar barrinha
+    fakeProgress?: boolean; // Habilitar fake progress
+    fakeProgressSpeed?: number; // Velocidade do fake progress (ex: 1.5 = 50% mais rápido, 2.0 = 2x mais rápido)
+    fakeProgressSlowdownStart?: number; // Porcentagem do vídeo onde começa a desacelerar (ex: 0.9 = últimos 10%)
   };
 }
 
