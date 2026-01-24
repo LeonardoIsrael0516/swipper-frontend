@@ -680,51 +680,6 @@ export default function PublicQuiz() {
     };
   }, [reel, currentSlide]);
 
-  const scrollToSlide = useCallback(async (slideIndex: number) => {
-    // Enviar formulários completos antes de avançar
-    if (reel?.slides && currentSlide < reel.slides.length) {
-      const currentSlideData = reel.slides[currentSlide];
-      if (currentSlideData?.elements) {
-        for (const element of currentSlideData.elements) {
-          if (element.elementType === 'FORM') {
-            const formRef = formRefs.current[element.id];
-            
-            if (formRef && formRef.isFormValid()) {
-              // Sempre enviar formulários válidos automaticamente
-              await formRef.submitForm();
-            }
-          }
-        }
-      }
-    }
-
-    const container = containerRef.current;
-    if (container) {
-      // Verificar se o slide destino está travado
-      const targetSlideIsLocked = checkIfSlideIsLocked(slideIndex);
-      
-      // Marcar que o scroll é programático (não deve ser bloqueado)
-      isProgrammaticScrollRef.current = true;
-      
-      // Se o slide destino está travado, usar scroll instantâneo para evitar conflito com monitor
-      // Caso contrário, usar smooth para melhor UX
-      const scrollBehavior = targetSlideIsLocked ? 'auto' : 'smooth';
-      
-      container.scrollTo({
-        top: slideIndex * container.clientHeight,
-        behavior: scrollBehavior,
-      });
-      
-      // Aumentar tempo para cobrir toda a transição (smooth pode levar até 800ms)
-      // Se for instantâneo, ainda dar tempo para o monitor não interferir
-      const timeoutDuration = targetSlideIsLocked ? 100 : 800;
-      
-      setTimeout(() => {
-        isProgrammaticScrollRef.current = false;
-      }, timeoutDuration);
-    }
-  }, [reel, currentSlide, checkIfSlideIsLocked]);
-
   // Função helper para verificar se um elemento está visível (considerando delay)
   const isElementVisible = useCallback((element: any, slideIndex: number): boolean => {
     // Se não é o slide atual, não está visível
@@ -810,6 +765,51 @@ export default function PublicQuiz() {
     
     return hasLocked || questionnaireLocked || progressLocked || formLocked;
   }, [reel?.slides, questionnaireResponses, progressStates, formValidStates]);
+
+  const scrollToSlide = useCallback(async (slideIndex: number) => {
+    // Enviar formulários completos antes de avançar
+    if (reel?.slides && currentSlide < reel.slides.length) {
+      const currentSlideData = reel.slides[currentSlide];
+      if (currentSlideData?.elements) {
+        for (const element of currentSlideData.elements) {
+          if (element.elementType === 'FORM') {
+            const formRef = formRefs.current[element.id];
+            
+            if (formRef && formRef.isFormValid()) {
+              // Sempre enviar formulários válidos automaticamente
+              await formRef.submitForm();
+            }
+          }
+        }
+      }
+    }
+
+    const container = containerRef.current;
+    if (container) {
+      // Verificar se o slide destino está travado
+      const targetSlideIsLocked = checkIfSlideIsLocked(slideIndex);
+      
+      // Marcar que o scroll é programático (não deve ser bloqueado)
+      isProgrammaticScrollRef.current = true;
+      
+      // Se o slide destino está travado, usar scroll instantâneo para evitar conflito com monitor
+      // Caso contrário, usar smooth para melhor UX
+      const scrollBehavior = targetSlideIsLocked ? 'auto' : 'smooth';
+      
+      container.scrollTo({
+        top: slideIndex * container.clientHeight,
+        behavior: scrollBehavior,
+      });
+      
+      // Aumentar tempo para cobrir toda a transição (smooth pode levar até 800ms)
+      // Se for instantâneo, ainda dar tempo para o monitor não interferir
+      const timeoutDuration = targetSlideIsLocked ? 100 : 800;
+      
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, timeoutDuration);
+    }
+  }, [reel, currentSlide, checkIfSlideIsLocked]);
 
 
   // Throttle scroll handler com requestAnimationFrame
