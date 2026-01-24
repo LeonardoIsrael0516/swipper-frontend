@@ -39,6 +39,7 @@ import { ReelSoundProvider } from '@/contexts/ReelSoundContext';
 import { Loader2 } from 'lucide-react';
 import { generateVisitorId, getUTMParams } from '@/lib/cookies';
 import { useAnalyticsBatch } from '@/hooks/useAnalyticsBatch';
+import { isCustomDomain } from '@/lib/utils';
 import DOMPurify from 'dompurify';
 
 // Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
@@ -149,23 +150,6 @@ const initialSlideState: SlideState = {
 
 // Limite mínimo de escala para manter legibilidade
 const MIN_CONTENT_SCALE = 0.72;
-
-// Helper para detectar se está sendo acessado via domínio personalizado
-const isCustomDomain = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  
-  const hostname = window.location.hostname.toLowerCase();
-  const mainDomains = [
-    'swipper.me',
-    'www.swipper.me',
-    'app.swipper.me',
-    'localhost',
-    '127.0.0.1',
-  ];
-  
-  // Se o hostname não está na lista de domínios principais, é um domínio personalizado
-  return !mainDomains.some(domain => hostname === domain || hostname.endsWith(`.${domain}`));
-};
 
 export default function PublicQuiz() {
   const { slug } = useParams<{ slug: string }>();

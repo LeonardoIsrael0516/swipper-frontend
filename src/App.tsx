@@ -10,6 +10,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
+import { isCustomDomain } from "@/lib/utils";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -55,6 +56,20 @@ const PageLoader = () => (
   </div>
 );
 
+// Componente para rota raiz que decide entre Index e PublicQuiz baseado no domínio
+const RootRoute = () => {
+  // Se for domínio personalizado, renderizar PublicQuiz (que vai buscar pelo domínio)
+  // Caso contrário, renderizar Index (página inicial da plataforma)
+  if (isCustomDomain()) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <PublicQuiz />
+      </Suspense>
+    );
+  }
+  return <Index />;
+};
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -84,7 +99,7 @@ const App = () => (
             }}
           >
             <Routes>
-              <Route path="/" element={<Index />} />
+              <Route path="/" element={<RootRoute />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
