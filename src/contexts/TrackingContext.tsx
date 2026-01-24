@@ -19,13 +19,29 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Carregar settings do backend
+  // Em páginas públicas (sem autenticação), isso vai falhar com 401, mas tratamos silenciosamente
   const { data: settings } = useQuery({
     queryKey: ['app-settings'],
     queryFn: async () => {
-      const response = await api.getSettings();
-      return (response as any).data || response;
+      try {
+        const response = await api.getSettings();
+        return (response as any).data || response;
+      } catch (error: any) {
+        // Em páginas públicas (401), retornar configurações padrão (tracking desabilitado)
+        if (error?.statusCode === 401 || error?.status === 401) {
+          return {
+            trackingEnabled: false,
+            metaPixelId: null,
+            googleTagId: null,
+            utmifyApiKey: null,
+          };
+        }
+        // Para outros erros, re-lançar
+        throw error;
+      }
     },
     staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+    retry: false, // Não tentar novamente em caso de erro 401
   });
 
   // Inicializar tracking quando settings estiverem disponíveis
