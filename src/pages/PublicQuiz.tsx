@@ -792,18 +792,24 @@ export default function PublicQuiz() {
       // Marcar que o scroll é programático (não deve ser bloqueado)
       isProgrammaticScrollRef.current = true;
       
-      // Se o slide destino está travado, usar scroll instantâneo para evitar conflito com monitor
-      // Caso contrário, usar smooth para melhor UX
-      const scrollBehavior = targetSlideIsLocked ? 'auto' : 'smooth';
+      // No mobile, sempre usar scroll instantâneo para evitar conflitos com touch events
+      // No desktop, usar smooth apenas se o slide destino não estiver travado
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const scrollBehavior = (isMobile || targetSlideIsLocked) ? 'auto' : 'smooth';
       
-      container.scrollTo({
-        top: slideIndex * container.clientHeight,
-        behavior: scrollBehavior,
-      });
+      // No mobile, usar scrollTop direto para ser mais rápido e evitar conflitos
+      if (isMobile) {
+        container.scrollTop = slideIndex * container.clientHeight;
+      } else {
+        container.scrollTo({
+          top: slideIndex * container.clientHeight,
+          behavior: scrollBehavior,
+        });
+      }
       
       // Aumentar tempo para cobrir toda a transição (smooth pode levar até 800ms)
-      // Se for instantâneo, ainda dar tempo para o monitor não interferir
-      const timeoutDuration = targetSlideIsLocked ? 100 : 800;
+      // No mobile, usar tempo menor já que é instantâneo
+      const timeoutDuration = isMobile ? 150 : (targetSlideIsLocked ? 100 : 800);
       
       setTimeout(() => {
         isProgrammaticScrollRef.current = false;
@@ -1104,13 +1110,17 @@ export default function PublicQuiz() {
     
     const monitorLock = () => {
       // Só monitorar se realmente estiver no slide travado (usar currentSlide do estado)
+      // E não estiver em scroll programático
       if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
         const currentScrollTop = container.scrollTop;
         const expectedScrollTop = currentSlide * slideHeight;
         
-        // Bloquear qualquer movimento além da posição exata (sem tolerância)
-        // Também impedir scroll para trás além da posição quando travado
-        if (currentScrollTop !== expectedScrollTop) {
+        // Usar pequena tolerância para evitar conflitos com scroll programático
+        // e permitir que scroll programático complete antes de forçar
+        const tolerance = 2; // 2px de tolerância
+        
+        // Bloquear qualquer movimento além da posição esperada (com tolerância)
+        if (Math.abs(currentScrollTop - expectedScrollTop) > tolerance) {
           // Forçar diretamente sem animação para precisão máxima
           container.scrollTop = expectedScrollTop;
         }
@@ -1127,9 +1137,11 @@ export default function PublicQuiz() {
         const currentScrollTop = container.scrollTop;
         const expectedScrollTop = currentSlide * slideHeight;
         
-        // Bloquear qualquer movimento além da posição exata
-        // Também impedir scroll para trás além da posição quando travado
-        if (currentScrollTop !== expectedScrollTop) {
+        // Usar pequena tolerância para evitar conflitos
+        const tolerance = 2; // 2px de tolerância
+        
+        // Bloquear qualquer movimento além da posição esperada (com tolerância)
+        if (Math.abs(currentScrollTop - expectedScrollTop) > tolerance) {
           // Forçar diretamente sem animação para precisão máxima
           container.scrollTop = expectedScrollTop;
         }
@@ -1166,28 +1178,53 @@ export default function PublicQuiz() {
       }
     };
 
-    // Para touch, precisamos verificar a direção do swipe
+    // Para touch, precisamos verificar a direção do swipe e distinguir de tap
     let touchStartY = 0;
     let touchStartScrollTop = 0;
+    let touchStartTime = 0;
+    let touchStartX = 0;
     let isScrollingForward = false;
+    let isTouchOnInteractiveElement = false;
     
     const handleTouchStart = (e: TouchEvent) => {
+      // Verificar se o toque está em um elemento interativo (botão, link, etc)
+      const target = e.target as HTMLElement;
+      const isInteractive = target.closest('button, a, [role="button"], input, select, textarea, [onclick]');
+      isTouchOnInteractiveElement = !!isInteractive;
+      
       if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
         touchStartY = e.touches[0].clientY;
+        touchStartX = e.touches[0].clientX;
+        touchStartTime = Date.now();
         touchStartScrollTop = currentSlide * slideHeight;
         isScrollingForward = false;
       }
     };
 
     const preventTouch = (e: TouchEvent) => {
+      // Se o toque está em um elemento interativo, não bloquear (permitir clique)
+      if (isTouchOnInteractiveElement) {
+        return;
+      }
+      
       // Só bloquear se realmente estiver no slide travado (usar currentSlide do estado)
       if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
         const expectedScrollTop = currentSlide * slideHeight;
         const touchY = e.touches[0].clientY;
+        const touchX = e.touches[0].clientX;
         const deltaY = touchY - touchStartY;
+        const deltaX = touchX - touchStartX;
+        const deltaTime = Date.now() - touchStartTime;
         
-        // Bloquear imediatamente qualquer movimento para baixo (deltaY positivo = swipe down = avançar) sem tolerância
-        if (deltaY > 0) {
+        // Se o movimento é principalmente horizontal ou muito rápido (tap), não bloquear
+        // Permitir taps e movimentos horizontais
+        if (Math.abs(deltaX) > Math.abs(deltaY) || deltaTime < 100) {
+          return;
+        }
+        
+        // Bloquear apenas movimentos verticais significativos para baixo (swipe down = avançar)
+        // Usar uma tolerância mínima para evitar bloquear taps acidentais
+        if (deltaY > 10) {
           isScrollingForward = true;
           e.preventDefault();
           e.stopImmediatePropagation();
@@ -1218,6 +1255,8 @@ export default function PublicQuiz() {
         container.scrollTop = currentSlide * slideHeight;
         isScrollingForward = false;
       }
+      // Resetar flag de elemento interativo
+      isTouchOnInteractiveElement = false;
     };
 
     const preventScroll = () => {
@@ -1258,9 +1297,10 @@ export default function PublicQuiz() {
       lockInterval = setInterval(monitorLockInterval, 8); // ~120fps
       
       container.addEventListener('wheel', preventWheel, { passive: false, capture: true });
-      container.addEventListener('touchstart', handleTouchStart, { passive: true, capture: true });
-      container.addEventListener('touchmove', preventTouch, { passive: false, capture: true });
-      container.addEventListener('touchend', handleTouchEnd, { passive: false, capture: true });
+      // Usar capture: false para touch events para não interferir com cliques em botões
+      container.addEventListener('touchstart', handleTouchStart, { passive: true, capture: false });
+      container.addEventListener('touchmove', preventTouch, { passive: false, capture: false });
+      container.addEventListener('touchend', handleTouchEnd, { passive: false, capture: false });
       container.addEventListener('scroll', preventScroll, { passive: false, capture: true });
       document.addEventListener('keydown', preventKeys, { capture: true });
     }
@@ -1274,9 +1314,9 @@ export default function PublicQuiz() {
       }
       container.removeEventListener('wheel', handleWheel, { capture: true } as EventListenerOptions);
       container.removeEventListener('wheel', preventWheel, { capture: true } as EventListenerOptions);
-      container.removeEventListener('touchstart', handleTouchStart, { capture: true } as EventListenerOptions);
-      container.removeEventListener('touchmove', preventTouch, { capture: true } as EventListenerOptions);
-      container.removeEventListener('touchend', handleTouchEnd, { capture: true } as EventListenerOptions);
+      container.removeEventListener('touchstart', handleTouchStart, { capture: false } as EventListenerOptions);
+      container.removeEventListener('touchmove', preventTouch, { capture: false } as EventListenerOptions);
+      container.removeEventListener('touchend', handleTouchEnd, { capture: false } as EventListenerOptions);
       container.removeEventListener('scroll', preventScroll, { capture: true } as EventListenerOptions);
       document.removeEventListener('keydown', preventKeys, { capture: true } as EventListenerOptions);
     };
