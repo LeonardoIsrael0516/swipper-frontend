@@ -181,14 +181,14 @@ export default function Index() {
             {/* Left: Headline & CTA */}
             <div className="space-y-8">
               {/* Badge */}
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full bg-slate-100 dark:bg-slate-800 animate-fade-in">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full bg-slate-100 dark:bg-slate-800 animate-fade-in-scale-blur" style={{ animationDelay: '0ms' }}>
                 <span className="text-xs md:text-sm font-medium text-slate-700 dark:text-slate-300">
                   #Dopaminergico
                 </span>
               </div>
 
               {/* Headline */}
-              <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-bold leading-tight animate-slide-up">
+              <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-bold leading-tight animate-slide-in-bounce" style={{ animationDelay: '100ms' }}>
                 <span className="gradient-text">Reels Sales</span>
                 <br />
                 que viciam e{' '}
@@ -204,12 +204,12 @@ export default function Index() {
               </h1>
 
               {/* Subtitle */}
-              <p className="text-xl md:text-2xl text-muted-foreground max-w-xl animate-slide-up" style={{ animationDelay: '100ms' }}>
+              <p className="text-xl md:text-2xl text-muted-foreground max-w-xl animate-fade-in-scale-blur" style={{ animationDelay: '300ms' }}>
                 Construa funis em formato de reels com scroll vertical que aumentam engajamento, retenção e conversão.
               </p>
 
               {/* CTAs */}
-              <div className="flex flex-col sm:flex-row items-start gap-4 animate-slide-up" style={{ animationDelay: '200ms' }}>
+              <div className="flex flex-col sm:flex-row items-start gap-4 animate-fade-in-rotate" style={{ animationDelay: '500ms' }}>
                 <Link to={user ? '/dashboard' : '/signup'} onClick={handleLeadClick}>
                   <Button size="lg" className="h-14 px-8 gradient-primary text-primary-foreground font-semibold text-lg glow-primary hover:opacity-90 transition-opacity group">
                     Criar conta
@@ -220,7 +220,7 @@ export default function Index() {
             </div>
 
             {/* Right: Swipper Preview - Desktop */}
-            <div className="relative animate-slide-up hidden lg:block" style={{ animationDelay: '300ms' }}>
+            <div className="relative animate-fade-in-rotate hidden lg:block" style={{ animationDelay: '700ms' }}>
               <SwipperPreview />
             </div>
           </div>
@@ -228,8 +228,8 @@ export default function Index() {
       </section>
 
       {/* Swipper Preview - Mobile (abaixo da hero) */}
-      <section className="lg:hidden -mt-56 sm:-mt-64 pb-6 overflow-x-hidden relative z-10">
-        <div className="w-full max-w-full">
+      <section className="lg:hidden -mt-40 sm:-mt-48 pb-6 overflow-x-hidden relative z-10">
+        <div className="w-full max-w-full animate-fade-in-scale-up" style={{ animationDelay: '400ms' }}>
           <div className="flex justify-center items-center w-full overflow-x-hidden px-2">
             <div className="flex justify-center items-center w-full" style={{ maxWidth: '100vw' }}>
               <div className="scale-[0.75] sm:scale-[0.85] md:scale-90 origin-center flex-shrink-0 mx-auto">
