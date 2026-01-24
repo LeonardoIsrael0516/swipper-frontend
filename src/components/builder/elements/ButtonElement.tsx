@@ -127,6 +127,10 @@ export const ButtonElement = memo(function ButtonElement({ element, onButtonClic
       // Validar URL antes de abrir
       try {
         const urlObj = new URL(finalUrl);
+        // Remover parâmetros UTM da URL (especialmente importante no builder)
+        const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+        utmParams.forEach(param => urlObj.searchParams.delete(param));
+        
         if (openInNewTab) {
           window.open(urlObj.href, '_blank', 'noopener,noreferrer');
         } else {

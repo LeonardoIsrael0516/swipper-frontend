@@ -115,6 +115,10 @@ export function PriceElement({ element, onButtonClick, isInBuilder = false }: Pr
       // Validar URL antes de abrir
       try {
         const urlObj = new URL(finalUrl);
+        // Remover parâmetros UTM da URL (especialmente importante no builder)
+        const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+        utmParams.forEach(param => urlObj.searchParams.delete(param));
+        
         if (buttonOpenInNewTab) {
           window.open(urlObj.href, '_blank', 'noopener,noreferrer');
         } else {
