@@ -150,6 +150,23 @@ const initialSlideState: SlideState = {
 // Limite mínimo de escala para manter legibilidade
 const MIN_CONTENT_SCALE = 0.72;
 
+// Helper para detectar se está sendo acessado via domínio personalizado
+const isCustomDomain = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  
+  const hostname = window.location.hostname.toLowerCase();
+  const mainDomains = [
+    'swipper.me',
+    'www.swipper.me',
+    'app.swipper.me',
+    'localhost',
+    '127.0.0.1',
+  ];
+  
+  // Se o hostname não está na lista de domínios principais, é um domínio personalizado
+  return !mainDomains.some(domain => hostname === domain || hostname.endsWith(`.${domain}`));
+};
+
 export default function PublicQuiz() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -170,6 +187,9 @@ export default function PublicQuiz() {
   const { queueEvent } = useAnalyticsBatch();
   const slideRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const isProgrammaticScrollRef = useRef<boolean>(false);
+  
+  // Detectar se é domínio personalizado
+  const customDomain = isCustomDomain() ? window.location.hostname : null;
 
   // Em reels NÃO deve existir scroll interno no slide.
   // Quando o conteúdo não cabe no viewport real do mobile (barras do navegador + safe-area),
@@ -240,12 +260,23 @@ export default function PublicQuiz() {
   }, []); // Executar apenas uma vez ao montar
 
   const { data: reel, isLoading, error } = useQuery({
-    queryKey: ['public-reel', slug],
+    queryKey: ['public-reel', customDomain || slug],
     queryFn: async () => {
-      // Sempre adicionar timestamp para forçar bypass de cache do navegador
-      // Isso garante que sempre busque dados atualizados
-      const cacheBuster = `?t=${Date.now()}`;
-      const response = await api.publicGet(`/reels/public/${slug}${cacheBuster}`);
+      let response: any;
+      
+      // Se for domínio personalizado, buscar pelo domínio
+      if (customDomain) {
+        // O cacheBuster será adicionado automaticamente pelo método getReelByDomain se necessário
+        response = await api.getReelByDomain(customDomain);
+      } else {
+        // Caso contrário, buscar pelo slug (comportamento normal)
+        if (!slug) {
+          throw new Error('Slug is required');
+        }
+        const cacheBuster = `?t=${Date.now()}`;
+        response = await api.publicGet(`/reels/public/${slug}${cacheBuster}`);
+      }
+      
       const reelData = (response as any).data || response;
       
       // Extrair backgroundConfig do uiConfig para cada slide
@@ -266,7 +297,7 @@ export default function PublicQuiz() {
       
       return reelData;
     },
-    enabled: !!slug,
+    enabled: !!(customDomain || slug),
     staleTime: 0, // Sempre considerar dados como stale - sempre buscar dados frescos
     gcTime: 0, // Não manter em cache - sempre buscar do servidor
     refetchOnWindowFocus: true, // Refazer ao focar na janela

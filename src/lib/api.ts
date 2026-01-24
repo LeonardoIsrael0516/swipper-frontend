@@ -816,6 +816,13 @@ class ApiClient {
     return this.delete<T>(`/reels/${reelId}/domains/${domainId}`);
   }
 
+  // Get reel by custom domain (public)
+  async getReelByDomain<T>(domain: string): Promise<T> {
+    // Adicionar cache buster para garantir dados atualizados
+    const cacheBuster = `?t=${Date.now()}`;
+    return this.publicGet<T>(`/reels/by-domain/${encodeURIComponent(domain)}${cacheBuster}`);
+  }
+
   // Auth methods
   async register<T>(data: any): Promise<T> {
     return this.publicPost<T>('/auth/register', data);
