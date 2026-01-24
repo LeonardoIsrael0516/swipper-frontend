@@ -18,56 +18,57 @@ const TrackingContext = createContext<TrackingContextType | undefined>(undefined
 export function TrackingProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Carregar settings do backend
-  // Em páginas públicas (sem autenticação), isso vai falhar com 401, mas tratamos silenciosamente
+  // Verificar se há token de autenticação antes de fazer requisição
+  // Em páginas públicas, não há token, então não fazemos a requisição
+  const hasAuthToken = typeof window !== 'undefined' && !!localStorage.getItem('accessToken');
+
+  // Carregar settings do backend apenas se houver autenticação
+  // Em páginas públicas, usar configurações padrão (tracking desabilitado)
   const { data: settings } = useQuery({
     queryKey: ['app-settings'],
     queryFn: async () => {
-      try {
-        const response = await api.getSettings();
-        return (response as any).data || response;
-      } catch (error: any) {
-        // Em páginas públicas (401), retornar configurações padrão (tracking desabilitado)
-        if (error?.statusCode === 401 || error?.status === 401) {
-          return {
-            trackingEnabled: false,
-            metaPixelId: null,
-            googleTagId: null,
-            utmifyApiKey: null,
-          };
-        }
-        // Para outros erros, re-lançar
-        throw error;
-      }
+      const response = await api.getSettings();
+      return (response as any).data || response;
     },
+    enabled: hasAuthToken, // Só fazer requisição se houver token
     staleTime: 5 * 60 * 1000, // Cache por 5 minutos
-    retry: false, // Não tentar novamente em caso de erro 401
+    retry: false,
+    retryOnMount: false,
+    refetchOnWindowFocus: false,
   });
+
+  // Se não houver autenticação, usar configurações padrão
+  const finalSettings = hasAuthToken ? settings : {
+    trackingEnabled: false,
+    metaPixelId: null,
+    googleTagId: null,
+    utmifyApiKey: null,
+  };
 
   // Inicializar tracking quando settings estiverem disponíveis
   useEffect(() => {
-    if (settings && !isInitialized) {
+    if (finalSettings && !isInitialized) {
       const trackingSettings: TrackingSettings = {
-        trackingEnabled: settings.trackingEnabled || false,
-        metaPixelId: settings.metaPixelId,
-        googleTagId: settings.googleTagId,
-        utmifyApiKey: settings.utmifyApiKey,
+        trackingEnabled: finalSettings.trackingEnabled || false,
+        metaPixelId: finalSettings.metaPixelId,
+        googleTagId: finalSettings.googleTagId,
+        utmifyApiKey: finalSettings.utmifyApiKey,
       };
 
       initTracking(trackingSettings);
       setIsInitialized(true);
     }
-  }, [settings, isInitialized]);
+  }, [finalSettings, isInitialized]);
 
   // Função para disparar eventos
   const trackEvent = (eventName: string, params?: Record<string, any>) => {
-    if (!settings?.trackingEnabled || !isInitialized) {
+    if (!finalSettings?.trackingEnabled || !isInitialized) {
       return;
     }
 
     try {
       // Disparar no Meta Pixel
-      if (settings.metaPixelId) {
+      if (finalSettings.metaPixelId) {
         const metaEvent = TrackingEvents.meta[eventName as keyof typeof TrackingEvents.meta];
         if (metaEvent) {
           (metaEvent as any)(params);
@@ -77,7 +78,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       }
 
       // Disparar no Google Tag
-      if (settings.googleTagId) {
+      if (finalSettings.googleTagId) {
         const googleEvent = TrackingEvents.google[eventName as keyof typeof TrackingEvents.google];
         if (googleEvent) {
           (googleEvent as any)(params);
@@ -96,7 +97,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
     userData?: any,
     customData?: any
   ): Promise<void> => {
-    if (!settings?.trackingEnabled) {
+    if (!finalSettings?.trackingEnabled) {
       return;
     }
 
@@ -139,9 +140,9 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
 
   // Função para enviar evento UTMify
   const sendUtmifyEvent = (transactionId: string, value: number, currency: string = 'BRL') => {
-    console.log('sendUtmifyEvent called', { transactionId, value, currency, trackingEnabled: settings?.trackingEnabled, isInitialized });
+    console.log('sendUtmifyEvent called', { transactionId, value, currency, trackingEnabled: finalSettings?.trackingEnabled, isInitialized });
     
-    if (!settings?.trackingEnabled) {
+    if (!finalSettings?.trackingEnabled) {
       console.warn('UTMify: Tracking is disabled');
       return;
     }
@@ -163,7 +164,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   return (
     <TrackingContext.Provider
       value={{
-        settings: settings || null,
+        settings: finalSettings || null,
         isInitialized,
         trackEvent,
         sendCapiEvent,
