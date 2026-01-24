@@ -786,30 +786,48 @@ export default function PublicQuiz() {
 
     const container = containerRef.current;
     if (container) {
+      // IMPORTANTE: Marcar ANTES de qualquer operação de scroll
+      // Se já está marcado (ex: botão clicado), não remarcar
+      if (!isProgrammaticScrollRef.current) {
+        isProgrammaticScrollRef.current = true;
+      }
+      
       // Verificar se o slide destino está travado
       const targetSlideIsLocked = checkIfSlideIsLocked(slideIndex);
-      
-      // Marcar que o scroll é programático (não deve ser bloqueado)
-      isProgrammaticScrollRef.current = true;
       
       // No mobile, sempre usar scroll instantâneo para evitar conflitos com touch events
       // No desktop, usar smooth apenas se o slide destino não estiver travado
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       const scrollBehavior = (isMobile || targetSlideIsLocked) ? 'auto' : 'smooth';
       
+      const targetScrollTop = slideIndex * container.clientHeight;
+      
       // No mobile, usar scrollTop direto para ser mais rápido e evitar conflitos
       if (isMobile) {
-        container.scrollTop = slideIndex * container.clientHeight;
+        // Forçar scroll imediatamente
+        container.scrollTop = targetScrollTop;
+        // Garantir que o scroll foi aplicado em múltiplos frames para evitar interferência do monitor
+        requestAnimationFrame(() => {
+          if (container.scrollTop !== targetScrollTop) {
+            container.scrollTop = targetScrollTop;
+          }
+        });
+        requestAnimationFrame(() => {
+          if (container.scrollTop !== targetScrollTop) {
+            container.scrollTop = targetScrollTop;
+          }
+        });
       } else {
         container.scrollTo({
-          top: slideIndex * container.clientHeight,
+          top: targetScrollTop,
           behavior: scrollBehavior,
         });
       }
       
       // Aumentar tempo para cobrir toda a transição (smooth pode levar até 800ms)
-      // No mobile, usar tempo menor já que é instantâneo
-      const timeoutDuration = isMobile ? 150 : (targetSlideIsLocked ? 100 : 800);
+      // No mobile, usar tempo maior para garantir que o monitor não interfira
+      // Dar tempo suficiente para o estado atualizar e o monitor parar completamente
+      const timeoutDuration = isMobile ? 400 : (targetSlideIsLocked ? 200 : 800);
       
       setTimeout(() => {
         isProgrammaticScrollRef.current = false;
@@ -1109,15 +1127,20 @@ export default function PublicQuiz() {
     let lockInterval: NodeJS.Timeout | null = null;
     
     const monitorLock = () => {
+      // IMPORTANTE: Se está em scroll programático, PARAR o monitor imediatamente
+      // Não continuar monitorando se o scroll é programático
+      if (isProgrammaticScrollRef.current) {
+        return; // Parar monitoramento
+      }
+      
       // Só monitorar se realmente estiver no slide travado (usar currentSlide do estado)
-      // E não estiver em scroll programático
-      if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
+      if (isSlideLocked && reel?.slides) {
         const currentScrollTop = container.scrollTop;
         const expectedScrollTop = currentSlide * slideHeight;
         
         // Usar pequena tolerância para evitar conflitos com scroll programático
         // e permitir que scroll programático complete antes de forçar
-        const tolerance = 2; // 2px de tolerância
+        const tolerance = 5; // Aumentar para 5px de tolerância
         
         // Bloquear qualquer movimento além da posição esperada (com tolerância)
         if (Math.abs(currentScrollTop - expectedScrollTop) > tolerance) {
@@ -1125,20 +1148,27 @@ export default function PublicQuiz() {
           container.scrollTop = expectedScrollTop;
         }
         
-        // Continuar monitorando
-        lockMonitor = requestAnimationFrame(monitorLock);
+        // Continuar monitorando apenas se ainda estiver travado e não programático
+        if (isSlideLocked && !isProgrammaticScrollRef.current) {
+          lockMonitor = requestAnimationFrame(monitorLock);
+        }
       }
     };
     
     // Monitor adicional com setInterval para ser ainda mais agressivo
     const monitorLockInterval = () => {
+      // IMPORTANTE: Se está em scroll programático, não fazer nada
+      if (isProgrammaticScrollRef.current) {
+        return; // Parar monitoramento
+      }
+      
       // Verificar se não está em scroll programático antes de forçar
-      if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
+      if (isSlideLocked && reel?.slides) {
         const currentScrollTop = container.scrollTop;
         const expectedScrollTop = currentSlide * slideHeight;
         
         // Usar pequena tolerância para evitar conflitos
-        const tolerance = 2; // 2px de tolerância
+        const tolerance = 5; // Aumentar para 5px de tolerância
         
         // Bloquear qualquer movimento além da posição esperada (com tolerância)
         if (Math.abs(currentScrollTop - expectedScrollTop) > tolerance) {
@@ -1471,6 +1501,10 @@ export default function PublicQuiz() {
     // Enviar formulários completos antes de avançar
     submitCompleteForms();
 
+    // IMPORTANTE: Marcar scroll como programático ANTES de desbloquear e scrollar
+    // Isso previne que o monitor de lock interfira
+    isProgrammaticScrollRef.current = true;
+
     // Desbloquear slide ao clicar no botão
     dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
 
@@ -1558,12 +1592,16 @@ export default function PublicQuiz() {
       if (import.meta.env.DEV) {
         console.log('Fluxo encontrado, usando conexão do fluxo:', nextIndex);
       }
+      // IMPORTANTE: Marcar scroll como programático ANTES de desbloquear e scrollar
+      isProgrammaticScrollRef.current = true;
       dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
       scrollToSlide(nextIndex);
       return;
     }
     
     // PRIORIDADE 2: Usar ação configurada do item (se não houver conexão no fluxo)
+    // IMPORTANTE: Marcar scroll como programático ANTES de desbloquear e scrollar
+    isProgrammaticScrollRef.current = true;
     dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
     
     if (actionType === 'slide' && slideId) {
