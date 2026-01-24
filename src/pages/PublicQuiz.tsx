@@ -39,7 +39,7 @@ import { ReelSoundProvider } from '@/contexts/ReelSoundContext';
 import { Loader2 } from 'lucide-react';
 import { generateVisitorId, getUTMParams } from '@/lib/cookies';
 import { useAnalyticsBatch } from '@/hooks/useAnalyticsBatch';
-import { isCustomDomain, normalizeDomain } from '@/lib/utils';
+import { isCustomDomain, normalizeDomain, removeUtmParamsIfNeeded } from '@/lib/utils';
 import DOMPurify from 'dompurify';
 
 // Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
@@ -1546,14 +1546,14 @@ export default function PublicQuiz() {
       // Validar URL antes de abrir
       try {
         const urlObj = new URL(finalUrl);
-        // Remover parâmetros UTM da URL
-        const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
-        utmParams.forEach(param => urlObj.searchParams.delete(param));
+        // Remover UTMs apenas se estivermos no builder/preview
+        // Nas páginas reais, manter UTMs (importantes para tracking)
+        const cleanUrl = removeUtmParamsIfNeeded(urlObj.href);
         
         if (openInNewTab !== false) { // default true
-          window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+          window.open(cleanUrl, '_blank', 'noopener,noreferrer');
         } else {
-          window.location.href = urlObj.href;
+          window.location.href = cleanUrl;
         }
       } catch (error) {
         console.error('URL inválida:', error);
@@ -1637,14 +1637,14 @@ export default function PublicQuiz() {
       
       try {
         const urlObj = new URL(finalUrl);
-        // Remover parâmetros UTM da URL
-        const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
-        utmParams.forEach(param => urlObj.searchParams.delete(param));
+        // Remover UTMs apenas se estivermos no builder/preview
+        // Nas páginas reais, manter UTMs (importantes para tracking)
+        const cleanUrl = removeUtmParamsIfNeeded(urlObj.href);
         
         if (openInNewTab !== false) {
-          window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+          window.open(cleanUrl, '_blank', 'noopener,noreferrer');
         } else {
-          window.location.href = urlObj.href;
+          window.location.href = cleanUrl;
         }
       } catch (error) {
         console.error('URL inválida:', error);
@@ -1746,14 +1746,14 @@ export default function PublicQuiz() {
       // Validar URL antes de abrir
       try {
         const urlObj = new URL(finalUrl);
-        // Remover parâmetros UTM da URL
-        const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
-        utmParams.forEach(param => urlObj.searchParams.delete(param));
+        // Remover UTMs apenas se estivermos no builder/preview
+        // Nas páginas reais, manter UTMs (importantes para tracking)
+        const cleanUrl = removeUtmParamsIfNeeded(urlObj.href);
         
         if (openInNewTab !== false) { // default true
-          window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+          window.open(cleanUrl, '_blank', 'noopener,noreferrer');
         } else {
-          window.location.href = urlObj.href;
+          window.location.href = cleanUrl;
         }
       } catch (error) {
         console.error('URL inválida:', error);
@@ -2077,14 +2077,14 @@ export default function PublicQuiz() {
                                     }
                                     try {
                                       const urlObj = new URL(finalUrl);
-                                      // Remover parâmetros UTM da URL
-                                      const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
-                                      utmParams.forEach(param => urlObj.searchParams.delete(param));
+                                      // Remover UTMs apenas se estivermos no builder/preview
+                                      // Nas páginas reais, manter UTMs (importantes para tracking)
+                                      const cleanUrl = removeUtmParamsIfNeeded(urlObj.href);
                                       
                                       if (openInNewTab) {
-                                        window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+                                        window.open(cleanUrl, '_blank', 'noopener,noreferrer');
                                       } else {
-                                        window.location.href = urlObj.href;
+                                        window.location.href = cleanUrl;
                                       }
                                     } catch (error) {
                                       console.error('URL inválida:', error);
@@ -2112,14 +2112,14 @@ export default function PublicQuiz() {
                                     }
                                     try {
                                       const urlObj = new URL(finalUrl);
-                                      // Remover parâmetros UTM da URL
-                                      const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
-                                      utmParams.forEach(param => urlObj.searchParams.delete(param));
+                                      // Remover UTMs apenas se estivermos no builder/preview
+                                      // Nas páginas reais, manter UTMs (importantes para tracking)
+                                      const cleanUrl = removeUtmParamsIfNeeded(urlObj.href);
                                       
                                       if (openInNewTab) {
-                                        window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+                                        window.open(cleanUrl, '_blank', 'noopener,noreferrer');
                                       } else {
-                                        window.location.href = urlObj.href;
+                                        window.location.href = cleanUrl;
                                       }
                                     } catch (error) {
                                       console.error('URL inválida:', error);

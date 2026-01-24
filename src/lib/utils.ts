@@ -45,3 +45,42 @@ export function normalizeDomain(domain: string): string {
   
   return normalized;
 }
+
+/**
+ * Verifica se estamos no builder ou preview (onde devemos remover UTMs da plataforma)
+ * @returns true se estamos no builder ou preview
+ */
+export function isInBuilderOrPreview(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  const pathname = window.location.pathname.toLowerCase();
+  // Verificar se está em rotas de builder ou preview
+  return pathname.includes('/builder/') || pathname.includes('/preview/');
+}
+
+/**
+ * Remove parâmetros UTM de uma URL apenas se estivermos no builder/preview
+ * Nas páginas reais, mantém UTMs (importantes para tracking)
+ * @param url - URL a ser processada
+ * @returns URL sem UTMs se estiver no builder/preview, ou URL original se estiver em página real
+ */
+export function removeUtmParamsIfNeeded(url: string): string {
+  if (!url) return url;
+  
+  // Se não estiver no builder/preview, manter UTMs (importantes para tracking)
+  if (!isInBuilderOrPreview()) {
+    return url;
+  }
+  
+  try {
+    const urlObj = new URL(url);
+    // Remover parâmetros UTM da URL (especialmente importante no builder/preview)
+    const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+    utmParams.forEach(param => urlObj.searchParams.delete(param));
+    
+    return urlObj.href;
+  } catch (error) {
+    // Se não for uma URL válida, retornar original
+    return url;
+  }
+}

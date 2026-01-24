@@ -1,6 +1,6 @@
 import { useState, useEffect, memo } from 'react';
 import { SlideElement } from '@/contexts/BuilderContext';
-import { cn } from '@/lib/utils';
+import { cn, removeUtmParamsIfNeeded } from '@/lib/utils';
 
 // Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
 const normalizeUiConfig = (uiConfig: any): any => {
@@ -127,14 +127,14 @@ export const ButtonElement = memo(function ButtonElement({ element, onButtonClic
       // Validar URL antes de abrir
       try {
         const urlObj = new URL(finalUrl);
-        // Remover parâmetros UTM da URL (especialmente importante no builder)
-        const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
-        utmParams.forEach(param => urlObj.searchParams.delete(param));
+        // Remover UTMs apenas se estivermos no builder/preview
+        // Nas páginas reais, manter UTMs (importantes para tracking)
+        const cleanUrl = removeUtmParamsIfNeeded(urlObj.href);
         
         if (openInNewTab) {
-          window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+          window.open(cleanUrl, '_blank', 'noopener,noreferrer');
         } else {
-          window.location.href = urlObj.href;
+          window.location.href = cleanUrl;
         }
       } catch (error) {
         console.error('URL inválida:', error);

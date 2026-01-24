@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { SlideElement } from '@/contexts/BuilderContext';
-import { cn } from '@/lib/utils';
+import { cn, removeUtmParamsIfNeeded } from '@/lib/utils';
 import * as LucideIcons from 'lucide-react';
 
 // Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
@@ -113,14 +113,14 @@ export const ReelPrice = memo(function ReelPrice({ element, onButtonClick, class
       // Validar URL antes de abrir
       try {
         const urlObj = new URL(finalUrl);
-        // Remover parâmetros UTM da URL
-        const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
-        utmParams.forEach(param => urlObj.searchParams.delete(param));
+        // Remover UTMs apenas se estivermos no builder/preview
+        // Nas páginas reais, manter UTMs (importantes para tracking)
+        const cleanUrl = removeUtmParamsIfNeeded(urlObj.href);
         
         if (buttonOpenInNewTab) {
-          window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+          window.open(cleanUrl, '_blank', 'noopener,noreferrer');
         } else {
-          window.location.href = urlObj.href;
+          window.location.href = cleanUrl;
         }
       } catch (error) {
         console.error('URL inválida:', error);

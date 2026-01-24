@@ -36,6 +36,7 @@ import { ReelAudioTag } from '@/components/reels/ReelAudioTag';
 import { BackgroundConfig } from '@/contexts/BuilderContext';
 import { ReelSoundProvider } from '@/contexts/ReelSoundContext';
 import { Loader2 } from 'lucide-react';
+import { removeUtmParamsIfNeeded } from '@/lib/utils';
 
 // Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
 const normalizeUiConfig = (uiConfig: any): any => {
@@ -827,10 +828,14 @@ export default function PreviewQuiz() {
       // Validar URL antes de abrir
       try {
         const urlObj = new URL(finalUrl);
+        // Remover UTMs apenas se estivermos no builder/preview
+        // Nas páginas reais, manter UTMs (importantes para tracking)
+        const cleanUrl = removeUtmParamsIfNeeded(urlObj.href);
+        
         if (openInNewTab !== false) { // default true
-          window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+          window.open(cleanUrl, '_blank', 'noopener,noreferrer');
         } else {
-          window.location.href = urlObj.href;
+          window.location.href = cleanUrl;
         }
       } catch (error) {
         console.error('URL inválida:', error);
@@ -889,10 +894,14 @@ export default function PreviewQuiz() {
       
       try {
         const urlObj = new URL(finalUrl);
+        // Remover UTMs apenas se estivermos no builder/preview
+        // Nas páginas reais, manter UTMs (importantes para tracking)
+        const cleanUrl = removeUtmParamsIfNeeded(urlObj.href);
+        
         if (openInNewTab !== false) {
-          window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+          window.open(cleanUrl, '_blank', 'noopener,noreferrer');
         } else {
-          window.location.href = urlObj.href;
+          window.location.href = cleanUrl;
         }
       } catch (error) {
         console.error('URL inválida:', error);
@@ -965,10 +974,14 @@ export default function PreviewQuiz() {
       // Validar URL antes de abrir
       try {
         const urlObj = new URL(finalUrl);
+        // Remover UTMs apenas se estivermos no builder/preview
+        // Nas páginas reais, manter UTMs (importantes para tracking)
+        const cleanUrl = removeUtmParamsIfNeeded(urlObj.href);
+        
         if (openInNewTab !== false) { // default true
-          window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+          window.open(cleanUrl, '_blank', 'noopener,noreferrer');
         } else {
-          window.location.href = urlObj.href;
+          window.location.href = cleanUrl;
         }
       } catch (error) {
         console.error('URL inválida:', error);
@@ -1267,10 +1280,14 @@ export default function PreviewQuiz() {
                                     }
                                     try {
                                       const urlObj = new URL(finalUrl);
+                                      // Remover UTMs apenas se estivermos no builder/preview
+                                      // Nas páginas reais, manter UTMs (importantes para tracking)
+                                      const cleanUrl = removeUtmParamsIfNeeded(urlObj.href);
+                                      
                                       if (openInNewTab) {
-                                        window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+                                        window.open(cleanUrl, '_blank', 'noopener,noreferrer');
                                       } else {
-                                        window.location.href = urlObj.href;
+                                        window.location.href = cleanUrl;
                                       }
                                     } catch (error) {
                                       console.error('URL inválida:', error);
@@ -1298,10 +1315,14 @@ export default function PreviewQuiz() {
                                     }
                                     try {
                                       const urlObj = new URL(finalUrl);
+                                      // Remover UTMs apenas se estivermos no builder/preview
+                                      // Nas páginas reais, manter UTMs (importantes para tracking)
+                                      const cleanUrl = removeUtmParamsIfNeeded(urlObj.href);
+                                      
                                       if (openInNewTab) {
-                                        window.open(urlObj.href, '_blank', 'noopener,noreferrer');
+                                        window.open(cleanUrl, '_blank', 'noopener,noreferrer');
                                       } else {
-                                        window.location.href = urlObj.href;
+                                        window.location.href = cleanUrl;
                                       }
                                     } catch (error) {
                                       console.error('URL inválida:', error);
