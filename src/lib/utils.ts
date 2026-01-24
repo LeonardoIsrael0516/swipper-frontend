@@ -24,3 +24,24 @@ export function isCustomDomain(): boolean {
   // Se o hostname não está na lista de domínios principais, é um domínio personalizado
   return !mainDomains.some(domain => hostname === domain || hostname.endsWith(`.${domain}`));
 }
+
+/**
+ * Normaliza um domínio removendo protocolo, path e porta
+ * @param domain - Domínio a ser normalizado
+ * @returns Domínio normalizado (apenas hostname)
+ */
+export function normalizeDomain(domain: string): string {
+  if (!domain) return '';
+  
+  let normalized = domain.toLowerCase().trim();
+  // Remover protocolo se houver
+  normalized = normalized.replace(/^https?:\/\//, '');
+  // Remover path se houver
+  normalized = normalized.replace(/\/.*$/, '');
+  // Remover porta se houver
+  normalized = normalized.split(':')[0];
+  // Remover espaços
+  normalized = normalized.trim();
+  
+  return normalized;
+}

@@ -39,7 +39,7 @@ import { ReelSoundProvider } from '@/contexts/ReelSoundContext';
 import { Loader2 } from 'lucide-react';
 import { generateVisitorId, getUTMParams } from '@/lib/cookies';
 import { useAnalyticsBatch } from '@/hooks/useAnalyticsBatch';
-import { isCustomDomain } from '@/lib/utils';
+import { isCustomDomain, normalizeDomain } from '@/lib/utils';
 import DOMPurify from 'dompurify';
 
 // Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
@@ -172,8 +172,8 @@ export default function PublicQuiz() {
   const slideRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const isProgrammaticScrollRef = useRef<boolean>(false);
   
-  // Detectar se é domínio personalizado
-  const customDomain = isCustomDomain() ? window.location.hostname : null;
+  // Detectar se é domínio personalizado e normalizar o domínio
+  const customDomain = isCustomDomain() ? normalizeDomain(window.location.hostname) : null;
 
   // Em reels NÃO deve existir scroll interno no slide.
   // Quando o conteúdo não cabe no viewport real do mobile (barras do navegador + safe-area),
@@ -250,8 +250,25 @@ export default function PublicQuiz() {
       
       // Se for domínio personalizado, buscar pelo domínio
       if (customDomain) {
-        // O cacheBuster será adicionado automaticamente pelo método getReelByDomain se necessário
-        response = await api.getReelByDomain(customDomain);
+        // Log de debug em desenvolvimento
+        if (import.meta.env.DEV) {
+          console.log('[PublicQuiz] Buscando reel por domínio personalizado:', customDomain);
+        }
+        try {
+          // O cacheBuster será adicionado automaticamente pelo método getReelByDomain se necessário
+          response = await api.getReelByDomain(customDomain);
+        } catch (err: any) {
+          // Log de erro mais detalhado
+          if (import.meta.env.DEV) {
+            console.error('[PublicQuiz] Erro ao buscar reel por domínio:', {
+              domain: customDomain,
+              error: err,
+              message: err?.message,
+              statusCode: err?.statusCode,
+            });
+          }
+          throw err;
+        }
       } else {
         // Caso contrário, buscar pelo slug (comportamento normal)
         if (!slug) {
@@ -1615,28 +1632,47 @@ export default function PublicQuiz() {
       console.error('PublicQuiz error:', {
         error,
         slug,
+        customDomain,
         errorMessage: error?.message,
         errorStatusCode: (error as any)?.statusCode,
+        isLoading,
       });
     }
+    
+    // Mensagem de erro mais específica para domínios personalizados
+    const isDomainError = customDomain && error;
+    const errorMessage = isDomainError 
+      ? 'O domínio personalizado não foi encontrado ou não está verificado. Verifique se o domínio está configurado corretamente no painel.'
+      : 'O quiz que você está procurando não existe ou não está disponível.';
     
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
         <div className="text-center text-white">
           <h1 className="text-2xl font-bold mb-4">Quiz não encontrado</h1>
           <p className="text-white/60 mb-6">
-            O quiz que você está procurando não existe ou não está disponível.
+            {errorMessage}
             {import.meta.env.DEV && error && (
               <span className="block mt-2 text-xs">
                 Erro: {(error as any)?.message || 'Erro desconhecido'}
+                {customDomain && (
+                  <span className="block mt-1">
+                    Domínio: {customDomain}
+                  </span>
+                )}
               </span>
             )}
           </p>
           <button
-            onClick={() => navigate('/')}
+            onClick={() => {
+              // Se for domínio personalizado, não fazer nada (não tem para onde navegar)
+              // Se não for, navegar para a página inicial
+              if (!customDomain) {
+                navigate('/');
+              }
+            }}
             className="px-6 py-3 bg-white text-black rounded-lg font-medium hover:bg-white/90 transition-colors"
           >
-            Voltar ao início
+            {customDomain ? 'Recarregar página' : 'Voltar ao início'}
           </button>
         </div>
       </div>
