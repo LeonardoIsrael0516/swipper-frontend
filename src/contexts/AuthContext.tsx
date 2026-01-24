@@ -256,9 +256,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return; // Só verificar se estiver logado
 
+    let lastCheckTime = 0;
+    const DEBOUNCE_MS = 2000; // 2 segundos de debounce entre verificações
     let isRefreshing = false; // Flag para evitar múltiplos refreshes simultâneos
 
     const checkAndRefreshToken = async () => {
+      const now = Date.now();
+      
+      // Debounce: evitar verificações muito próximas
+      if (now - lastCheckTime < DEBOUNCE_MS) {
+        return;
+      }
+      lastCheckTime = now;
+
       // Evitar múltiplos refreshes simultâneos
       if (isRefreshing) {
         return;
@@ -288,12 +298,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Access token expirado (15min) - fazer refresh automático
         // NÃO fazer logout - refresh token ainda é válido (7 dias)
         isRefreshing = true;
-        const refreshed = await refreshToken();
-        isRefreshing = false;
-        if (!refreshed) {
-          // Refresh falhou - pode ser erro temporário
-          // Não fazer logout - tentar novamente na próxima verificação
-          // Se realmente falhar, o interceptor da API vai tentar refresh na próxima requisição
+        try {
+          const refreshed = await refreshToken();
+          if (!refreshed) {
+            // Refresh falhou - pode ser erro temporário
+            // Não fazer logout - tentar novamente na próxima verificação
+            // Se realmente falhar, o interceptor da API vai tentar refresh na próxima requisição
+          }
+        } finally {
+          isRefreshing = false;
         }
         return;
       }
@@ -301,23 +314,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Se access token está próximo de expirar (menos de 5 min), fazer refresh proativo
       if (isTokenExpiringSoon(accessToken)) {
         isRefreshing = true;
-        const refreshed = await refreshToken();
-        isRefreshing = false;
-        if (!refreshed) {
-          // Se refresh proativo falhar mas token ainda não expirou, não fazer logout
-          // Tentar novamente na próxima verificação
+        try {
+          const refreshed = await refreshToken();
+          if (!refreshed) {
+            // Se refresh proativo falhar mas token ainda não expirou, não fazer logout
+            // Tentar novamente na próxima verificação
+          }
+        } finally {
+          isRefreshing = false;
         }
       }
     };
 
-    // Verificar imediatamente
-    checkAndRefreshToken();
+    // Verificar imediatamente (com pequeno delay para evitar race conditions)
+    const initialTimeout = setTimeout(checkAndRefreshToken, 1000);
 
     // Verificar a cada 10 minutos (aumentado de 5min para reduzir requisições)
     // A sessão permanece ativa enquanto refresh token for válido (7 dias)
     const interval = setInterval(checkAndRefreshToken, 10 * 60 * 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
   }, [user, isTokenExpired, isTokenExpiringSoon, refreshToken, logout]);
 
   const login = useCallback(async (email: string, password: string) => {

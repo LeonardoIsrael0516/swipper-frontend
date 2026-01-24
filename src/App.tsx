@@ -18,6 +18,8 @@ import ResetPassword from "./pages/ResetPassword";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import AffiliateTerms from "./pages/AffiliateTerms";
+import AffiliateProgram from "./pages/AffiliateProgram";
+import PartnerProgram from "./pages/PartnerProgram";
 import VerifyEmail from "./pages/VerifyEmail";
 import GoogleCallback from "./pages/GoogleCallback";
 import Dashboard from "./pages/Dashboard";
@@ -90,6 +92,8 @@ const App = () => (
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/affiliate-terms" element={<AffiliateTerms />} />
+              <Route path="/affiliate-program" element={<AffiliateProgram />} />
+              <Route path="/partner-program" element={<PartnerProgram />} />
               <Route path="/plans" element={<Plans />} />
               <Route path="/confirm-email/:token" element={<VerifyEmail />} />
               <Route path="/auth/google/callback" element={<GoogleCallback />} />

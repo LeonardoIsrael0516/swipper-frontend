@@ -6,12 +6,83 @@ export interface ApiError {
   error?: string;
 }
 
+// Singleton para coordenar refreshes entre múltiplas instâncias/abas
+class RefreshCoordinator {
+  private static instance: RefreshCoordinator;
+  private refreshing: Promise<boolean> | null = null;
+  private lastRefreshTime: number = 0;
+  private readonly DEBOUNCE_MS = 1000; // 1 segundo de debounce
+
+  static getInstance(): RefreshCoordinator {
+    if (!RefreshCoordinator.instance) {
+      RefreshCoordinator.instance = new RefreshCoordinator();
+    }
+    return RefreshCoordinator.instance;
+  }
+
+  async refresh(baseURL: string, refreshToken: string): Promise<boolean> {
+    const now = Date.now();
+    
+    // Se já está fazendo refresh, aguardar o mesmo processo
+    if (this.refreshing) {
+      return this.refreshing;
+    }
+
+    // Debounce: evitar múltiplos refreshes muito próximos
+    if (now - this.lastRefreshTime < this.DEBOUNCE_MS) {
+      // Aguardar um pouco e tentar novamente
+      await new Promise(resolve => setTimeout(resolve, this.DEBOUNCE_MS - (now - this.lastRefreshTime)));
+      if (this.refreshing) {
+        return this.refreshing;
+      }
+    }
+
+    this.lastRefreshTime = Date.now();
+    this.refreshing = (async () => {
+      try {
+        const response = await fetch(`${baseURL}/auth/refresh`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ refreshToken }),
+        });
+
+        if (response.ok) {
+          const responseData = await response.json();
+          const data = responseData.data || responseData;
+          
+          if (data.accessToken && data.refreshToken) {
+            // Atualizar tokens em todas as instâncias via localStorage
+            localStorage.setItem('accessToken', data.accessToken);
+            localStorage.setItem('refreshToken', data.refreshToken);
+            return true;
+          }
+        }
+        return false;
+      } catch (error) {
+        return false;
+      } finally {
+        this.refreshing = null;
+      }
+    })();
+
+    return this.refreshing;
+  }
+
+  isRefreshing(): boolean {
+    return this.refreshing !== null;
+  }
+}
+
 class ApiClient {
   private baseURL: string;
   private refreshingToken: Promise<boolean> | null = null;
+  private refreshCoordinator: RefreshCoordinator;
 
   constructor(baseURL: string) {
     this.baseURL = baseURL;
+    this.refreshCoordinator = RefreshCoordinator.getInstance();
   }
 
   private getAuthToken(): string | null {
@@ -73,11 +144,6 @@ class ApiClient {
   }
 
   private async refreshAccessToken(): Promise<boolean> {
-    // Se já está fazendo refresh, aguardar o mesmo processo
-    if (this.refreshingToken) {
-      return this.refreshingToken;
-    }
-
     const refreshToken = this.getRefreshToken();
     if (!refreshToken) {
       return false;
@@ -92,43 +158,29 @@ class ApiClient {
       return false;
     }
 
-    // Criar promise de refresh
-    this.refreshingToken = (async () => {
-      try {
-        const response = await fetch(`${this.baseURL}/auth/refresh`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ refreshToken }),
-        });
-
-        if (response.ok) {
-          const responseData = await response.json();
-          // Handle transformed response (with data wrapper) or direct response
-          const data = responseData.data || responseData;
-          
-          if (data.accessToken && data.refreshToken) {
-            localStorage.setItem('accessToken', data.accessToken);
-            localStorage.setItem('refreshToken', data.refreshToken);
-            this.refreshingToken = null; // Reset
-            return true;
-          }
-        }
-      } catch (error) {
-        // Silent fail - will logout user
-      } finally {
-        this.refreshingToken = null; // Reset sempre
+    // Usar coordenador global para evitar múltiplos refreshes simultâneos
+    try {
+      const refreshed = await this.refreshCoordinator.refresh(this.baseURL, refreshToken);
+      
+      if (refreshed) {
+        // Tokens já foram atualizados pelo coordenador
+        return true;
       }
-
-      // If refresh fails, clear tokens
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
+      
+      // Refresh falhou - verificar se refresh token ainda válido
+      const currentRefreshToken = this.getRefreshToken();
+      if (!currentRefreshToken || this.isTokenExpired(currentRefreshToken)) {
+        // Refresh token expirado após 7 dias - sessão terminou
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+      }
+      
       return false;
-    })();
-
-    return this.refreshingToken;
+    } catch (error) {
+      // Erro ao fazer refresh - não limpar tokens ainda (pode ser erro temporário)
+      return false;
+    }
   }
 
   private async request<T>(

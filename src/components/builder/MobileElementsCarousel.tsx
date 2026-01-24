@@ -21,8 +21,10 @@ import {
   Grid3x3,
   Paintbrush,
   Minus,
+  ShoppingCart,
 } from 'lucide-react';
 import { useBuilder } from '@/contexts/BuilderContext';
+import { Badge } from '@/components/ui/badge';
 
 const elements = [
   { type: 'TEXT', icon: Type, label: 'Texto' },
@@ -44,6 +46,7 @@ const elements = [
   { type: 'CIRCULAR', icon: Circle, label: 'Dash' },
   { type: 'CHART', icon: BarChart3, label: 'Gráfico' },
   { type: 'SCORE', icon: Minus, label: 'Score' },
+  { type: 'CHECKOUT', icon: ShoppingCart, label: 'Checkout', comingSoon: true },
 ];
 
 interface MobileElementsCarouselProps {
@@ -91,17 +94,23 @@ export function MobileElementsCarousel({ onElementAdded }: MobileElementsCarouse
         {/* Elementos */}
         {elements.map((element) => {
           const Icon = element.icon;
-          const elementDisabled = isDisabled && element.type !== 'TEXT';
+          const isComingSoon = element.comingSoon === true;
+          const elementDisabled = (isDisabled && element.type !== 'TEXT') || isComingSoon;
 
           return (
             <button
               key={element.type}
               onClick={() => handleAddElement(element.type)}
               disabled={elementDisabled}
-              className="flex-shrink-0 flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-lg border border-border/50 bg-background hover:bg-surface-hover hover:border-border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-shrink-0 flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-lg border border-border/50 bg-background hover:bg-surface-hover hover:border-border transition-all disabled:opacity-50 disabled:cursor-not-allowed relative"
             >
               <Icon className="w-4 h-4 text-foreground" />
               <span className="text-[10px] font-medium text-foreground leading-tight">{element.label}</span>
+              {isComingSoon && (
+                <Badge variant="secondary" className="absolute -top-0.5 -right-0.5 text-[7px] px-0.5 py-0 h-3 leading-none">
+                  Em breve
+                </Badge>
+              )}
             </button>
           );
         })}

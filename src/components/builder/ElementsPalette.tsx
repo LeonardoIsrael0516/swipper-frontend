@@ -23,8 +23,10 @@ import {
   GripVertical,
   Paintbrush,
   Minus,
+  ShoppingCart,
 } from 'lucide-react';
 import { useBuilder } from '@/contexts/BuilderContext';
+import { Badge } from '@/components/ui/badge';
 
 const elements = [
   { type: 'TEXT', icon: Type, label: 'Texto' },
@@ -47,6 +49,7 @@ const elements = [
   { type: 'CHART', icon: BarChart3, label: 'Gráfico' },
   { type: 'SCORE', icon: Minus, label: 'Score' },
   { type: 'SPACING', icon: GripVertical, label: 'Espaçamento' },
+  { type: 'CHECKOUT', icon: ShoppingCart, label: 'Checkout', comingSoon: true },
 ];
 
 export function ElementsPalette() {
@@ -95,12 +98,15 @@ export function ElementsPalette() {
           {/* Outros elementos */}
           {elements.map((element) => {
             const Icon = element.icon;
-            const isDisabled = !selectedSlide || !hasAvailableSpace;
+            const isComingSoon = element.comingSoon === true;
+            const isDisabled = !selectedSlide || !hasAvailableSpace || isComingSoon;
             
             const tooltipMessage = !selectedSlide
               ? 'Selecione um slide para adicionar elementos'
               : !hasAvailableSpace
               ? 'Limite de altura atingido. Remova elementos existentes para adicionar novos.'
+              : isComingSoon
+              ? 'Em breve'
               : '';
 
             // Para elementos desabilitados, usar wrapper div para tooltip funcionar
@@ -121,11 +127,16 @@ export function ElementsPalette() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex flex-col items-center gap-2 h-auto py-3 opacity-50 cursor-not-allowed w-full lg:w-full max-w-[120px] lg:max-w-none pointer-events-none"
+                        className="flex flex-col items-center gap-2 h-auto py-3 opacity-50 cursor-not-allowed w-full lg:w-full max-w-[120px] lg:max-w-none pointer-events-none relative"
                         disabled
                       >
                         <Icon className="w-5 h-5" />
                         <span className="text-xs">{element.label}</span>
+                        {isComingSoon && (
+                          <Badge variant="secondary" className="absolute -top-1 -right-1 text-[8px] px-1 py-0 h-4">
+                            Em breve
+                          </Badge>
+                        )}
                       </Button>
                     </div>
                   </TooltipTrigger>
@@ -143,12 +154,17 @@ export function ElementsPalette() {
                 key={element.type}
                 variant="outline"
                 size="sm"
-                className="flex flex-col items-center gap-2 h-auto py-3 w-full lg:w-full max-w-[120px] lg:max-w-none hover:bg-surface-hover hover:text-foreground"
+                className="flex flex-col items-center gap-2 h-auto py-3 w-full lg:w-full max-w-[120px] lg:max-w-none hover:bg-surface-hover hover:text-foreground relative"
                 onClick={() => handleAddElement(element.type)}
                 disabled={isDisabled}
               >
                 <Icon className="w-5 h-5" />
                 <span className="text-xs">{element.label}</span>
+                {isComingSoon && (
+                  <Badge variant="secondary" className="absolute -top-1 -right-1 text-[8px] px-1 py-0 h-4">
+                    Em breve
+                  </Badge>
+                )}
               </Button>
             );
           })}

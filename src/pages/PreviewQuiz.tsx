@@ -696,6 +696,36 @@ export default function PreviewQuiz() {
   }, [isSlideLocked, currentSlide, reel?.slides]);
 
   // Função helper para obter o próximo slide baseado em logicNext
+  // Função para verificar apenas conexões do fluxo (sem fallback)
+  const hasFlowConnection = useCallback((slideId: string, elementId?: string, itemId?: string): number | null => {
+    if (!reel?.slides) return null;
+    
+    const slide = reel.slides.find((s) => s.id === slideId);
+    if (!slide) return null;
+
+    const logicNext = slide.logicNext || {};
+    
+    // PRIORIDADE 1: Se há conexão de elemento específico com item (para Question/QuestionGrid)
+    if (elementId && itemId) {
+      const elementItemKey = `${elementId}-item-${itemId}`;
+      if (logicNext.elements?.[elementItemKey]) {
+        const targetSlideId = logicNext.elements[elementItemKey];
+        const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
+        return targetIndex >= 0 ? targetIndex : null;
+      }
+    }
+    
+    // PRIORIDADE 2: Se há conexão de elemento específico (sem item)
+    if (elementId && logicNext.elements?.[elementId]) {
+      const targetSlideId = logicNext.elements[elementId];
+      const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
+      return targetIndex >= 0 ? targetIndex : null;
+    }
+    
+    // Não há conexão no fluxo - retornar null (sem fallback)
+    return null;
+  }, [reel]);
+
   const getNextSlideIndex = useCallback((slideId: string, elementId?: string, optionId?: string, itemId?: string): number | null => {
     if (!reel?.slides) return null;
     
@@ -831,8 +861,8 @@ export default function PreviewQuiz() {
     
     const elementId = questionnaireElement.id;
     
-    // PRIORIDADE 1: Verificar conexão no fluxo primeiro
-    const nextIndex = getNextSlideIndex(currentSlideData.id, elementId, undefined, itemId);
+    // PRIORIDADE 1: Verificar conexão no fluxo primeiro (sem fallback)
+    const nextIndex = hasFlowConnection(currentSlideData.id, elementId, itemId);
     
     if (nextIndex !== null) {
       // Há conexão no fluxo - usar ela (ignorar ação do item)
@@ -841,11 +871,11 @@ export default function PreviewQuiz() {
       return;
     }
     
-    // PRIORIDADE 2: Usar ação configurada do item
+    // PRIORIDADE 2: Usar ação configurada do item (se não houver conexão no fluxo)
     setIsSlideLocked(false);
     
     if (actionType === 'slide' && slideId) {
-      // Navegar para slide específico
+      // Navegar para slide específico configurado no item
       const targetSlideIndex = reel.slides.findIndex((s: any) => s.id === slideId);
       if (targetSlideIndex !== -1) {
         scrollToSlide(targetSlideIndex);
@@ -874,7 +904,7 @@ export default function PreviewQuiz() {
       }
     }
     // Se actionType === 'none', não fazer nada (apenas selecionou)
-  }, [reel, currentSlide, getNextSlideIndex, scrollToSlide]);
+  }, [reel, currentSlide, hasFlowConnection, scrollToSlide]);
 
   const handleQuestionnaireNext = useCallback((elementId: string, itemId: string) => {
     if (!reel?.slides || currentSlide >= reel.slides.length) return;
