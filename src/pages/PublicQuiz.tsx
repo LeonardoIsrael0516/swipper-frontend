@@ -162,6 +162,7 @@ export default function PublicQuiz() {
   const [completedProgressElements, setCompletedProgressElements] = useState<Set<string>>(new Set()); // elementId -> já foi completado
   const [formValidStates, setFormValidStates] = useState<Record<string, boolean>>({}); // elementId -> isValid
   const [elementsHidingSocial, setElementsHidingSocial] = useState<Set<string>>(new Set()); // elementId -> should hide social
+  const [blockedScrollAttempt, setBlockedScrollAttempt] = useState(false); // Flag para animação quando bloqueia scroll
   const containerRef = useRef<HTMLDivElement>(null);
   const formRefs = useRef<Record<string, ReelFormRef>>({});
   const prevIsSlideLockedRef = useRef<boolean>(false);
@@ -699,20 +700,55 @@ export default function PublicQuiz() {
 
     const container = containerRef.current;
     if (container) {
+      // Verificar se o slide destino está travado
+      const targetSlideIsLocked = checkIfSlideIsLocked(slideIndex);
+      
       // Marcar que o scroll é programático (não deve ser bloqueado)
       isProgrammaticScrollRef.current = true;
       
+      // Se o slide destino está travado, usar scroll instantâneo para evitar conflito com monitor
+      // Caso contrário, usar smooth para melhor UX
+      const scrollBehavior = targetSlideIsLocked ? 'auto' : 'smooth';
+      
       container.scrollTo({
         top: slideIndex * container.clientHeight,
-        behavior: 'smooth',
+        behavior: scrollBehavior,
       });
       
-      // Limpar a flag após a animação de scroll completar (assumindo ~500ms para smooth scroll)
+      // Aumentar tempo para cobrir toda a transição (smooth pode levar até 800ms)
+      // Se for instantâneo, ainda dar tempo para o monitor não interferir
+      const timeoutDuration = targetSlideIsLocked ? 100 : 800;
+      
       setTimeout(() => {
         isProgrammaticScrollRef.current = false;
-      }, 600);
+      }, timeoutDuration);
     }
-  }, [reel, currentSlide]);
+  }, [reel, currentSlide, checkIfSlideIsLocked]);
+
+  // Função helper para verificar se um elemento está visível (considerando delay)
+  const isElementVisible = useCallback((element: any, slideIndex: number): boolean => {
+    // Se não é o slide atual, não está visível
+    if (slideIndex !== currentSlide) {
+      return false;
+    }
+    
+    const config = getNormalizedUiConfig(element.uiConfig);
+    const delay = config.delay || 0;
+    
+    // Se não tem delay, está visível imediatamente
+    if (delay === 0) {
+      return true;
+    }
+    
+    // Verificar se já passou o tempo desde que o slide foi exibido
+    const slideStartTime = slideStartTimeRef.current[slideIndex];
+    if (!slideStartTime) {
+      return false;
+    }
+    
+    const elapsed = Date.now() - slideStartTime;
+    return elapsed >= delay;
+  }, [currentSlide]);
 
   // Função helper para verificar se um slide específico está travado
   const checkIfSlideIsLocked = useCallback((slideIndex: number): boolean => {
@@ -1086,6 +1122,7 @@ export default function PublicQuiz() {
     
     // Monitor adicional com setInterval para ser ainda mais agressivo
     const monitorLockInterval = () => {
+      // Verificar se não está em scroll programático antes de forçar
       if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
         const currentScrollTop = container.scrollTop;
         const expectedScrollTop = currentSlide * slideHeight;
@@ -1108,8 +1145,16 @@ export default function PublicQuiz() {
         if (e.deltaY > 0) {
           e.preventDefault();
           e.stopImmediatePropagation();
+          e.stopPropagation();
           // Forçar scrollTop de volta imediatamente
           container.scrollTop = expectedScrollTop;
+          
+          // Ativar animação visual por 500ms
+          setBlockedScrollAttempt(true);
+          setTimeout(() => {
+            setBlockedScrollAttempt(false);
+          }, 500);
+          
           return false;
         }
         
@@ -1146,8 +1191,16 @@ export default function PublicQuiz() {
           isScrollingForward = true;
           e.preventDefault();
           e.stopImmediatePropagation();
+          e.stopPropagation();
           // Forçar scrollTop de volta imediatamente
           container.scrollTop = expectedScrollTop;
+          
+          // Ativar animação visual por 500ms
+          setBlockedScrollAttempt(true);
+          setTimeout(() => {
+            setBlockedScrollAttempt(false);
+          }, 500);
+          
           return false;
         }
         
@@ -1894,6 +1947,10 @@ export default function PublicQuiz() {
                             case 'CAROUSEL':
                               return <CarouselElement key={element.id} element={elementWithConfig} />;
                             case 'BUTTON':
+                              const buttonConfig = getNormalizedUiConfig(elementWithConfig.uiConfig);
+                              const showButtonAnimation = blockedScrollAttempt && 
+                                                          buttonConfig.lockSlide === true && 
+                                                          isElementVisible(element, index);
                               return (
                                 <ButtonElement
                                   key={element.id}
@@ -1901,6 +1958,7 @@ export default function PublicQuiz() {
                                   onButtonClick={(dest, url, openInNewTab) => handleButtonClick(dest, url, openInNewTab, element.id)}
                                   onVisibilityChange={handleElementVisibilityChange}
                                   isActive={index === currentSlide}
+                                  showBlockedAnimation={showButtonAnimation}
                                 />
                               );
                             case 'ACCORDION':
@@ -1971,6 +2029,10 @@ export default function PublicQuiz() {
                                 />
                               );
                             case 'QUESTIONNAIRE':
+                              const questionnaireConfig = getNormalizedUiConfig(elementWithConfig.uiConfig);
+                              const showQuestionnaireAnimation = blockedScrollAttempt && 
+                                                                 questionnaireConfig.lockSlide === true && 
+                                                                 isElementVisible(element, index);
                               return (
                                 <ReelQuestionnaire
                                   key={element.id}
@@ -1979,6 +2041,7 @@ export default function PublicQuiz() {
                                   onNextSlide={handleQuestionnaireNext}
                                   onItemAction={handleItemAction}
                                   onVisibilityChange={handleElementVisibilityChange}
+                                  showBlockedAnimation={showQuestionnaireAnimation}
                                   onSelectionChange={(selectedIds) => {
                                     // Registrar interação de questionário
                                     if (visitIdRef.current && reel && reel.slides?.[currentSlide]) {
@@ -2000,6 +2063,10 @@ export default function PublicQuiz() {
                                 />
                               );
                             case 'QUESTION_GRID':
+                              const questionGridConfig = getNormalizedUiConfig(elementWithConfig.uiConfig);
+                              const showQuestionGridAnimation = blockedScrollAttempt && 
+                                                                questionGridConfig.lockSlide === true && 
+                                                                isElementVisible(element, index);
                               return (
                                 <ReelQuestionGrid
                                   key={element.id}
@@ -2008,6 +2075,7 @@ export default function PublicQuiz() {
                                   onNextSlide={handleQuestionnaireNext}
                                   onItemAction={handleItemAction}
                                   onVisibilityChange={handleElementVisibilityChange}
+                                  showBlockedAnimation={showQuestionGridAnimation}
                                   onSelectionChange={(selectedIds) => {
                                     // Atualizar estado de respostas do question grid
                                     // O useEffect que verifica lockSlide será acionado automaticamente

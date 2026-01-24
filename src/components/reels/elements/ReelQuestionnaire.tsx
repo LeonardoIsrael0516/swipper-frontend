@@ -25,6 +25,7 @@ interface ReelQuestionnaireProps {
   onSelectionChange?: (selectedIds: string[]) => void;
   onVisibilityChange?: (elementId: string, isVisible: boolean, shouldHideSocial: boolean) => void;
   isActive?: boolean;
+  showBlockedAnimation?: boolean;
 }
 
 // Função para obter o componente do ícone do Lucide React
@@ -175,7 +176,7 @@ const renderEndIcon = (endIcon: string, endIconCustom: string, isSelected: boole
   return null;
 };
 
-export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNextSlide, onItemAction, onSelectionChange, onVisibilityChange, isActive = false }: ReelQuestionnaireProps) {
+export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNextSlide, onItemAction, onSelectionChange, onVisibilityChange, isActive = false, showBlockedAnimation = false }: ReelQuestionnaireProps) {
   const config = normalizeUiConfig(element.uiConfig);
   const {
     items = [],
@@ -405,7 +406,20 @@ export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNe
 
   return (
     <>
-      <div style={containerStyle}>
+      <style>{`
+        @keyframes blocked-pulse {
+          0%, 100% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+          }
+          50% {
+            box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+          }
+        }
+        .blocked-scroll-animation {
+          animation: blocked-pulse 0.5s ease-in-out 3;
+        }
+      `}</style>
+      <div style={containerStyle} className={showBlockedAnimation ? 'blocked-scroll-animation' : ''}>
         {normalizedItems.length === 0 ? (
           <div style={getItemStyle('')}>
             <p style={{ color: textColor, fontSize: '14px', opacity: 0.6 }}>

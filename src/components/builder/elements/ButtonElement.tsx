@@ -24,9 +24,10 @@ interface ButtonElementProps {
   onVisibilityChange?: (elementId: string, isVisible: boolean, shouldHideSocial: boolean) => void;
   isInBuilder?: boolean;
   isActive?: boolean;
+  showBlockedAnimation?: boolean;
 }
 
-export const ButtonElement = memo(function ButtonElement({ element, onButtonClick, onVisibilityChange, isInBuilder = false, isActive = false }: ButtonElementProps) {
+export const ButtonElement = memo(function ButtonElement({ element, onButtonClick, onVisibilityChange, isInBuilder = false, isActive = false, showBlockedAnimation = false }: ButtonElementProps) {
   const config = normalizeUiConfig(element.uiConfig);
   const {
     title = 'Clique aqui',
@@ -173,18 +174,34 @@ export const ButtonElement = memo(function ButtonElement({ element, onButtonClic
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      style={style}
-      className={cn(
-        'font-medium text-center',
-        pulseAnimation && !isInBuilder && 'animate-button-pulse'
-      )}
-      disabled={isInBuilder}
-    >
-      {title}
-    </button>
+    <>
+      <style>{`
+        @keyframes blocked-pulse {
+          0%, 100% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+          }
+          50% {
+            box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+          }
+        }
+        .blocked-scroll-animation {
+          animation: blocked-pulse 0.5s ease-in-out 3;
+        }
+      `}</style>
+      <button
+        type="button"
+        onClick={handleClick}
+        style={style}
+        className={cn(
+          'font-medium text-center',
+          pulseAnimation && !isInBuilder && 'animate-button-pulse',
+          showBlockedAnimation && !isInBuilder && 'blocked-scroll-animation'
+        )}
+        disabled={isInBuilder}
+      >
+        {title}
+      </button>
+    </>
   );
 });
 

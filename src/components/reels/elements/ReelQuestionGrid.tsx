@@ -25,9 +25,10 @@ interface ReelQuestionGridProps {
   onSelectionChange?: (selectedIds: string[]) => void;
   onVisibilityChange?: (elementId: string, isVisible: boolean, shouldHideSocial: boolean) => void;
   isActive?: boolean;
+  showBlockedAnimation?: boolean;
 }
 
-export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNextSlide, onItemAction, onSelectionChange, onVisibilityChange, isActive = false }: ReelQuestionGridProps) {
+export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNextSlide, onItemAction, onSelectionChange, onVisibilityChange, isActive = false, showBlockedAnimation = false }: ReelQuestionGridProps) {
   const config = normalizeUiConfig(element.uiConfig);
   const {
     items = [],
@@ -252,7 +253,20 @@ export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNext
 
   return (
     <>
-      <div style={containerStyle}>
+      <style>{`
+        @keyframes blocked-pulse {
+          0%, 100% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+          }
+          50% {
+            box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+          }
+        }
+        .blocked-scroll-animation {
+          animation: blocked-pulse 0.5s ease-in-out 3;
+        }
+      `}</style>
+      <div style={containerStyle} className={showBlockedAnimation ? 'blocked-scroll-animation' : ''}>
         {normalizedItems.length === 0 ? (
           <div style={getCardStyle('')}>
             <p style={{ color: textColor, fontSize: '14px', opacity: 0.6 }}>
