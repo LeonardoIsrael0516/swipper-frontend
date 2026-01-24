@@ -556,14 +556,15 @@ export function SwipperPreview() {
   const PHONE_ASPECT_RATIO = 9 / 16;
 
   return (
-    <div className="relative w-full max-w-sm mx-auto">
+    <div className="relative w-full max-w-sm mx-auto flex justify-center items-center">
       {/* Phone Frame - Proporção 9:16 (1080x1920) */}
       <div 
-        className="relative mx-auto rounded-[3rem] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-3 shadow-2xl"
+        className="relative rounded-[3rem] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-3 shadow-2xl"
         style={{
           width: `${PHONE_WIDTH}px`,
           height: `${PHONE_HEIGHT}px`,
           aspectRatio: `${PHONE_ASPECT_RATIO}`,
+          margin: '0 auto',
         }}
       >
         {/* Notch */}

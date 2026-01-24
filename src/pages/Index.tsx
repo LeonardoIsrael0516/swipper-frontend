@@ -231,8 +231,8 @@ export default function Index() {
       <section className="lg:hidden -mt-56 sm:-mt-64 pb-6 overflow-x-hidden relative z-10">
         <div className="w-full max-w-full">
           <div className="flex justify-center items-center w-full overflow-x-hidden px-2">
-            <div className="flex justify-center items-center" style={{ width: '100%', maxWidth: '100vw' }}>
-              <div className="scale-[0.65] sm:scale-75 md:scale-90 origin-center flex-shrink-0">
+            <div className="flex justify-center items-center w-full" style={{ maxWidth: '100vw' }}>
+              <div className="scale-[0.75] sm:scale-[0.85] md:scale-90 origin-center flex-shrink-0 mx-auto">
                 <SwipperPreview />
               </div>
             </div>
