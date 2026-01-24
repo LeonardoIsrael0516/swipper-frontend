@@ -43,8 +43,11 @@ const getIconComponent = (iconName: string) => {
 };
 
 // Helper para renderizar ícone de feature
-const renderFeatureIcon = (icon?: string, iconColor?: string) => {
-  if (!icon) return <Check className="w-5 h-5 text-primary" />;
+const renderFeatureIcon = (icon?: string, iconColor?: string, defaultColor?: string) => {
+  if (!icon) {
+    const colorClass = defaultColor || 'text-primary';
+    return <Check className={`w-5 h-5 ${colorClass}`} />;
+  }
   
   const trimmedIcon = String(icon).trim();
   
@@ -69,13 +72,15 @@ const renderFeatureIcon = (icon?: string, iconColor?: string) => {
   const IconComponent = getIconComponent(iconName);
   if (IconComponent) {
     const Icon = IconComponent;
-    // Usar a cor personalizada se fornecida, caso contrário usar a cor padrão (text-primary)
-    const iconStyle = iconColor ? { color: iconColor } : undefined;
-    return <Icon className="w-5 h-5" style={iconStyle} />;
+    // Usar a cor personalizada se fornecida, caso contrário usar a cor padrão
+    const iconStyle = iconColor ? { color: iconColor } : (defaultColor ? undefined : undefined);
+    const colorClass = !iconColor && defaultColor ? defaultColor : '';
+    return <Icon className={`w-5 h-5 ${colorClass}`} style={iconStyle} />;
   }
   
   // Fallback - retornar checkmark
-  return <Check className="w-5 h-5 text-primary" />;
+  const colorClass = defaultColor || 'text-primary';
+  return <Check className={`w-5 h-5 ${colorClass}`} />;
 };
 
 // Helper para formatar preço
@@ -948,41 +953,45 @@ export default function Index() {
                     key={plans[currentPlanIndex].id}
                     className={`relative p-4 md:p-6 rounded-2xl transition-all duration-300 ${
                       plans[currentPlanIndex].isPopular
-                        ? 'glass-card border-2 border-primary/50 shadow-xl shadow-primary/20'
+                        ? `border-2 border-primary/50 shadow-xl shadow-primary/20 ${theme === 'light' ? 'bg-black text-white' : 'glass-card'}`
                         : 'glass-card border border-border/50 hover:border-primary/30'
                     }`}
                   >
                     <div className="mb-3 md:mb-4">
-                      <h3 className="font-display text-lg md:text-xl lg:text-2xl font-bold mb-1 md:mb-2">{plans[currentPlanIndex].title}</h3>
+                      <h3 className={`font-display text-lg md:text-xl lg:text-2xl font-bold mb-1 md:mb-2 ${plans[currentPlanIndex].isPopular && theme === 'light' ? 'text-white' : ''}`}>{plans[currentPlanIndex].title}</h3>
                       {plans[currentPlanIndex].description && (
-                        <p className="text-xs md:text-sm text-muted-foreground">{plans[currentPlanIndex].description}</p>
+                        <p className={`text-xs md:text-sm ${plans[currentPlanIndex].isPopular && theme === 'light' ? 'text-white/80' : 'text-muted-foreground'}`}>{plans[currentPlanIndex].description}</p>
                       )}
                     </div>
 
                     <div className="mb-4 md:mb-6">
                       <div className="flex items-baseline gap-2">
-                        <span className="text-2xl md:text-3xl lg:text-4xl font-bold">
+                        <span className={`text-2xl md:text-3xl lg:text-4xl font-bold ${plans[currentPlanIndex].isPopular && theme === 'light' ? 'text-white' : ''}`}>
                           {plans[currentPlanIndex].price === 0 ? 'Grátis' : formatPrice(plans[currentPlanIndex].price)}
                         </span>
                         {plans[currentPlanIndex].price > 0 && (
-                          <span className="text-xs md:text-sm text-muted-foreground">/mês</span>
+                          <span className={`text-xs md:text-sm ${plans[currentPlanIndex].isPopular && theme === 'light' ? 'text-white/70' : 'text-muted-foreground'}`}>/mês</span>
                         )}
                       </div>
                     </div>
 
                     <div className="space-y-2 mb-4 md:mb-6">
-                      {plans[currentPlanIndex].features.slice(0, 4).map((feature, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          {feature.icon ? (
-                            <div className="flex-shrink-0">
-                              {renderFeatureIcon(feature.icon, feature.iconColor)}
-                            </div>
-                          ) : (
-                            <CheckCircle2 className="w-3 h-3 md:w-4 md:h-4 text-primary flex-shrink-0" />
-                          )}
-                          <p className="text-xs md:text-sm text-muted-foreground">{feature.text}</p>
-                        </div>
-                      ))}
+                      {plans[currentPlanIndex].features.map((feature, index) => {
+                        const isPopularLight = plans[currentPlanIndex].isPopular && theme === 'light';
+                        const iconDefaultColor = isPopularLight ? 'text-white' : 'text-primary';
+                        return (
+                          <div key={index} className="flex items-center gap-2">
+                            {feature.icon ? (
+                              <div className="flex-shrink-0">
+                                {renderFeatureIcon(feature.icon, feature.iconColor, iconDefaultColor)}
+                              </div>
+                            ) : (
+                              <CheckCircle2 className={`w-3 h-3 md:w-4 md:h-4 flex-shrink-0 ${iconDefaultColor}`} />
+                            )}
+                            <p className={`text-xs md:text-sm ${isPopularLight ? 'text-white/90' : 'text-muted-foreground'}`}>{feature.text}</p>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <Button
@@ -1085,20 +1094,24 @@ export default function Index() {
                     </div>
 
                     <div className="space-y-3 mb-8">
-                      {plan.features.map((feature, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          {feature.icon ? (
-                            <div className="flex-shrink-0">
-                              {renderFeatureIcon(feature.icon, feature.iconColor)}
-                            </div>
-                          ) : (
-                            <Check className="w-4 h-4 text-primary flex-shrink-0" />
-                          )}
-                          <p className={`text-sm ${plan.isPopular && theme === 'light' ? 'text-white/90' : 'text-muted-foreground'}`}>
-                            {feature.text}
-                          </p>
-                        </div>
-                      ))}
+                      {plan.features.map((feature, index) => {
+                        const isPopularLight = plan.isPopular && theme === 'light';
+                        const iconDefaultColor = isPopularLight ? 'text-white' : 'text-primary';
+                        return (
+                          <div key={index} className="flex items-center gap-2">
+                            {feature.icon ? (
+                              <div className="flex-shrink-0">
+                                {renderFeatureIcon(feature.icon, feature.iconColor, iconDefaultColor)}
+                              </div>
+                            ) : (
+                              <Check className={`w-4 h-4 flex-shrink-0 ${iconDefaultColor}`} />
+                            )}
+                            <p className={`text-sm ${isPopularLight ? 'text-white/90' : 'text-muted-foreground'}`}>
+                              {feature.text}
+                            </p>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <Button
