@@ -67,11 +67,20 @@ export default function VerifyEmail() {
   const handleResend = async () => {
     setIsResending(true);
     try {
-      await api.post('/auth/resend-verification');
+      await api.resendVerificationEmail();
       toast.success('Email de verificação reenviado! Verifique sua caixa de entrada.');
     } catch (err: any) {
       const message = err?.response?.data?.message || err?.message || 'Erro ao reenviar email';
-      toast.error(message);
+      // Melhorar mensagem de erro para ser mais clara
+      let errorMessage = message;
+      if (message.includes('No active email provider') || message.includes('Nenhum provedor')) {
+        errorMessage = 'Serviço de email não configurado. Entre em contato com o suporte.';
+      } else if (message.includes('Email já foi verificado')) {
+        errorMessage = 'Seu email já foi verificado. Você pode acessar o dashboard.';
+      } else if (err?.response?.status === 401) {
+        errorMessage = 'Você precisa estar logado para reenviar o email. Faça login primeiro.';
+      }
+      toast.error(errorMessage);
     } finally {
       setIsResending(false);
     }

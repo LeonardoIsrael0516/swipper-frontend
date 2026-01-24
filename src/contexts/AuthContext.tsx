@@ -8,6 +8,7 @@ export interface User {
   role: 'USER' | 'REELS';
   avatar?: string | null;
   emailVerified?: boolean;
+  planId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

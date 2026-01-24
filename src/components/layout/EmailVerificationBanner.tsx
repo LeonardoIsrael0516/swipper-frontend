@@ -58,7 +58,21 @@ export function EmailVerificationBanner() {
       await api.resendVerificationEmail();
       toast.success('Email de verificação reenviado! Verifique sua caixa de entrada.');
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Erro ao reenviar email de verificação.');
+      const message = err?.response?.data?.message || err?.message || 'Erro ao reenviar email de verificação.';
+      // Melhorar mensagem de erro para ser mais clara
+      let errorMessage = message;
+      if (message.includes('No active email provider') || message.includes('Nenhum provedor')) {
+        errorMessage = 'Serviço de email não configurado. Entre em contato com o suporte.';
+      } else if (message.includes('Email já foi verificado')) {
+        errorMessage = 'Seu email já foi verificado.';
+        // Atualizar usuário para refletir a verificação
+        refreshUser().catch(() => {});
+      } else if (err?.response?.status === 401) {
+        errorMessage = 'Você precisa estar logado para reenviar o email.';
+      } else if (err?.response?.status === 429) {
+        errorMessage = 'Você já solicitou o reenvio recentemente. Tente novamente em 10 minutos.';
+      }
+      toast.error(errorMessage);
     } finally {
       setIsResending(false);
     }
