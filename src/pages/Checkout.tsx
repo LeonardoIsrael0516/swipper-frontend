@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTracking } from '@/contexts/TrackingContext';
 import { Loader2, CreditCard, QrCode, Lock, Check, ArrowLeft, Shield, CheckCircle2 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { formatCPF, formatPhone, formatCEP, validateCPF, validateCEP } from '@/lib/validation';
 import { Plan } from '@/types/plan';
 
@@ -24,6 +25,48 @@ const BRAZIL_STATES = [
   'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
   'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
 ];
+
+// Helper para obter componente de ícone Lucide (mesma lógica do IconEmojiSelector)
+const getIconComponent = (iconName: string) => {
+  const IconComponent = (LucideIcons as any)[iconName];
+  return IconComponent || null;
+};
+
+// Helper para renderizar ícone de feature
+const renderFeatureIcon = (icon?: string, iconColor?: string) => {
+  if (!icon) return <Check className="w-5 h-5 text-primary" />;
+  
+  const trimmedIcon = String(icon).trim();
+  
+  // Se começar com http:// ou https:// ou /, é URL
+  if (trimmedIcon.startsWith('http://') || trimmedIcon.startsWith('https://') || trimmedIcon.startsWith('/')) {
+    return <img src={trimmedIcon} alt="" className="w-5 h-5 object-cover rounded" />;
+  }
+  
+  // Se começar com "icon:", remover o prefixo
+  let iconName = trimmedIcon;
+  if (trimmedIcon.startsWith('icon:')) {
+    iconName = trimmedIcon.substring(5).trim();
+  }
+  
+  // Se for emoji (regex simples)
+  const emojiRegex = /^[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u;
+  if (emojiRegex.test(iconName)) {
+    return <span className="text-xl">{iconName}</span>;
+  }
+  
+  // Caso contrário, tratar como nome de ícone Lucide
+  const IconComponent = getIconComponent(iconName);
+  if (IconComponent) {
+    const Icon = IconComponent;
+    // Usar a cor personalizada se fornecida, caso contrário usar a cor padrão (text-primary)
+    const iconStyle = iconColor ? { color: iconColor } : undefined;
+    return <Icon className="w-5 h-5" style={iconStyle} />;
+  }
+  
+  // Fallback - retornar checkmark
+  return <Check className="w-5 h-5 text-primary" />;
+};
 
 // Função para retornar o ícone da bandeira usando os SVGs da pasta public
 const getCardBrandIcon = (brand: string) => {
@@ -1132,7 +1175,13 @@ export default function Checkout() {
                 <div className="space-y-2 pt-4 border-t">
                   {plan.features.map((feature: any, index: number) => (
                     <div key={index} className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-primary" />
+                      {feature.icon ? (
+                        <div className="flex-shrink-0">
+                          {renderFeatureIcon(feature.icon, feature.iconColor)}
+                        </div>
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
+                      )}
                       <span className="text-sm">{feature.text || feature}</span>
                     </div>
                   ))}
