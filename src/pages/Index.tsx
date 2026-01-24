@@ -1163,7 +1163,7 @@ export default function Index() {
                 <h3 className="font-display text-lg font-bold mb-4">Redes Sociais</h3>
                 <div className="flex items-center gap-4">
                   <a
-                    href="https://instagram.com"
+                    href="https://www.instagram.com/swipper.me"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-10 h-10 rounded-lg bg-primary/10 hover:bg-primary/20 flex items-center justify-center text-primary transition-all duration-300 hover:scale-110"
@@ -1179,13 +1179,6 @@ export default function Index() {
                     aria-label="LinkedIn"
                   >
                     <Linkedin className="w-5 h-5" />
-                  </a>
-                  <a
-                    href="mailto:contato@swipper.com"
-                    className="w-10 h-10 rounded-lg bg-primary/10 hover:bg-primary/20 flex items-center justify-center text-primary transition-all duration-300 hover:scale-110"
-                    aria-label="Email"
-                  >
-                    <Mail className="w-5 h-5" />
                   </a>
                 </div>
               </div>
