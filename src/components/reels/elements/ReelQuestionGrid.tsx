@@ -284,6 +284,7 @@ export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNext
                   style={getCardStyle(item.id)}
                   onClick={() => handleItemClick(item.id)}
                   role="button"
+                  data-interactive="true"
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -293,7 +294,7 @@ export const ReelQuestionGrid = memo(function ReelQuestionGrid({ element, onNext
                   }}
                   aria-pressed={isSelected}
                   aria-label={`${item.title || 'Item'}. ${isSelected ? 'Selecionado' : 'Não selecionado'}`}
-                  className="hover:opacity-90 active:scale-[0.98]"
+                  className={`hover:opacity-90 active:scale-[0.98] ${showBlockedAnimation && !isSelected ? 'animate-button-blocked' : ''}`}
                 >
                   {/* Container da Imagem */}
                   <div style={imageContainerStyle}>

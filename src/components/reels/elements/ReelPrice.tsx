@@ -113,6 +113,10 @@ export const ReelPrice = memo(function ReelPrice({ element, onButtonClick, class
       // Validar URL antes de abrir
       try {
         const urlObj = new URL(finalUrl);
+        // Remover parâmetros UTM da URL
+        const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+        utmParams.forEach(param => urlObj.searchParams.delete(param));
+        
         if (buttonOpenInNewTab) {
           window.open(urlObj.href, '_blank', 'noopener,noreferrer');
         } else {

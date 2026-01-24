@@ -1,6 +1,7 @@
 import { useState, useEffect, memo, useRef } from 'react';
 import { SlideElement } from '@/contexts/BuilderContext';
 import * as LucideIcons from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
 const normalizeUiConfig = (uiConfig: any): any => {
@@ -437,6 +438,7 @@ export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNe
                   style={getItemStyle(item.id)}
                   onClick={() => handleItemClick(item.id)}
                   role="button"
+                  data-interactive="true"
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -446,7 +448,10 @@ export const ReelQuestionnaire = memo(function ReelQuestionnaire({ element, onNe
                   }}
                   aria-pressed={isSelected}
                   aria-label={`${item.title || 'Item'}. ${isSelected ? 'Selecionado' : 'Não selecionado'}`}
-                  className="hover:opacity-90 active:scale-[0.98]"
+                  className={cn(
+                    "hover:opacity-90 active:scale-[0.98]",
+                    showBlockedAnimation && !isSelected && "animate-button-blocked"
+                  )}
                 >
                   {/* Ícone à esquerda */}
                   <div style={{ flexShrink: 0 }}>

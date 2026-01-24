@@ -120,6 +120,10 @@ export const ReelPlans = memo(function ReelPlans({ element, onButtonClick, class
       
       try {
         const urlObj = new URL(finalUrl);
+        // Remover parâmetros UTM da URL
+        const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+        utmParams.forEach(param => urlObj.searchParams.delete(param));
+        
         if (selectedPlan.buttonOpenInNewTab !== false) {
           window.open(urlObj.href, '_blank', 'noopener,noreferrer');
         } else {

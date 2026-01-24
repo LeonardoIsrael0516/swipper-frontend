@@ -1217,9 +1217,10 @@ export default function PublicQuiz() {
     let isTouchOnInteractiveElement = false;
     
     const handleTouchStart = (e: TouchEvent) => {
-      // Verificar se o toque está em um elemento interativo (botão, link, etc)
+      // Verificar se o toque está em um elemento interativo (botão, link, question item, etc)
       const target = e.target as HTMLElement;
-      const isInteractive = target.closest('button, a, [role="button"], input, select, textarea, [onclick]');
+      // Incluir elementos de question/questionnaire/grid que são clicáveis
+      const isInteractive = target.closest('button, a, [role="button"], input, select, textarea, [onclick], [data-question-item], [data-question-grid-item], [data-interactive]');
       isTouchOnInteractiveElement = !!isInteractive;
       
       if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
@@ -1232,8 +1233,12 @@ export default function PublicQuiz() {
     };
 
     const preventTouch = (e: TouchEvent) => {
+      // Verificar novamente se o toque está em um elemento interativo (pode ter mudado)
+      const target = e.target as HTMLElement;
+      const isInteractive = target.closest('button, a, [role="button"], input, select, textarea, [onclick], [data-question-item], [data-question-grid-item], [data-interactive]');
+      
       // Se o toque está em um elemento interativo, não bloquear (permitir clique)
-      if (isTouchOnInteractiveElement) {
+      if (isTouchOnInteractiveElement || isInteractive) {
         return;
       }
       
@@ -1248,7 +1253,8 @@ export default function PublicQuiz() {
         
         // Se o movimento é principalmente horizontal ou muito rápido (tap), não bloquear
         // Permitir taps e movimentos horizontais
-        if (Math.abs(deltaX) > Math.abs(deltaY) || deltaTime < 100) {
+        // Aumentar tolerância de tempo para taps (150ms) e movimento horizontal
+        if (Math.abs(deltaX) > Math.abs(deltaY) || deltaTime < 150 || Math.abs(deltaY) < 5) {
           return;
         }
         
