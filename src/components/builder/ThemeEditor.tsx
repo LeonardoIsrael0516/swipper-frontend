@@ -24,6 +24,10 @@ export function ThemeEditor() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   
+  // Refs para rastrear quando estamos editando
+  const isEditingSeoTitleRef = useRef(false);
+  const isEditingSeoDescriptionRef = useRef(false);
+  
   // Estados para configurações sociais
   const [socialConfig, setSocialConfig] = useState<SocialConfig>({
     enabled: reel?.socialConfig?.enabled || false,
@@ -41,9 +45,14 @@ export function ThemeEditor() {
   });
 
   // Sincronizar estado quando reel mudar
+  // Mas apenas se não estivermos editando ativamente
   useEffect(() => {
-    setSeoTitle(reel?.seoTitle || '');
-    setSeoDescription(reel?.seoDescription || '');
+    if (!isEditingSeoTitleRef.current) {
+      setSeoTitle(reel?.seoTitle || '');
+    }
+    if (!isEditingSeoDescriptionRef.current) {
+      setSeoDescription(reel?.seoDescription || '');
+    }
     setFaviconUrl(reel?.faviconUrl || '');
     setShowProgressBar(reel?.showProgressBar || false);
     if (reel?.socialConfig) {
@@ -225,7 +234,18 @@ export function ThemeEditor() {
           id="seoTitle"
           type="text"
           value={seoTitle}
-          onChange={(e) => setSeoTitle(e.target.value)}
+          onChange={(e) => {
+            isEditingSeoTitleRef.current = true;
+            setSeoTitle(e.target.value);
+          }}
+          onFocus={() => {
+            isEditingSeoTitleRef.current = true;
+          }}
+          onBlur={() => {
+            setTimeout(() => {
+              isEditingSeoTitleRef.current = false;
+            }, 200);
+          }}
           placeholder="Título que aparecerá na aba do navegador"
           maxLength={60}
           className="w-full"
@@ -241,7 +261,18 @@ export function ThemeEditor() {
         <Textarea
           id="seoDescription"
           value={seoDescription}
-          onChange={(e) => setSeoDescription(e.target.value)}
+          onChange={(e) => {
+            isEditingSeoDescriptionRef.current = true;
+            setSeoDescription(e.target.value);
+          }}
+          onFocus={() => {
+            isEditingSeoDescriptionRef.current = true;
+          }}
+          onBlur={() => {
+            setTimeout(() => {
+              isEditingSeoDescriptionRef.current = false;
+            }, 200);
+          }}
           placeholder="Descrição que aparecerá nos resultados de busca"
           maxLength={160}
           rows={4}
