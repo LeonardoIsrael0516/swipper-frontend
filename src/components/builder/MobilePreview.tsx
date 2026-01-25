@@ -194,6 +194,7 @@ export function MobilePreview() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [spaceUsage, setSpaceUsage] = useState(0);
   const [availableHeight, setAvailableHeight] = useState(AVAILABLE_HEIGHT);
+  const [previewSize, setPreviewSize] = useState({ width: 480, height: 819 });
   
   // Calcular índice do slide atual para a barra de progresso
   const currentPreviewSlide = useMemo(() => {
@@ -253,6 +254,56 @@ export function MobilePreview() {
     }
 
     return () => resizeObserver.disconnect();
+  }, [isMobile]);
+
+  // Calcular tamanho do preview no desktop baseado no espaço disponível
+  useEffect(() => {
+    if (isMobile || !containerRef.current) {
+      return;
+    }
+
+    const updatePreviewSize = () => {
+      if (containerRef.current) {
+        const container = containerRef.current;
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+        
+        // Proporção do preview: 9:15.35
+        const aspectRatio = 9 / 15.35;
+        
+        // Calcular largura máxima baseada na altura disponível
+        const maxWidthFromHeight = containerHeight * aspectRatio;
+        
+        // Calcular altura máxima baseada na largura disponível
+        const maxHeightFromWidth = containerWidth / aspectRatio;
+        
+        // Usar o menor dos dois para manter a proporção
+        let width = Math.min(480, containerWidth, maxWidthFromHeight);
+        let height = width / aspectRatio;
+        
+        // Se a altura calculada for maior que o disponível, ajustar pela altura
+        if (height > containerHeight) {
+          height = containerHeight;
+          width = height * aspectRatio;
+        }
+        
+        setPreviewSize({ width, height });
+      }
+    };
+
+    updatePreviewSize();
+    const resizeObserver = new ResizeObserver(updatePreviewSize);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    // Também observar mudanças na janela
+    window.addEventListener('resize', updatePreviewSize);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updatePreviewSize);
+    };
   }, [isMobile]);
 
   // Medir altura do conteúdo e atualizar disponibilidade de espaço
@@ -599,10 +650,8 @@ export function MobilePreview() {
             aspectRatio: '9/15.35',
             overflow: 'hidden',
           } : {
-            width: '100%',
-            height: '100%',
-            maxWidth: '480px',
-            maxHeight: '100%',
+            width: `${previewSize.width}px`,
+            height: `${previewSize.height}px`,
             aspectRatio: '9/15.35',
           }}
         >
