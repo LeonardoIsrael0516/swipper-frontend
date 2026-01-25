@@ -265,36 +265,53 @@ export function MobilePreview() {
     const updatePreviewSize = () => {
       if (containerRef.current) {
         const container = containerRef.current;
-        const containerWidth = container.clientWidth;
-        const containerHeight = container.clientHeight;
+        // Pegar o container pai que tem o padding
+        const parentContainer = container.parentElement;
+        if (!parentContainer) return;
+        
+        // Obter dimensões do container pai (que já tem padding aplicado)
+        const parentWidth = parentContainer.clientWidth;
+        const parentHeight = parentContainer.clientHeight;
         
         // Proporção do preview: 9:15.35
         const aspectRatio = 9 / 15.35;
         
         // Calcular largura máxima baseada na altura disponível
-        const maxWidthFromHeight = containerHeight * aspectRatio;
+        const maxWidthFromHeight = parentHeight * aspectRatio;
         
         // Calcular altura máxima baseada na largura disponível
-        const maxHeightFromWidth = containerWidth / aspectRatio;
+        const maxHeightFromWidth = parentWidth / aspectRatio;
         
-        // Usar o menor dos dois para manter a proporção
-        let width = Math.min(480, containerWidth, maxWidthFromHeight);
+        // Usar o menor dos dois para manter a proporção, mas garantir mínimo de 300px de largura
+        let width = Math.max(300, Math.min(480, parentWidth, maxWidthFromHeight));
         let height = width / aspectRatio;
         
         // Se a altura calculada for maior que o disponível, ajustar pela altura
-        if (height > containerHeight) {
-          height = containerHeight;
+        if (height > parentHeight) {
+          height = parentHeight;
           width = height * aspectRatio;
+          // Garantir que a largura não fique muito pequena
+          if (width < 300) {
+            width = 300;
+            height = width / aspectRatio;
+          }
         }
         
         setPreviewSize({ width, height });
       }
     };
 
-    updatePreviewSize();
-    const resizeObserver = new ResizeObserver(updatePreviewSize);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
+    // Aguardar um frame para garantir que o DOM está renderizado
+    requestAnimationFrame(() => {
+      updatePreviewSize();
+    });
+    
+    const resizeObserver = new ResizeObserver(() => {
+      requestAnimationFrame(updatePreviewSize);
+    });
+    
+    if (containerRef.current?.parentElement) {
+      resizeObserver.observe(containerRef.current.parentElement);
     }
 
     // Também observar mudanças na janela
@@ -639,7 +656,7 @@ export function MobilePreview() {
 
   return (
     <ReelSoundProvider>
-      <div ref={containerRef} className={`flex items-center justify-center h-full w-full ${isMobile ? '' : 'p-4 md:p-6'}`}>
+      <div ref={containerRef} className={`flex items-center justify-center h-full w-full ${isMobile ? '' : 'p-2 sm:p-4 md:p-6'}`}>
         <div 
           className={`relative overflow-hidden ${!isMobile ? 'rounded-2xl' : ''}`}
           style={isMobile ? {
