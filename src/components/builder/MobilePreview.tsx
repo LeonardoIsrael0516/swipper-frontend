@@ -588,7 +588,7 @@ export function MobilePreview() {
 
   return (
     <ReelSoundProvider>
-      <div ref={containerRef} className={`flex items-center justify-center h-full w-full ${isMobile ? '' : 'p-6'}`}>
+      <div ref={containerRef} className={`flex items-center justify-center h-full w-full ${isMobile ? '' : 'p-4 md:p-6'}`}>
         <div 
           className={`relative overflow-hidden ${!isMobile ? 'rounded-2xl' : ''}`}
           style={isMobile ? {
@@ -599,8 +599,11 @@ export function MobilePreview() {
             aspectRatio: '9/15.35',
             overflow: 'hidden',
           } : {
-            width: '480px',
-            height: '819px',
+            width: '100%',
+            height: '100%',
+            maxWidth: '480px',
+            maxHeight: '100%',
+            aspectRatio: '9/15.35',
           }}
         >
           {/* Outer glow effect - apenas no desktop */}

@@ -179,22 +179,12 @@ function BuilderContent() {
     );
   }
 
-  // Renderizar FlowPage quando aba flow estiver ativa
-  if (selectedTab === 'flow') {
+  // Renderizar FlowPage quando aba flow estiver ativa (apenas desktop)
+  if (selectedTab === 'flow' && !isMobile) {
     return (
       <div className="flex flex-col h-screen bg-background">
         <BuilderHeader />
         <FlowPage />
-      </div>
-    );
-  }
-
-  // Renderizar SettingsPage quando aba settings estiver ativa
-  if (selectedTab === 'settings') {
-    return (
-      <div className="flex flex-col h-screen bg-background">
-        <BuilderHeader />
-        <SettingsPage />
       </div>
     );
   }
@@ -244,6 +234,16 @@ function BuilderContent() {
     );
   }
 
+  // Renderizar SettingsPage quando aba settings estiver ativa (apenas desktop)
+  if (selectedTab === 'settings' && !isMobile) {
+    return (
+      <div className="flex flex-col h-screen bg-background">
+        <BuilderHeader />
+        <SettingsPage />
+      </div>
+    );
+  }
+
   // Layout Desktop (mantém layout atual)
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -255,7 +255,7 @@ function BuilderContent() {
           <ElementsPalette />
         </div>
         {/* Center: Preview */}
-        <div className="flex-1 min-w-[430px] flex-shrink-0 overflow-auto flex items-center justify-center">
+        <div className="flex-1 min-w-0 flex-shrink-0 overflow-auto flex items-center justify-center">
           <MobilePreview />
         </div>
         {/* Right: Config Panel */}
