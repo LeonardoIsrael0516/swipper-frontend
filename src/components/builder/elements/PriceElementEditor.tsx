@@ -396,10 +396,24 @@ export function PriceElementEditor({ element, tab }: PriceElementEditorProps) {
       id: benefit.id,
     });
 
+    // Estado local para o input de texto para evitar perda de foco
+    const [localText, setLocalText] = useState(benefit.text || '');
+
+    // Sincronizar estado local quando o benefício mudar externamente
+    useEffect(() => {
+      setLocalText(benefit.text || '');
+    }, [benefit.text]);
+
     const style = {
       transform: CSS.Transform.toString(transform),
       transition,
       opacity: isDragging ? 0.5 : 1,
+    };
+
+    const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newValue = e.target.value;
+      setLocalText(newValue);
+      updateBenefit(benefit.id, { text: newValue });
     };
 
     return (
@@ -419,8 +433,8 @@ export function PriceElementEditor({ element, tab }: PriceElementEditorProps) {
             <div>
               <Label>Texto do Benefício</Label>
               <Input
-                value={benefit.text || ''}
-                onChange={(e) => updateBenefit(benefit.id, { text: e.target.value })}
+                value={localText}
+                onChange={handleTextChange}
                 placeholder="Texto do benefício"
                 className="mt-1"
               />
