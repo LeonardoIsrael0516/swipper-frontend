@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -282,40 +282,42 @@ export function PriceElementEditor({ element, tab }: PriceElementEditorProps) {
     element.id,
   ]);
 
-  const addBenefit = () => {
+  const addBenefit = useCallback(() => {
     const newBenefit = {
       id: generateId(),
       text: 'Novo benefício',
       icon: '',
     };
-    setBenefits([...benefits, newBenefit]);
-  };
+    setBenefits((prev) => [...prev, newBenefit]);
+  }, []);
 
-  const removeBenefit = (benefitId: string) => {
-    setBenefits(benefits.filter((benefit: any) => benefit.id !== benefitId));
-  };
+  const removeBenefit = useCallback((benefitId: string) => {
+    setBenefits((prev) => prev.filter((benefit: any) => benefit.id !== benefitId));
+  }, []);
 
-  const duplicateBenefit = (benefitId: string) => {
-    const benefitToDuplicate = benefits.find((benefit: any) => benefit.id === benefitId);
-    if (!benefitToDuplicate) return;
+  const duplicateBenefit = useCallback((benefitId: string) => {
+    setBenefits((prev) => {
+      const benefitToDuplicate = prev.find((benefit: any) => benefit.id === benefitId);
+      if (!benefitToDuplicate) return prev;
 
-    const duplicatedBenefit = {
-      ...benefitToDuplicate,
-      id: generateId(),
-      text: `${benefitToDuplicate.text || 'Benefício'} (cópia)`,
-    };
+      const duplicatedBenefit = {
+        ...benefitToDuplicate,
+        id: generateId(),
+        text: `${benefitToDuplicate.text || 'Benefício'} (cópia)`,
+      };
 
-    const benefitIndex = benefits.findIndex((benefit: any) => benefit.id === benefitId);
-    const newBenefits = [...benefits];
-    newBenefits.splice(benefitIndex + 1, 0, duplicatedBenefit);
-    setBenefits(newBenefits);
-  };
+      const benefitIndex = prev.findIndex((benefit: any) => benefit.id === benefitId);
+      const newBenefits = [...prev];
+      newBenefits.splice(benefitIndex + 1, 0, duplicatedBenefit);
+      return newBenefits;
+    });
+  }, []);
 
-  const updateBenefit = (benefitId: string, updates: Partial<any>) => {
-    setBenefits(benefits.map((benefit: any) => 
+  const updateBenefit = useCallback((benefitId: string, updates: Partial<any>) => {
+    setBenefits((prev) => prev.map((benefit: any) => 
       benefit.id === benefitId ? { ...benefit, ...updates } : benefit
     ));
-  };
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -390,19 +392,25 @@ export function PriceElementEditor({ element, tab }: PriceElementEditorProps) {
     }
   };
 
-  // Componente SortableBenefitItem
-  function SortableBenefitItem({ benefit, benefitIndex, updateBenefit, removeBenefit, duplicateBenefit }: any) {
+  // Componente SortableBenefitItem (memoizado para evitar recriações)
+  const SortableBenefitItem = memo(function SortableBenefitItem({ benefit, benefitIndex, updateBenefit, removeBenefit, duplicateBenefit }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
       id: benefit.id,
     });
 
     // Estado local para o input de texto para evitar perda de foco
     const [localText, setLocalText] = useState(benefit.text || '');
+    const inputRef = useRef<HTMLInputElement>(null);
+    const isEditingRef = useRef(false);
+    const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Sincronizar estado local quando o benefício mudar externamente
+    // Mas apenas se não estivermos editando ativamente
     useEffect(() => {
-      setLocalText(benefit.text || '');
-    }, [benefit.text]);
+      if (!isEditingRef.current && benefit.text !== localText) {
+        setLocalText(benefit.text || '');
+      }
+    }, [benefit.text, localText]);
 
     const style = {
       transform: CSS.Transform.toString(transform),
@@ -413,8 +421,46 @@ export function PriceElementEditor({ element, tab }: PriceElementEditorProps) {
     const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const newValue = e.target.value;
       setLocalText(newValue);
-      updateBenefit(benefit.id, { text: newValue });
+      isEditingRef.current = true;
+      
+      // Limpar timeout anterior se existir
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+      
+      // Atualizar com debounce para evitar muitas atualizações
+      updateTimeoutRef.current = setTimeout(() => {
+        updateBenefit(benefit.id, { text: newValue });
+        isEditingRef.current = false;
+      }, 300);
     };
+
+    const handleFocus = () => {
+      isEditingRef.current = true;
+    };
+
+    const handleBlur = () => {
+      // Limpar timeout se ainda estiver pendente
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+        updateTimeoutRef.current = null;
+      }
+      
+      isEditingRef.current = false;
+      // Garantir que o valor está sincronizado ao sair do campo
+      if (localText !== benefit.text) {
+        updateBenefit(benefit.id, { text: localText });
+      }
+    };
+
+    // Limpar timeout ao desmontar
+    useEffect(() => {
+      return () => {
+        if (updateTimeoutRef.current) {
+          clearTimeout(updateTimeoutRef.current);
+        }
+      };
+    }, []);
 
     return (
       <div ref={setNodeRef} style={style}>
@@ -433,8 +479,11 @@ export function PriceElementEditor({ element, tab }: PriceElementEditorProps) {
             <div>
               <Label>Texto do Benefício</Label>
               <Input
+                ref={inputRef}
                 value={localText}
                 onChange={handleTextChange}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
                 placeholder="Texto do benefício"
                 className="mt-1"
               />
@@ -472,7 +521,7 @@ export function PriceElementEditor({ element, tab }: PriceElementEditorProps) {
         </AccordionItem>
       </div>
     );
-  }
+  });
 
   if (tab === 'content') {
     return (
