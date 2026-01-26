@@ -59,6 +59,28 @@ export function isInBuilderOrPreview(): boolean {
 }
 
 /**
+ * Detecta se o dispositivo é iOS (iPhone, iPad, iPod)
+ * @returns true se o dispositivo é iOS
+ */
+export function isIOS(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS 13+
+}
+
+/**
+ * Detecta se o navegador é Safari (incluindo iOS Safari)
+ * @returns true se o navegador é Safari
+ */
+export function isSafari(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  const ua = navigator.userAgent.toLowerCase();
+  return ua.includes('safari') && !ua.includes('chrome') && !ua.includes('chromium');
+}
+
+/**
  * Remove parâmetros UTM de uma URL apenas se estivermos no builder/preview
  * Nas páginas reais, mantém UTMs (importantes para tracking)
  * @param url - URL a ser processada

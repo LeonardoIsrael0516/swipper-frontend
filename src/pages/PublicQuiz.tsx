@@ -43,6 +43,7 @@ import { isCustomDomain, normalizeDomain, removeUtmParamsIfNeeded } from '@/lib/
 import DOMPurify from 'dompurify';
 import { useTracking } from '@/contexts/TrackingContext';
 import { getUTM } from '@/lib/tracking';
+import { useWakeLock } from '@/hooks/useWakeLock';
 
 // Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
 // Movida para fora do componente para evitar recriação
@@ -176,9 +177,13 @@ export default function PublicQuiz() {
   const isProgrammaticScrollRef = useRef<boolean>(false);
   const { sendCapiEvent } = useTracking();
   const pixelBlockedRef = useRef<boolean>(false); // Flag para indicar se o pixel foi bloqueado
+  const [isMediaPlaying, setIsMediaPlaying] = useState(false); // Estado para rastrear se há mídia tocando
   
   // Detectar se é domínio personalizado e normalizar o domínio
   const customDomain = isCustomDomain() ? normalizeDomain(window.location.hostname) : null;
+  
+  // Usar wake lock para manter tela acesa quando há mídia tocando
+  useWakeLock(isMediaPlaying);
 
   // Em reels NÃO deve existir scroll interno no slide.
   // Quando o conteúdo não cabe no viewport real do mobile (barras do navegador + safe-area),
@@ -791,6 +796,124 @@ export default function PublicQuiz() {
       };
     }
   }, [reel?.pixelsConfig?.customScripts, reel?.id]);
+
+  // Detectar quando há vídeo ou áudio tocando para manter tela acesa
+  useEffect(() => {
+    const checkMediaPlaying = () => {
+      // Buscar todos os elementos de vídeo e áudio na página
+      const videos = document.querySelectorAll('video');
+      const audios = document.querySelectorAll('audio');
+      
+      // Verificar se algum vídeo ou áudio está tocando
+      let hasPlayingMedia = false;
+      
+      videos.forEach((video) => {
+        if (!video.paused && !video.ended && video.readyState >= 2) {
+          hasPlayingMedia = true;
+        }
+      });
+      
+      audios.forEach((audio) => {
+        if (!audio.paused && !audio.ended && audio.readyState >= 2) {
+          hasPlayingMedia = true;
+        }
+      });
+      
+      setIsMediaPlaying(hasPlayingMedia);
+    };
+
+    // Verificar imediatamente
+    checkMediaPlaying();
+
+    // Adicionar listeners para eventos de play/pause em todos os vídeos e áudios
+    const handleMediaPlay = () => {
+      checkMediaPlaying();
+    };
+
+    const handleMediaPause = () => {
+      checkMediaPlaying();
+    };
+
+    const handleMediaEnded = () => {
+      checkMediaPlaying();
+    };
+
+    // Adicionar listeners a todos os elementos de mídia existentes
+    const videos = document.querySelectorAll('video');
+    const audios = document.querySelectorAll('audio');
+    
+    videos.forEach((video) => {
+      video.addEventListener('play', handleMediaPlay);
+      video.addEventListener('pause', handleMediaPause);
+      video.addEventListener('ended', handleMediaEnded);
+      video.addEventListener('loadeddata', checkMediaPlaying);
+    });
+    
+    audios.forEach((audio) => {
+      audio.addEventListener('play', handleMediaPlay);
+      audio.addEventListener('pause', handleMediaPause);
+      audio.addEventListener('ended', handleMediaEnded);
+      audio.addEventListener('loadeddata', checkMediaPlaying);
+    });
+
+    // Usar MutationObserver para detectar quando novos elementos de mídia são adicionados
+    const observer = new MutationObserver(() => {
+      checkMediaPlaying();
+      
+      // Adicionar listeners aos novos elementos
+      const newVideos = document.querySelectorAll('video');
+      const newAudios = document.querySelectorAll('audio');
+      
+      newVideos.forEach((video) => {
+        if (!video.hasAttribute('data-wakelock-listener')) {
+          video.setAttribute('data-wakelock-listener', 'true');
+          video.addEventListener('play', handleMediaPlay);
+          video.addEventListener('pause', handleMediaPause);
+          video.addEventListener('ended', handleMediaEnded);
+          video.addEventListener('loadeddata', checkMediaPlaying);
+        }
+      });
+      
+      newAudios.forEach((audio) => {
+        if (!audio.hasAttribute('data-wakelock-listener')) {
+          audio.setAttribute('data-wakelock-listener', 'true');
+          audio.addEventListener('play', handleMediaPlay);
+          audio.addEventListener('pause', handleMediaPause);
+          audio.addEventListener('ended', handleMediaEnded);
+          audio.addEventListener('loadeddata', checkMediaPlaying);
+        }
+      });
+    });
+
+    // Observar mudanças no DOM
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    // Verificar periodicamente (fallback caso eventos não sejam disparados)
+    const intervalId = setInterval(checkMediaPlaying, 1000);
+
+    return () => {
+      // Remover listeners
+      videos.forEach((video) => {
+        video.removeEventListener('play', handleMediaPlay);
+        video.removeEventListener('pause', handleMediaPause);
+        video.removeEventListener('ended', handleMediaEnded);
+        video.removeEventListener('loadeddata', checkMediaPlaying);
+      });
+      
+      audios.forEach((audio) => {
+        audio.removeEventListener('play', handleMediaPlay);
+        audio.removeEventListener('pause', handleMediaPause);
+        audio.removeEventListener('ended', handleMediaEnded);
+        audio.removeEventListener('loadeddata', checkMediaPlaying);
+      });
+      
+      observer.disconnect();
+      clearInterval(intervalId);
+    };
+  }, [reel]); // Re-executar quando reel mudar
 
   // Atualizar visita quando sair da página
   useEffect(() => {

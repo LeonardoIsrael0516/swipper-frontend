@@ -3,6 +3,7 @@ import { VolumeX, Loader2 } from 'lucide-react';
 import { useReelSound } from '@/contexts/ReelSoundContext';
 import Hls from 'hls.js';
 import { VideoProgressBar } from './VideoProgressBar';
+import { isIOS, isSafari } from '@/lib/utils';
 
 interface ReelVideoBackgroundProps {
   src: string;
@@ -44,12 +45,34 @@ export function ReelVideoBackground({
   const lastActiveStateRef = useRef<boolean>(false); // Rastrear último estado de isActive
   const [hasAttemptedPlay, setHasAttemptedPlay] = useState(false); // Rastrear se já tentamos tocar
   const hlsRef = useRef<Hls | null>(null); // Referência para instância HLS
+  const globalInteractionListenerRef = useRef<boolean>(false); // Rastrear se já adicionamos listener global
   
   // Contexto global de som
   const { isSoundUnlocked } = useReelSound();
   
+  // Detectar iOS/Safari para aplicar estratégias específicas
+  const isIOSDevice = isIOS();
+  const isSafariBrowser = isSafari();
+  
   // Verificar se é HLS
   const isHLS = src?.endsWith('.m3u8') || false;
+  
+  // Função helper para verificar se o vídeo está visível no viewport
+  const isVideoVisible = (video: HTMLVideoElement): boolean => {
+    if (!video) return false;
+    
+    const rect = video.getBoundingClientRect();
+    const isInViewport = rect.top < window.innerHeight && rect.bottom > 0 &&
+                         rect.left < window.innerWidth && rect.right > 0;
+    
+    // Verificar também se o elemento está visível (não oculto por CSS)
+    const style = window.getComputedStyle(video);
+    const isVisible = style.display !== 'none' && 
+                     style.visibility !== 'hidden' && 
+                     style.opacity !== '0';
+    
+    return isInViewport && isVisible;
+  };
   
   // Lógica de muted:
   // - Se isSoundUnlocked === true: tentar tocar com som
@@ -142,10 +165,32 @@ export function ReelVideoBackground({
       if (isActive && autoplay) {
         // Aguardar que o vídeo esteja pronto antes de tentar tocar
         const attemptPlay = () => {
+          // Verificar visibilidade no iOS
+          if (isIOSDevice && !isVideoVisible(video)) {
+            return;
+          }
+          
           if (video.readyState >= 2 && video.paused) {
-            video.play().catch(() => {
-              // Autoplay pode falhar no iOS até haver interação
-            });
+            // Garantir muted e playsInline antes de tentar tocar
+            const shouldBeMuted = isBlurVersion ? true : !isSoundUnlocked;
+            video.muted = shouldBeMuted;
+            if (shouldBeMuted) {
+              video.setAttribute('muted', '');
+            }
+            video.setAttribute('playsinline', '');
+            video.playsInline = true;
+            
+            video.play()
+              .then(() => {
+                setIsPlaying(true);
+                setHasUserInteracted(true);
+              })
+              .catch(() => {
+                // Autoplay pode falhar no iOS até haver interação
+                if (isIOSDevice && import.meta.env.DEV) {
+                  console.debug('[ReelVideoBackground] HLS autoplay bloqueado no iOS (esperado até primeira interação)');
+                }
+              });
           }
         };
         
@@ -648,6 +693,49 @@ export function ReelVideoBackground({
     }
   }, [isActive, autoplay, isBlurVersion, isSoundUnlocked]); // Incluir isSoundUnlocked para sincronizar muted inicial
 
+  // IntersectionObserver para HLS (especialmente útil no iOS)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isHLS || !isActive || !autoplay || !isIOSDevice) return;
+
+    // Criar observer para detectar quando vídeo HLS fica visível
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio > 0) {
+            // Vídeo está visível, tentar tocar
+            if (video.paused && video.readyState >= 2) {
+              // Garantir muted e playsInline
+              const shouldBeMuted = isBlurVersion ? true : !isSoundUnlocked;
+              video.muted = shouldBeMuted;
+              if (shouldBeMuted) {
+                video.setAttribute('muted', '');
+              }
+              video.setAttribute('playsinline', '');
+              video.playsInline = true;
+              
+              video.play()
+                .then(() => {
+                  setIsPlaying(true);
+                  setHasUserInteracted(true);
+                })
+                .catch(() => {
+                  // Autoplay ainda pode falhar até primeira interação
+                });
+            }
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(video);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isActive, autoplay, isIOSDevice, isBlurVersion, isSoundUnlocked, isHLS]);
+
   // Efeito específico para HLS: tentar tocar quando slide ficar ativo
   useEffect(() => {
     const video = videoRef.current;
@@ -679,7 +767,12 @@ export function ReelVideoBackground({
     const attemptHLSPlay = async () => {
       if (!video || !isActive || !autoplay) return;
       
-      // Garantir muted novamente antes de cada tentativa
+      // Verificar visibilidade no iOS
+      if (isIOSDevice && !isVideoVisible(video)) {
+        return;
+      }
+      
+      // Garantir muted e playsInline ANTES de cada tentativa (CRÍTICO para iOS)
       if (isBlurVersion) {
         video.muted = true;
         video.setAttribute('muted', '');
@@ -692,13 +785,21 @@ export function ReelVideoBackground({
         }
       }
       
-      // Tentar tocar se estiver pausado
-      if (video.paused) {
+      // Garantir playsInline para iOS
+      video.setAttribute('playsinline', '');
+      video.playsInline = true;
+      
+      // Tentar tocar se estiver pausado e pronto
+      if (video.paused && video.readyState >= 2) {
         try {
           await video.play();
           setIsPlaying(true);
+          setHasUserInteracted(true);
         } catch (error) {
-          // Autoplay pode falhar
+          // Autoplay pode falhar no iOS até haver interação
+          if (isIOSDevice && import.meta.env.DEV) {
+            console.debug('[ReelVideoBackground] HLS autoplay bloqueado no iOS (esperado até primeira interação)');
+          }
         }
       }
     };
@@ -734,6 +835,49 @@ export function ReelVideoBackground({
     };
   }, [isActive, autoplay, isSoundUnlocked, isBlurVersion, isHLS]);
 
+  // IntersectionObserver para detectar quando vídeo fica visível (especialmente útil no iOS)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isActive || !autoplay || !isIOSDevice) return;
+
+    // Criar observer para detectar quando vídeo fica visível
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio > 0) {
+            // Vídeo está visível, tentar tocar
+            if (video.paused && video.readyState >= 2) {
+              // Garantir muted e playsInline
+              const shouldBeMuted = isBlurVersion ? true : !isSoundUnlocked;
+              video.muted = shouldBeMuted;
+              if (shouldBeMuted) {
+                video.setAttribute('muted', '');
+              }
+              video.setAttribute('playsinline', '');
+              video.playsInline = true;
+              
+              video.play()
+                .then(() => {
+                  setIsPlaying(true);
+                  setHasUserInteracted(true);
+                })
+                .catch(() => {
+                  // Autoplay ainda pode falhar até primeira interação
+                });
+            }
+          }
+        });
+      },
+      { threshold: 0.1 } // Disparar quando pelo menos 10% do vídeo estiver visível
+    );
+
+    observer.observe(video);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isActive, autoplay, isIOSDevice, isBlurVersion, isSoundUnlocked, isHLS]);
+
   // Garantir que vídeo sempre tente tocar quando estiver ativo (para iOS e outros casos)
   // Este useEffect é para vídeos não-HLS
   useEffect(() => {
@@ -750,7 +894,14 @@ export function ReelVideoBackground({
     const attemptPlay = () => {
       if (!video || !isActive || !autoplay) return;
       
-      // CRÍTICO: Garantir muted ANTES de tentar tocar (iOS requer isso)
+      // Verificar se o vídeo está visível (especialmente importante no iOS)
+      if (isIOSDevice && !isVideoVisible(video)) {
+        // No iOS, vídeos fora do viewport podem não iniciar
+        // Tentar novamente quando ficar visível
+        return;
+      }
+      
+      // CRÍTICO: Garantir muted e playsInline ANTES de qualquer tentativa de play (iOS requer isso)
       // Configurar muted corretamente
       if (isBlurVersion) {
         video.muted = true;
@@ -768,7 +919,7 @@ export function ReelVideoBackground({
         setIsMuted(shouldBeMuted);
       }
       
-      // Garantir playsInline para iOS
+      // Garantir playsInline para iOS (CRÍTICO)
       video.setAttribute('playsinline', '');
       video.playsInline = true;
       
@@ -783,10 +934,14 @@ export function ReelVideoBackground({
             .then(() => {
               setIsPlaying(true);
               setHasAttemptedPlay(false); // Resetar quando começar a tocar
+              setHasUserInteracted(true); // Marcar que conseguimos tocar
             })
-            .catch(() => {
+            .catch((error) => {
               // Autoplay bloqueado - isso é esperado no iOS até haver interação
-              // O useEffect vai atualizar o botão baseado em isPlaying
+              // No iOS, isso é normal e o vídeo iniciará na primeira interação
+              if (isIOSDevice && import.meta.env.DEV) {
+                console.debug('[ReelVideoBackground] Autoplay bloqueado no iOS (esperado até primeira interação)');
+              }
             });
         }
       } else if (!video.paused) {
@@ -794,6 +949,7 @@ export function ReelVideoBackground({
         if (video.readyState >= 2) {
           setIsPlaying(true);
           setHasAttemptedPlay(false);
+          setHasUserInteracted(true);
         }
       }
     };
@@ -825,27 +981,58 @@ export function ReelVideoBackground({
     video.addEventListener('canplaythrough', handleCanPlayThrough);
 
     // No iOS, autoplay só funciona após interação do usuário
-    // Adicionar listener global para qualquer interação na página
+    // Adicionar listener global mais agressivo para primeira interação
+    // Isso garante que o vídeo inicie assim que o usuário tocar em qualquer lugar da tela
     const handleUserInteraction = () => {
-      attemptPlay();
+      if (!hasUserInteracted) {
+        setHasUserInteracted(true);
+        // Tentar tocar imediatamente na primeira interação
+        attemptPlay();
+      }
     };
 
-    // Adicionar listeners para diferentes tipos de interação (uma vez apenas)
-    const options = { once: true, passive: true };
-    document.addEventListener('touchstart', handleUserInteraction, options);
-    document.addEventListener('touchend', handleUserInteraction, options);
-    document.addEventListener('click', handleUserInteraction, options);
-    window.addEventListener('scroll', handleUserInteraction, options);
+    // Adicionar listeners para diferentes tipos de interação (mais agressivo no iOS)
+    const interactionEvents = isIOSDevice 
+      ? ['touchstart', 'touchend', 'touchmove', 'click', 'scroll', 'pointerdown', 'pointerup']
+      : ['touchstart', 'touchend', 'click', 'scroll'];
+    
+    const options = { passive: true };
+    
+    // Adicionar listeners (mais agressivo no iOS)
+    interactionEvents.forEach(eventType => {
+      if (isIOSDevice) {
+        // No iOS, manter listeners ativos até o vídeo começar a tocar
+        const handler = () => {
+          handleUserInteraction();
+          // Verificar se vídeo está tocando após tentativa
+          setTimeout(() => {
+            const video = videoRef.current;
+            if (video && !video.paused && video.readyState >= 2) {
+              // Vídeo está tocando, remover listeners
+              document.removeEventListener(eventType, handler);
+              window.removeEventListener(eventType, handler);
+            }
+          }, 100);
+        };
+        document.addEventListener(eventType, handler, options);
+        window.addEventListener(eventType, handler, options);
+      } else {
+        // Em outros navegadores, usar once é suficiente
+        document.addEventListener(eventType, handleUserInteraction, { ...options, once: true });
+        window.addEventListener(eventType, handleUserInteraction, { ...options, once: true });
+      }
+    });
 
     return () => {
       video.removeEventListener('loadedmetadata', handleReady);
       video.removeEventListener('loadeddata', handleReady);
       video.removeEventListener('canplay', handleCanPlay);
       video.removeEventListener('canplaythrough', handleCanPlayThrough);
-      document.removeEventListener('touchstart', handleUserInteraction);
-      document.removeEventListener('touchend', handleUserInteraction);
-      document.removeEventListener('click', handleUserInteraction);
-      window.removeEventListener('scroll', handleUserInteraction);
+      // Remover listeners de interação (serão removidos automaticamente quando vídeo começar a tocar no iOS)
+      interactionEvents.forEach(eventType => {
+        document.removeEventListener(eventType, handleUserInteraction);
+        window.removeEventListener(eventType, handleUserInteraction);
+      });
     };
   }, [isActive, autoplay, isBlurVersion, isSoundUnlocked, isHLS]);
 
@@ -873,7 +1060,7 @@ export function ReelVideoBackground({
         autoPlay={isActive && autoplay && !isHLS} // HLS autoplay é controlado via hls.js
         loop={loop}
         muted={isBlurVersion ? true : (isSoundUnlocked ? false : true)} // CRÍTICO: muted sempre true quando som não desbloqueado (necessário para autoplay no iOS)
-        playsInline
+        playsInline={true} // CRÍTICO: necessário para autoplay no iOS
         preload="auto"
         poster={thumbnailUrl}
         className={blurClasses}
