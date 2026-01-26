@@ -23,9 +23,11 @@ import { SpacingElementEditor } from '@/components/builder/elements/SpacingEleme
 import { BackgroundEditor } from '@/components/builder/BackgroundEditor';
 import { ThemeEditor } from '@/components/builder/ThemeEditor';
 import { GamificationEditor } from '@/components/builder/GamificationEditor';
+import { QuestionOptionsEditor } from '@/components/builder/elements/QuestionOptionsEditor';
+import { QuickLogicEditor } from '@/components/builder/QuickLogicEditor';
 
 export function ElementConfigPanel() {
-  const { selectedElement, isEditingBackground, selectedTab } = useBuilder();
+  const { selectedElement, selectedSlide, isEditingBackground, selectedTab } = useBuilder();
 
   // Se estiver na aba Gamificação, mostrar GamificationEditor
   if (selectedTab === 'gamification') {
@@ -67,6 +69,28 @@ export function ElementConfigPanel() {
         </div>
         <div className="flex-1 overflow-y-auto p-4">
           <BackgroundEditor />
+        </div>
+      </div>
+    );
+  }
+
+  // Se há slide selecionado e não há elemento selecionado, sempre mostrar editor de lógica
+  if (selectedSlide && !selectedElement) {
+    const hasOptions = selectedSlide.options && selectedSlide.options.length > 0;
+    const hasQuestionnaireItems = selectedSlide.elements?.some(
+      (el) => (el.elementType === 'QUESTIONNAIRE' || el.elementType === 'QUESTION_GRID') &&
+              (el.uiConfig?.items || []).length > 0
+    );
+    
+    return (
+      <div className="basis-96 min-w-[300px] max-w-[384px] border-l border-border/50 bg-background flex flex-col">
+        <div className="p-4 border-b border-border/50">
+          <h2 className="text-sm font-semibold">Configurações</h2>
+          <p className="text-xs text-muted-foreground mt-1">Lógica do Slide</p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {hasOptions && <QuestionOptionsEditor slide={selectedSlide} />}
+          <QuickLogicEditor slide={selectedSlide} />
         </div>
       </div>
     );

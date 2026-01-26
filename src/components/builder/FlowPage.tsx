@@ -5,9 +5,10 @@ import { useBuilder } from '@/contexts/BuilderContext';
 import { FlowCanvas } from './FlowCanvas';
 import { toast } from 'sonner';
 import dagre from 'dagre';
+import { api } from '@/lib/api';
 
 export function FlowPage() {
-  const { reel, saveFlowConnections, updateSlide, isLoading } = useBuilder();
+  const { reel, saveFlowConnections, updateSlide, isLoading, setReel } = useBuilder();
   const [pendingConnections, setPendingConnections] = useState<Record<string, Record<string, any>>>({});
   const [pendingPositions, setPendingPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -310,6 +311,27 @@ export function FlowPage() {
     }
   }, [reel, saveFlowConnections]);
 
+  const handleStickyNoteChange = useCallback(async (stickyNotes: any[]) => {
+    if (!reel) return;
+
+    try {
+      const currentUiConfig = reel.uiConfig || {};
+      const updatedUiConfig = {
+        ...currentUiConfig,
+        flowStickyNotes: stickyNotes,
+      };
+
+      // Atualizar estado local
+      setReel({ ...reel, uiConfig: updatedUiConfig });
+
+      // Salvar no backend
+      await api.patch(`/reels/${reel.id}`, { uiConfig: updatedUiConfig });
+    } catch (error: any) {
+      console.error('Erro ao salvar sticky notes:', error);
+      toast.error('Erro ao salvar notas: ' + (error.message || 'Erro desconhecido'));
+    }
+  }, [reel, setReel]);
+
   if (!reel) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -366,7 +388,9 @@ export function FlowPage() {
           onConnect={handleConnect}
           onDisconnect={handleDisconnect}
           onNodePositionChange={handleNodePositionChange}
+          onStickyNoteChange={handleStickyNoteChange}
           reelId={reel.id}
+          reel={reel}
         />
       </div>
     </div>

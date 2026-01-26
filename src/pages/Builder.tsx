@@ -129,12 +129,17 @@ function BuilderContent() {
           const data = await api.get(`/reels/${reelId}`);
           const reelData = (data as any).data || data;
           
+          // Normalizar uiConfig do reel (para pastas, etc)
+          reelData.uiConfig = normalizeUiConfig(reelData.uiConfig);
+          
           // Normalizar slides com backgroundConfig corretamente
           if (reelData.slides) {
             reelData.slides = reelData.slides.map((slide: any) => {
               const normalizedSlide = normalizeBackgroundConfig(slide);
               return {
                 ...normalizedSlide,
+                // Normalizar uiConfig do slide também
+                uiConfig: normalizeUiConfig(normalizedSlide.uiConfig),
                 // Garantir que elements existe e está no formato correto
                 elements: (normalizedSlide.elements || []).map((element: any) => {
                   const normalizedElementUiConfig = normalizeUiConfig(element.uiConfig);
@@ -148,11 +153,55 @@ function BuilderContent() {
             });
           }
           
+          // Recuperar pastas órfãs: criar pastas para slides que têm folderId mas a pasta não existe
+          const existingFolders = (reelData.uiConfig?.folders || []) as Array<{ id: string; name: string; order: number; collapsed?: boolean }>;
+          const existingFolderIds = new Set(existingFolders.map((f) => f.id));
+          
+          // Encontrar folderIds únicos dos slides que não têm pasta correspondente
+          const orphanFolderIds = new Set<string>();
+          reelData.slides?.forEach((slide: any) => {
+            const folderId = slide.uiConfig?.folderId;
+            if (folderId && !existingFolderIds.has(folderId)) {
+              orphanFolderIds.add(folderId);
+            }
+          });
+          
+          // Criar pastas órfãs automaticamente
+          if (orphanFolderIds.size > 0) {
+            const newFolders = Array.from(orphanFolderIds).map((folderId, index) => ({
+              id: folderId,
+              name: `Pasta ${existingFolders.length + index + 1}`,
+              order: existingFolders.length + index,
+              collapsed: false,
+            }));
+            
+            const updatedFolders = [...existingFolders, ...newFolders];
+            reelData.uiConfig = {
+              ...reelData.uiConfig,
+              folders: updatedFolders,
+            };
+            
+            // Salvar as pastas recuperadas no backend
+            try {
+              await api.patch(`/reels/${reelData.id}`, {
+                uiConfig: reelData.uiConfig,
+              });
+              if (newFolders.length > 0) {
+                toast.success(`${newFolders.length} pasta(s) recuperada(s) automaticamente`);
+              }
+            } catch (error: any) {
+              console.error('Erro ao salvar pastas recuperadas:', error);
+            }
+          }
+          
           // Debug em desenvolvimento
           if (import.meta.env.DEV) {
             console.log('Builder - Reel data loaded:', {
               reelId: reelData.id,
               slidesCount: reelData.slides?.length || 0,
+              hasUiConfig: !!reelData.uiConfig,
+              folders: reelData.uiConfig?.folders?.length || 0,
+              orphanFoldersRecovered: orphanFolderIds.size,
               elements: reelData.slides?.flatMap((s: any) => s.elements || []).map((e: any) => ({
                 id: e.id,
                 elementType: e.elementType,

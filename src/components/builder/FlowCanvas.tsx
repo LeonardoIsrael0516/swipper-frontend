@@ -1,9 +1,8 @@
-import { useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo, useEffect, useState } from 'react';
 import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   Node,
   Edge,
   Connection,
@@ -26,8 +25,14 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import * as LucideIcons from 'lucide-react';
-import { X } from 'lucide-react';
+import { X, StickyNote, Palette, Edit2, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
 import { Slide, SlideElement } from '@/contexts/BuilderContext';
+import { cn } from '@/lib/utils';
+import { useTheme } from '@/contexts/ThemeContext';
 import { TextElement } from './elements/TextElement';
 import { ImageElement } from './elements/ImageElement';
 import { VideoElement } from './elements/VideoElement';
@@ -562,8 +567,8 @@ function SlideNode({ data }: { data: SlideNodeData }) {
   );
 }
 
-// Componente de edge customizado com botão de deletar
-function CustomEdge({ id, sourceX, sourceY, targetX, targetY, style, markerEnd }: EdgeProps) {
+// Componente de edge customizado com botão de deletar e label
+function CustomEdge({ id, sourceX, sourceY, targetX, targetY, style, markerEnd, data }: EdgeProps) {
   const { deleteElements } = useReactFlow();
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -577,6 +582,10 @@ function CustomEdge({ id, sourceX, sourceY, targetX, targetY, style, markerEnd }
     deleteElements({ edges: [{ id }] });
   };
 
+  const edgeData = data as { label?: string; type?: string } | undefined;
+  const label = edgeData?.label || '';
+  const labelType = edgeData?.type || ''; // 'option' | 'element' | 'element-item'
+
   return (
     <>
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
@@ -587,8 +596,21 @@ function CustomEdge({ id, sourceX, sourceY, targetX, targetY, style, markerEnd }
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             pointerEvents: 'all',
           }}
-          className="nodrag nopan"
+          className="nodrag nopan flex flex-col items-center gap-1"
         >
+          {label && (
+            <div
+              className={cn(
+                "px-2 py-0.5 rounded text-xs font-medium shadow-sm border max-w-[120px] truncate",
+                labelType === 'option' 
+                  ? "bg-green-50 text-green-700 border-green-200" 
+                  : "bg-blue-50 text-blue-700 border-blue-200"
+              )}
+              title={label}
+            >
+              {label}
+            </div>
+          )}
           <button
             onClick={onEdgeClick}
             className="bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-md transition-colors z-10"
@@ -603,9 +625,328 @@ function CustomEdge({ id, sourceX, sourceY, targetX, targetY, style, markerEnd }
   );
 }
 
+// Interface para Sticky Note
+interface StickyNoteData {
+  id: string;
+  title: string;
+  color: string;
+  position: { x: number; y: number };
+  width: number;
+  height: number;
+}
+
+// Componente de Sticky Note
+function StickyNoteNode({ data, selected }: { data: StickyNoteData & { onUpdate?: (data: Partial<StickyNoteData>) => void; onResizeStart?: () => void; onResizeEnd?: () => void }; selected: boolean }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [title, setTitle] = useState(data.title);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const { deleteElements } = useReactFlow();
+
+  useEffect(() => {
+    setTitle(data.title);
+  }, [data.title]);
+
+  const handleSave = () => {
+    if (data.onUpdate) {
+      data.onUpdate({ title });
+    }
+    setIsEditing(false);
+  };
+
+  const handleDelete = () => {
+    deleteElements({ nodes: [{ id: `sticky-note-${data.id}` }] });
+  };
+
+  const handleColorChange = (color: string) => {
+    if (data.onUpdate) {
+      data.onUpdate({ color });
+    }
+    setShowColorPicker(false);
+  };
+
+  return (
+    <div
+      className="rounded-lg shadow-lg border-2 border-gray-300 relative"
+      style={{
+        backgroundColor: data.color,
+        width: data.width,
+        height: data.height,
+        minWidth: 300,
+        minHeight: 200,
+        zIndex: 0,
+      }}
+    >
+      {/* Botões de ação (aparecem quando selecionado) */}
+      {selected && (
+        <div className="absolute top-2 right-2 flex gap-1 z-10">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 bg-white hover:bg-white/90 shadow-md border border-gray-200"
+            onClick={() => setIsEditing(!isEditing)}
+            title="Editar"
+          >
+            <Edit2 className="w-3.5 h-3.5 text-gray-700" />
+          </Button>
+          <Popover open={showColorPicker} onOpenChange={setShowColorPicker}>
+            <PopoverTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0 bg-white hover:bg-white/90 shadow-md border border-gray-200"
+                title="Escolher cor"
+              >
+                <Palette className="w-3.5 h-3.5 text-gray-700" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64">
+              <Label className="text-xs mb-2">Cor da Nota</Label>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  '#FEF3C7', '#DBEAFE', '#FCE7F3', '#E0E7FF',
+                  '#D1FAE5', '#FED7AA', '#E5E7EB', '#F3E8FF',
+                  '#FEF2F2', '#ECFDF5', '#F0FDF4', '#FFFBEB',
+                  '#F0F9FF', '#FDF2F8', '#F5F3FF', '#ECFEFF',
+                ].map((color) => (
+                  <button
+                    key={color}
+                    className={`w-8 h-8 rounded border-2 transition-all ${
+                      data.color === color ? 'border-primary scale-110' : 'border-border'
+                    }`}
+                    style={{ backgroundColor: color }}
+                    onClick={() => handleColorChange(color)}
+                    title={color}
+                  />
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 bg-white hover:bg-white/90 shadow-md border border-gray-200"
+            onClick={handleDelete}
+            title="Excluir"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-gray-700" />
+          </Button>
+        </div>
+      )}
+      
+      {/* Handles de redimensionamento */}
+      {selected && (
+        <>
+          {/* Canto superior esquerdo */}
+          <div
+            className="absolute top-0 left-0 w-4 h-4 cursor-nwse-resize z-30 resize-handle nodrag nopan"
+            style={{ transform: 'translate(-50%, -50%)' }}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (data.onResizeStart) data.onResizeStart();
+              const startX = e.clientX;
+              const startY = e.clientY;
+              const startWidth = data.width;
+              const startHeight = data.height;
+              const startPosX = data.position.x;
+              const startPosY = data.position.y;
+
+              const handleMouseMove = (moveEvent: MouseEvent) => {
+                moveEvent.preventDefault();
+                moveEvent.stopPropagation();
+                const deltaX = startX - moveEvent.clientX;
+                const deltaY = startY - moveEvent.clientY;
+                const newWidth = Math.max(300, startWidth + deltaX);
+                const newHeight = Math.max(200, startHeight + deltaY);
+                const newPosX = startPosX - deltaX;
+                const newPosY = startPosY - deltaY;
+
+                if (data.onUpdate) {
+                  data.onUpdate({
+                    width: newWidth,
+                    height: newHeight,
+                    position: { x: newPosX, y: newPosY },
+                  });
+                }
+              };
+
+              const handleMouseUp = () => {
+                if (data.onResizeEnd) data.onResizeEnd();
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+              };
+
+              document.addEventListener('mousemove', handleMouseMove);
+              document.addEventListener('mouseup', handleMouseUp);
+            }}
+          >
+            <div className="w-full h-full bg-white border-2 border-gray-600 rounded-full shadow-md" />
+          </div>
+          {/* Canto superior direito */}
+          <div
+            className="absolute top-0 right-0 w-4 h-4 cursor-nesw-resize z-30 resize-handle nodrag nopan"
+            style={{ transform: 'translate(50%, -50%)' }}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (data.onResizeStart) data.onResizeStart();
+              const startX = e.clientX;
+              const startY = e.clientY;
+              const startWidth = data.width;
+              const startHeight = data.height;
+              const startPosY = data.position.y;
+
+              const handleMouseMove = (moveEvent: MouseEvent) => {
+                moveEvent.preventDefault();
+                moveEvent.stopPropagation();
+                const deltaX = moveEvent.clientX - startX;
+                const deltaY = startY - moveEvent.clientY;
+                const newWidth = Math.max(300, startWidth + deltaX);
+                const newHeight = Math.max(200, startHeight + deltaY);
+                const newPosY = startPosY - deltaY;
+
+                if (data.onUpdate) {
+                  data.onUpdate({
+                    width: newWidth,
+                    height: newHeight,
+                    position: { x: data.position.x, y: newPosY },
+                  });
+                }
+              };
+
+              const handleMouseUp = () => {
+                if (data.onResizeEnd) data.onResizeEnd();
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+              };
+
+              document.addEventListener('mousemove', handleMouseMove);
+              document.addEventListener('mouseup', handleMouseUp);
+            }}
+          >
+            <div className="w-full h-full bg-white border-2 border-gray-600 rounded-full shadow-md" />
+          </div>
+          {/* Canto inferior esquerdo */}
+          <div
+            className="absolute bottom-0 left-0 w-4 h-4 cursor-nesw-resize z-30 resize-handle nodrag nopan"
+            style={{ transform: 'translate(-50%, 50%)' }}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (data.onResizeStart) data.onResizeStart();
+              const startX = e.clientX;
+              const startY = e.clientY;
+              const startWidth = data.width;
+              const startHeight = data.height;
+              const startPosX = data.position.x;
+
+              const handleMouseMove = (moveEvent: MouseEvent) => {
+                moveEvent.preventDefault();
+                moveEvent.stopPropagation();
+                const deltaX = startX - moveEvent.clientX;
+                const deltaY = moveEvent.clientY - startY;
+                const newWidth = Math.max(300, startWidth + deltaX);
+                const newHeight = Math.max(200, startHeight + deltaY);
+                const newPosX = startPosX - deltaX;
+
+                if (data.onUpdate) {
+                  data.onUpdate({
+                    width: newWidth,
+                    height: newHeight,
+                    position: { x: newPosX, y: data.position.y },
+                  });
+                }
+              };
+
+              const handleMouseUp = () => {
+                if (data.onResizeEnd) data.onResizeEnd();
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+              };
+
+              document.addEventListener('mousemove', handleMouseMove);
+              document.addEventListener('mouseup', handleMouseUp);
+            }}
+          >
+            <div className="w-full h-full bg-white border-2 border-gray-600 rounded-full shadow-md" />
+          </div>
+          {/* Canto inferior direito */}
+          <div
+            className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize z-30 resize-handle nodrag nopan"
+            style={{ transform: 'translate(50%, 50%)' }}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (data.onResizeStart) data.onResizeStart();
+              const startX = e.clientX;
+              const startY = e.clientY;
+              const startWidth = data.width;
+              const startHeight = data.height;
+
+              const handleMouseMove = (moveEvent: MouseEvent) => {
+                moveEvent.preventDefault();
+                moveEvent.stopPropagation();
+                const deltaX = moveEvent.clientX - startX;
+                const deltaY = moveEvent.clientY - startY;
+                const newWidth = Math.max(300, startWidth + deltaX);
+                const newHeight = Math.max(200, startHeight + deltaY);
+
+                if (data.onUpdate) {
+                  data.onUpdate({
+                    width: newWidth,
+                    height: newHeight,
+                  });
+                }
+              };
+
+              const handleMouseUp = () => {
+                if (data.onResizeEnd) data.onResizeEnd();
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+              };
+
+              document.addEventListener('mousemove', handleMouseMove);
+              document.addEventListener('mouseup', handleMouseUp);
+            }}
+          >
+            <div className="w-full h-full bg-white border-2 border-gray-600 rounded-full shadow-md" />
+          </div>
+        </>
+      )}
+
+      {/* Conteúdo editável */}
+      <div className="p-4 h-full flex flex-col">
+        {isEditing ? (
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Título"
+            className="text-sm font-semibold bg-white/90 w-full"
+            onBlur={handleSave}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleSave();
+              }
+            }}
+            autoFocus
+          />
+        ) : (
+          <div
+            className="text-sm font-semibold text-gray-900 cursor-text"
+            onDoubleClick={() => setIsEditing(true)}
+          >
+            {title || 'Duplo clique para editar'}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Tipos de nós
 const nodeTypes: NodeTypes = {
   slide: SlideNode,
+  'sticky-note': StickyNoteNode,
 };
 
 // Tipos de edges
@@ -619,14 +960,68 @@ interface FlowCanvasProps {
   onConnect: (connections: Record<string, Record<string, any>>) => void;
   onDisconnect?: (edgeId: string) => void;
   onNodePositionChange?: (slideId: string, position: { x: number; y: number }) => void;
+  onStickyNoteChange?: (stickyNotes: StickyNoteData[]) => void;
   initialNodes?: Node[];
   initialEdges?: Edge[];
   reelId?: string;
+  reel?: any; // Para acessar reel.uiConfig.flowStickyNotes
 }
 
-export function FlowCanvas({ slides, onConnect, onDisconnect, onNodePositionChange, initialNodes = [], initialEdges = [], reelId }: FlowCanvasProps) {
+export function FlowCanvas({ slides, onConnect, onDisconnect, onNodePositionChange, onStickyNoteChange, initialNodes = [], initialEdges = [], reelId, reel }: FlowCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [newStickyNoteColor, setNewStickyNoteColor] = useState('#FEF3C7');
+
+  // Carregar sticky notes do reel.uiConfig
+  const stickyNotes = useMemo(() => {
+    if (!reel?.uiConfig?.flowStickyNotes) return [];
+    return (reel.uiConfig.flowStickyNotes as StickyNoteData[]) || [];
+  }, [reel]);
+
+  // Handler para atualizar dados de sticky note
+  const handleStickyNoteDataChange = useCallback((nodeId: string, data: Partial<StickyNoteData>) => {
+    if (!nodeId.startsWith('sticky-note-')) return;
+    
+    const stickyNoteId = nodeId.replace('sticky-note-', '');
+    const updatedStickyNotes = stickyNotes.map((note) =>
+      note.id === stickyNoteId ? { ...note, ...data } : note
+    );
+    
+    if (onStickyNoteChange) {
+      onStickyNoteChange(updatedStickyNotes);
+    }
+  }, [stickyNotes, onStickyNoteChange]);
+
+  // Estado para controlar se está redimensionando
+  const [isResizingNote, setIsResizingNote] = useState<string | null>(null);
+
+  // Converter sticky notes para nós
+  const stickyNoteNodes = useMemo(() => {
+    return stickyNotes.map((note) => ({
+      id: `sticky-note-${note.id}`,
+      type: 'sticky-note',
+      position: note.position,
+      data: {
+        ...note,
+        onUpdate: (updatedData: Partial<StickyNoteData>) => {
+          handleStickyNoteDataChange(`sticky-note-${note.id}`, updatedData);
+        },
+        onResizeStart: () => setIsResizingNote(note.id),
+        onResizeEnd: () => setIsResizingNote(null),
+      },
+      style: {
+        width: note.width || 400,
+        height: note.height || 300,
+        zIndex: 0, // Garantir que sticky notes fiquem atrás dos edges
+      },
+      draggable: isResizingNote !== note.id, // Desabilitar drag quando estiver redimensionando esta nota
+      selectable: true,
+      deletable: true,
+      resizable: false, // Desabilitar redimensionamento padrão do ReactFlow, vamos fazer manual
+      zIndex: 0, // Garantir que sticky notes fiquem atrás dos edges
+    } as Node));
+  }, [stickyNotes, handleStickyNoteDataChange, isResizingNote]);
 
   // Converter slides para nós
   const slideNodes = useMemo(() => {
@@ -637,6 +1032,12 @@ export function FlowCanvas({ slides, onConnect, onDisconnect, onNodePositionChan
         y: 100,
       };
 
+      // Verificar se o slide está dentro de uma sticky note
+      const parentStickyNote = stickyNotes.find((note) => 
+        note.id && slide.uiConfig?.stickyNoteId === note.id
+      );
+      const parentId = parentStickyNote ? `sticky-note-${parentStickyNote.id}` : undefined;
+
       return {
         id: `slide-${slideId}`,
         type: 'slide',
@@ -646,11 +1047,13 @@ export function FlowCanvas({ slides, onConnect, onDisconnect, onNodePositionChan
           label: slide.question || `Slide ${slide.order}`,
           reelId,
         },
+        parentId,
+        extent: parentId ? 'parent' : undefined,
       } as Node;
     });
-  }, [slides, reelId]);
+  }, [slides, reelId, stickyNotes]);
 
-  // Converter conexões (logicNext) para edges
+  // Converter conexões (logicNext) para edges com labels
   const connectionEdges = useMemo(() => {
     const edgeList: Edge[] = [];
 
@@ -662,6 +1065,35 @@ export function FlowCanvas({ slides, onConnect, onDisconnect, onNodePositionChan
       if (logicNext.elements) {
         Object.entries(logicNext.elements).forEach(([elementKey, targetSlideId]) => {
           // elementKey pode ser elementId ou elementId-itemId
+          let label = '';
+          let labelType = 'element';
+          
+          // Tentar obter label do elemento ou item
+          if (elementKey.includes('-item-')) {
+            const [elementId, , itemId] = elementKey.split('-item-');
+            const element = slide.elements?.find((el) => el.id === elementId);
+            if (element) {
+              const config = normalizeUiConfig(element.uiConfig);
+              const items = config.items || [];
+              const item = items.find((it: any) => it.id === itemId);
+              if (item) {
+                label = item.title || item.text || `Item ${itemId.substring(0, 6)}`;
+                labelType = 'element-item';
+              }
+            }
+          } else {
+            const element = slide.elements?.find((el) => el.id === elementKey);
+            if (element) {
+              const elementType = element.elementType;
+              if (elementType === 'BUTTON') {
+                const config = normalizeUiConfig(element.uiConfig);
+                label = config.text || 'Botão';
+              } else {
+                label = elementType.replace('_', ' ');
+              }
+            }
+          }
+          
           edgeList.push({
             id: `edge-element-${elementKey}-${targetSlideId}`,
             source: `slide-${slideId}`,
@@ -669,7 +1101,9 @@ export function FlowCanvas({ slides, onConnect, onDisconnect, onNodePositionChan
             target: `slide-${targetSlideId}`,
             type: 'smoothstep',
             animated: true,
-            style: { stroke: '#3b82f6', strokeWidth: 2 },
+            style: { stroke: '#3b82f6', strokeWidth: 2, zIndex: 10 },
+            data: { label, type: labelType },
+            zIndex: 10, // Garantir que edges fiquem acima das sticky notes
           });
         });
       }
@@ -677,6 +1111,12 @@ export function FlowCanvas({ slides, onConnect, onDisconnect, onNodePositionChan
       // Conexões de opções
       if (logicNext.options) {
         Object.entries(logicNext.options).forEach(([optionId, targetSlideId]) => {
+          // Obter label da opção
+          const option = slide.options?.find((opt) => opt.id === optionId);
+          const label = option 
+            ? `${option.emoji || ''} ${option.text}`.trim() || `Opção ${optionId.substring(0, 6)}`
+            : `Opção ${optionId.substring(0, 6)}`;
+          
           edgeList.push({
             id: `edge-option-${optionId}-${targetSlideId}`,
             source: `slide-${slideId}`,
@@ -684,7 +1124,9 @@ export function FlowCanvas({ slides, onConnect, onDisconnect, onNodePositionChan
             target: `slide-${targetSlideId}`,
             type: 'smoothstep',
             animated: true,
-            style: { stroke: '#10b981', strokeWidth: 2 },
+            style: { stroke: '#10b981', strokeWidth: 2, zIndex: 10 },
+            data: { label, type: 'option' },
+            zIndex: 10, // Garantir que edges fiquem acima das sticky notes
           });
         });
       }
@@ -693,10 +1135,11 @@ export function FlowCanvas({ slides, onConnect, onDisconnect, onNodePositionChan
     return edgeList;
   }, [slides]);
 
-  // Atualizar nós quando slides mudarem
+  // Atualizar nós quando slides ou sticky notes mudarem
   useEffect(() => {
-    setNodes(slideNodes);
-  }, [slideNodes, setNodes]);
+    const allNodes = [...stickyNoteNodes, ...slideNodes];
+    setNodes(allNodes);
+  }, [stickyNoteNodes, slideNodes, setNodes]);
 
   // Atualizar edges quando conexões mudarem
   useEffect(() => {
@@ -801,28 +1244,167 @@ export function FlowCanvas({ slides, onConnect, onDisconnect, onNodePositionChan
     [slides, setEdges, onConnect],
   );
 
+  // Handler para adicionar sticky note
+  const handleAddStickyNote = useCallback(() => {
+    // Usar posição padrão (será ajustada quando o ReactFlow estiver disponível)
+    const newStickyNote: StickyNoteData = {
+      id: `sticky-${Date.now()}`,
+      title: 'Nova Nota',
+      color: newStickyNoteColor,
+      position: { x: 0, y: 0 },
+      width: 400,
+      height: 300,
+    };
+
+    const updatedStickyNotes = [...stickyNotes, newStickyNote];
+    
+    if (onStickyNoteChange) {
+      onStickyNoteChange(updatedStickyNotes);
+    }
+  }, [stickyNotes, newStickyNoteColor, onStickyNoteChange]);
+
+  // Handler para atualizar posição de sticky note
+  const handleStickyNotePositionChange = useCallback((nodeId: string, position: { x: number; y: number }) => {
+    if (!nodeId.startsWith('sticky-note-')) return;
+    
+    const stickyNoteId = nodeId.replace('sticky-note-', '');
+    const updatedStickyNotes = stickyNotes.map((note) =>
+      note.id === stickyNoteId ? { ...note, position } : note
+    );
+    
+    if (onStickyNoteChange) {
+      onStickyNoteChange(updatedStickyNotes);
+    }
+  }, [stickyNotes, onStickyNoteChange]);
+
+  // Componente interno para acessar ReactFlow context
+  function AddStickyNoteButton() {
+    const { getViewport } = useReactFlow();
+    const { theme } = useTheme();
+    
+    const handleAdd = () => {
+      const viewport = getViewport();
+      
+      // Calcular posição central da viewport
+      const centerX = -viewport.x / viewport.zoom + window.innerWidth / 2 / viewport.zoom;
+      const centerY = -viewport.y / viewport.zoom + window.innerHeight / 2 / viewport.zoom;
+
+      const newStickyNote: StickyNoteData = {
+        id: `sticky-${Date.now()}`,
+        title: 'Nova Nota',
+        color: newStickyNoteColor,
+        position: { x: centerX - 200, y: centerY - 150 },
+        width: 400,
+        height: 300,
+      };
+
+      const updatedStickyNotes = [...stickyNotes, newStickyNote];
+      
+      if (onStickyNoteChange) {
+        onStickyNoteChange(updatedStickyNotes);
+      }
+    };
+
+    return (
+      <div className="absolute top-4 right-4 z-10">
+        <Button
+          size="sm"
+          variant="ghost"
+          className={cn(
+            "h-8 w-8 p-0 shadow-sm",
+            theme === 'light' 
+              ? "bg-white hover:bg-gray-100 border border-gray-300 text-gray-900" 
+              : "bg-gray-800 hover:bg-gray-700 border border-gray-600 text-gray-100"
+          )}
+          onClick={handleAdd}
+          title="Adicionar nota adesiva"
+        >
+          <StickyNote className="w-4 h-4" />
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={handleNodesChange}
+        connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 2 }}
+        connectionRadius={20}
+        onNodesChange={(changes) => {
+          onNodesChange(changes);
+          
+          // Detectar mudanças em sticky notes (posição e dados)
+          changes.forEach((change) => {
+            if ('id' in change) {
+              const changeId = change.id as string;
+              if (changeId?.startsWith('sticky-note-')) {
+                if (change.type === 'position' && 'position' in change) {
+                  const node = nodes.find((n) => n.id === changeId);
+                  if (node && change.position) {
+                    handleStickyNotePositionChange(changeId, change.position);
+                  }
+                } else if (change.type === 'remove') {
+                  // Quando uma sticky note é removida, atualizar a lista
+                  const stickyNoteId = changeId.replace('sticky-note-', '');
+                  const updatedStickyNotes = stickyNotes.filter((note) => note.id !== stickyNoteId);
+                  if (onStickyNoteChange) {
+                    onStickyNoteChange(updatedStickyNotes);
+                  }
+                } else if (change.type === 'select' && 'selected' in change && change.selected) {
+                  // Quando uma sticky note é selecionada, verificar se há mudanças nos dados
+                  const node = nodes.find((n) => n.id === changeId);
+                  if (node && node.data) {
+                    const nodeData = node.data as unknown as StickyNoteData;
+                    const existingNote = stickyNotes.find((n) => n.id === nodeData.id);
+                    if (existingNote && existingNote.title !== nodeData.title) {
+                      handleStickyNoteDataChange(changeId, {
+                        title: nodeData.title,
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          });
+        }}
         onEdgesChange={handleEdgesChange}
         onConnect={onConnectCallback}
+        onNodeDragStart={(event, node) => {
+          // Se estiver redimensionando, prevenir o drag
+          const target = event.target as HTMLElement;
+          if (target && (target.closest('.nodrag') || target.closest('.resize-handle'))) {
+            // Cancelar o drag se estiver redimensionando
+            event.preventDefault();
+            return;
+          }
+        }}
         onNodeDragStop={(event, node) => {
           if (onNodePositionChange && node.id.startsWith('slide-')) {
             const slideId = node.id.replace('slide-', '');
             onNodePositionChange(slideId, node.position);
+          } else if (node.id.startsWith('sticky-note-')) {
+            handleStickyNotePositionChange(node.id, node.position);
           }
         }}
+        nodeDragThreshold={5}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
+        minZoom={0.1}
+        maxZoom={2}
         attributionPosition="bottom-left"
+        nodesDraggable={true}
+        nodesConnectable={true}
+        elementsSelectable={true}
+        defaultEdgeOptions={{ zIndex: 1 }} // Edges ficam acima das sticky notes
+        snapToGrid={false}
+        snapGrid={[15, 15]}
       >
         <Background />
         <Controls />
-        <MiniMap />
+        <AddStickyNoteButton />
       </ReactFlow>
     </div>
   );

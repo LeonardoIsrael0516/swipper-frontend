@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -191,10 +191,27 @@ export function CarouselElementEditor({ element, tab }: CarouselElementEditorPro
   };
 
   // Componente SortableItem para cada item do carrossel
+  // Componente SortableItem para cada item do carrossel
   function SortableCarouselItem({ item, itemIndex, updateItem, removeItem, duplicateItem, isUploading }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
       id: item.id,
     });
+
+    // Estado local para título e descrição para evitar desfoque
+    const [localTitle, setLocalTitle] = useState(item.title || '');
+    const [localDescription, setLocalDescription] = useState(item.description || '');
+    const isTitleFocusedRef = useRef(false);
+    const isDescriptionFocusedRef = useRef(false);
+
+    // Sincronizar quando item mudar externamente (apenas se não estiver editando)
+    useEffect(() => {
+      if (!isTitleFocusedRef.current) {
+        setLocalTitle(item.title || '');
+      }
+      if (!isDescriptionFocusedRef.current) {
+        setLocalDescription(item.description || '');
+      }
+    }, [item.title, item.description]);
 
     const style = {
       transform: CSS.Transform.toString(transform),
@@ -264,8 +281,19 @@ export function CarouselElementEditor({ element, tab }: CarouselElementEditorPro
               </Label>
               <Input
                 id={`item-title-${item.id}`}
-                value={item.title || ''}
-                onChange={(e) => updateItem(item.id, { title: e.target.value })}
+                value={localTitle}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  setLocalTitle(newValue);
+                }}
+                onFocus={() => {
+                  isTitleFocusedRef.current = true;
+                }}
+                onBlur={() => {
+                  isTitleFocusedRef.current = false;
+                  // Atualizar apenas ao sair do campo
+                  updateItem(item.id, { title: localTitle });
+                }}
                 className="mt-1 h-8 text-sm"
                 placeholder="Título do item"
               />
@@ -277,8 +305,19 @@ export function CarouselElementEditor({ element, tab }: CarouselElementEditorPro
               </Label>
               <Input
                 id={`item-description-${item.id}`}
-                value={item.description || ''}
-                onChange={(e) => updateItem(item.id, { description: e.target.value })}
+                value={localDescription}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  setLocalDescription(newValue);
+                }}
+                onFocus={() => {
+                  isDescriptionFocusedRef.current = true;
+                }}
+                onBlur={() => {
+                  isDescriptionFocusedRef.current = false;
+                  // Atualizar apenas ao sair do campo
+                  updateItem(item.id, { description: localDescription });
+                }}
                 className="mt-1 h-8 text-sm"
                 placeholder="Descrição do item"
               />

@@ -1034,7 +1034,7 @@ export default function PublicQuiz() {
     return hasLocked || questionnaireLocked || progressLocked || formLocked;
   }, [reel?.slides, questionnaireResponses, progressStates, formValidStates]);
 
-  const scrollToSlide = useCallback(async (slideIndex: number) => {
+  const scrollToSlide = useCallback(async (slideIndex: number, isDirectJump?: boolean) => {
     // Enviar formulários completos antes de avançar
     if (reel?.slides && currentSlide < reel.slides.length) {
       const currentSlideData = reel.slides[currentSlide];
@@ -1063,16 +1063,21 @@ export default function PublicQuiz() {
       // Verificar se o slide destino está travado
       const targetSlideIsLocked = checkIfSlideIsLocked(slideIndex);
       
+      // Detectar se é pulo direto (diferença > 1 entre slide atual e destino)
+      const slideDifference = Math.abs(slideIndex - currentSlide);
+      const isJump = isDirectJump !== undefined ? isDirectJump : slideDifference > 1;
+      
       // No mobile, sempre usar scroll instantâneo para evitar conflitos com touch events
-      // No desktop, usar smooth apenas se o slide destino não estiver travado
+      // Para pulos diretos, sempre usar scroll instantâneo (não mostrar slides intermediários)
+      // No desktop, usar smooth apenas se não for pulo direto e o slide destino não estiver travado
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      const scrollBehavior = (isMobile || targetSlideIsLocked) ? 'auto' : 'smooth';
+      const scrollBehavior = (isMobile || targetSlideIsLocked || isJump) ? 'auto' : 'smooth';
       
       const targetScrollTop = slideIndex * container.clientHeight;
       
-      // No mobile, usar scrollTop direto para ser mais rápido e evitar conflitos
-      if (isMobile) {
-        // Forçar scroll imediatamente
+      // Para pulos diretos ou mobile, usar scrollTop direto para ser instantâneo
+      if (isMobile || isJump) {
+        // Forçar scroll imediatamente sem animação
         container.scrollTop = targetScrollTop;
         // Garantir que o scroll foi aplicado em múltiplos frames para evitar interferência do monitor
         requestAnimationFrame(() => {
@@ -1092,10 +1097,15 @@ export default function PublicQuiz() {
         });
       }
       
+      // Atualizar currentSlide imediatamente para pulos diretos (evitar renderizar intermediários)
+      if (isJump) {
+        setCurrentSlide(slideIndex);
+      }
+      
       // Aumentar tempo para cobrir toda a transição (smooth pode levar até 800ms)
-      // No mobile, usar tempo maior para garantir que o monitor não interfira
+      // No mobile ou pulos diretos, usar tempo menor (scroll instantâneo)
       // Dar tempo suficiente para o estado atualizar e o monitor parar completamente
-      const timeoutDuration = isMobile ? 400 : (targetSlideIsLocked ? 200 : 800);
+      const timeoutDuration = isMobile || isJump ? 100 : (targetSlideIsLocked ? 200 : 800);
       
       setTimeout(() => {
         isProgrammaticScrollRef.current = false;
@@ -1147,7 +1157,7 @@ export default function PublicQuiz() {
           if (currentSlideIsLocked && newSlide > currentSlide && !isProgrammatic) {
             // Reverter scroll para o slide atual (não permitir sair do slide travado)
             scrollTimeout = setTimeout(() => {
-              scrollToSlide(currentSlide);
+              scrollToSlide(currentSlide, false);
             }, 50);
             return; // Não atualizar currentSlide
           }
@@ -1168,14 +1178,15 @@ export default function PublicQuiz() {
                 if (currentSlideIsLocked && !isProgrammatic) {
                   // Reverter scroll para o slide atual
                   scrollTimeout = setTimeout(() => {
-                    scrollToSlide(currentSlide);
+                    scrollToSlide(currentSlide, false);
                   }, 50);
                   return;
                 }
                 
                 // Redirecionar para o slide conectado
+                const isDirectJump = Math.abs(targetIndex - currentSlide) > 1;
                 scrollTimeout = setTimeout(() => {
-                  scrollToSlide(targetIndex);
+                  scrollToSlide(targetIndex, isDirectJump);
                 }, 50);
                 return;
               }
@@ -1718,13 +1729,14 @@ export default function PublicQuiz() {
     return null;
   }, [reel]);
 
-  const getNextSlideIndex = useCallback((slideId: string, elementId?: string, optionId?: string, itemId?: string): number | null => {
+  const getNextSlideIndex = useCallback((slideId: string, elementId?: string, optionId?: string, itemId?: string): { index: number; isDirectJump: boolean } | null => {
     if (!reel?.slides) return null;
     
     const slide = reel.slides.find((s) => s.id === slideId);
     if (!slide) return null;
 
     const logicNext = slide.logicNext || {};
+    const currentIndex = reel.slides.findIndex((s) => s.id === slideId);
     
     // PRIORIDADE 1: Se há conexão de elemento específico com item (para Question/QuestionGrid)
     if (elementId && itemId) {
@@ -1732,7 +1744,10 @@ export default function PublicQuiz() {
       if (logicNext.elements?.[elementItemKey]) {
         const targetSlideId = logicNext.elements[elementItemKey];
         const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
-        return targetIndex >= 0 ? targetIndex : null;
+        if (targetIndex >= 0) {
+          const isDirectJump = Math.abs(targetIndex - currentIndex) > 1;
+          return { index: targetIndex, isDirectJump };
+        }
       }
     }
     
@@ -1740,27 +1755,35 @@ export default function PublicQuiz() {
     if (elementId && logicNext.elements?.[elementId]) {
       const targetSlideId = logicNext.elements[elementId];
       const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
-      return targetIndex >= 0 ? targetIndex : null;
+      if (targetIndex >= 0) {
+        const isDirectJump = Math.abs(targetIndex - currentIndex) > 1;
+        return { index: targetIndex, isDirectJump };
+      }
     }
     
     // PRIORIDADE 3: Se há conexão de opção específica
     if (optionId && logicNext.options?.[optionId]) {
       const targetSlideId = logicNext.options[optionId];
       const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
-      return targetIndex >= 0 ? targetIndex : null;
+      if (targetIndex >= 0) {
+        const isDirectJump = Math.abs(targetIndex - currentIndex) > 1;
+        return { index: targetIndex, isDirectJump };
+      }
     }
     
     // PRIORIDADE 4: Se há conexão padrão (defaultNext)
     if (logicNext.defaultNext) {
       const targetSlideId = logicNext.defaultNext;
       const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
-      return targetIndex >= 0 ? targetIndex : null;
+      if (targetIndex >= 0) {
+        const isDirectJump = Math.abs(targetIndex - currentIndex) > 1;
+        return { index: targetIndex, isDirectJump };
+      }
     }
     
     // Fallback: próxima na ordem
-    const currentIndex = reel.slides.findIndex((s) => s.id === slideId);
     if (currentIndex >= 0 && currentIndex < reel.slides.length - 1) {
-      return currentIndex + 1;
+      return { index: currentIndex + 1, isDirectJump: false };
     }
     
     return null;
@@ -1848,11 +1871,11 @@ export default function PublicQuiz() {
       
       // PRIORIDADE 1: Verificar se há conexão no fluxo (sempre verificar primeiro)
       if (elementId) {
-        const nextIndex = getNextSlideIndex(currentSlideData.id, elementId);
+        const nextSlide = getNextSlideIndex(currentSlideData.id, elementId);
         
-        if (nextIndex !== null) {
+        if (nextSlide !== null) {
           // Há conexão no fluxo - usar ela (ignorar configuração do botão)
-          scrollToSlide(nextIndex);
+          scrollToSlide(nextSlide.index, nextSlide.isDirectJump);
           return; // IMPORTANTE: retornar aqui para não executar lógica padrão
         }
       }
@@ -1932,7 +1955,8 @@ export default function PublicQuiz() {
       // IMPORTANTE: Marcar scroll como programático ANTES de desbloquear e scrollar
       isProgrammaticScrollRef.current = true;
       dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
-      scrollToSlide(nextIndex);
+      const isDirectJump = Math.abs(nextIndex - currentSlide) > 1;
+      scrollToSlide(nextIndex, isDirectJump);
       return;
     }
     
@@ -1948,7 +1972,8 @@ export default function PublicQuiz() {
       }
       const targetSlideIndex = reel.slides.findIndex((s: any) => s.id === slideId);
       if (targetSlideIndex !== -1) {
-        scrollToSlide(targetSlideIndex);
+        const isDirectJump = Math.abs(targetSlideIndex - currentSlide) > 1;
+        scrollToSlide(targetSlideIndex, isDirectJump);
       } else {
         console.error('Slide não encontrado:', slideId);
       }
@@ -1995,17 +2020,17 @@ export default function PublicQuiz() {
     const currentSlideData = reel.slides[currentSlide];
     
     // Verificar conexão no fluxo primeiro
-    const nextIndex = getNextSlideIndex(currentSlideData.id, elementId, undefined, itemId);
+    const nextSlide = getNextSlideIndex(currentSlideData.id, elementId, undefined, itemId);
     
-    if (nextIndex !== null) {
+    if (nextSlide !== null) {
       // Há conexão no fluxo - usar ela
       dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
-      scrollToSlide(nextIndex);
+      scrollToSlide(nextSlide.index, nextSlide.isDirectJump);
     } else {
       // Não há conexão - usar comportamento padrão (próximo slide)
       dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
       if (currentSlide < reel.slides.length - 1) {
-        scrollToSlide(currentSlide + 1);
+        scrollToSlide(currentSlide + 1, false);
       }
     }
   }, [reel, currentSlide, getNextSlideIndex, scrollToSlide]);
@@ -2037,12 +2062,12 @@ export default function PublicQuiz() {
       if (!reel?.slides || currentSlide >= reel.slides.length) return;
       
       const currentSlideData = reel.slides[currentSlide];
-      const nextIndex = getNextSlideIndex(currentSlideData.id, undefined, optionId);
+      const nextSlide = getNextSlideIndex(currentSlideData.id, undefined, optionId);
       
-      if (nextIndex !== null) {
-        scrollToSlide(nextIndex);
+      if (nextSlide !== null) {
+        scrollToSlide(nextSlide.index, nextSlide.isDirectJump);
       } else if (currentSlide < reel.slides.length - 1) {
-        scrollToSlide(currentSlide + 1);
+        scrollToSlide(currentSlide + 1, false);
       }
     }, 500);
   };
@@ -2068,7 +2093,7 @@ export default function PublicQuiz() {
 
     if (destination === 'next-slide') {
       if (currentSlide < (reel?.slides?.length || 0) - 1) {
-        scrollToSlide(currentSlide + 1);
+        scrollToSlide(currentSlide + 1, false);
       }
     } else if (destination === 'url' && url) {
       // Validar e preparar URL
@@ -2217,12 +2242,12 @@ export default function PublicQuiz() {
             }
             onNavigateUp={() => {
               if (currentSlide > 0) {
-                scrollToSlide(currentSlide - 1);
+                scrollToSlide(currentSlide - 1, false);
               }
             }}
             onNavigateDown={() => {
               if (currentSlide < slides.length - 1 && !checkIfSlideIsLocked(currentSlide)) {
-                scrollToSlide(currentSlide + 1);
+                scrollToSlide(currentSlide + 1, false);
               }
             }}
           />
@@ -2735,7 +2760,7 @@ export default function PublicQuiz() {
                                   onNextSlide={() => {
                                     dispatchSlide({ type: 'SET_IS_LOCKED', payload: false });
                                     if (currentSlide < (reel?.slides?.length || 0) - 1) {
-                                      scrollToSlide(currentSlide + 1);
+                                      scrollToSlide(currentSlide + 1, false);
                                     }
                                   }}
                                   onFormSubmit={(data) => handleFormSubmit(element.id, data)}

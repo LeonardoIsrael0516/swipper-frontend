@@ -231,7 +231,7 @@ export default function PreviewQuiz() {
     }
   }, [reel, currentSlide, pointsConfig, addPoints, triggerGamification]);
 
-  const scrollToSlide = useCallback(async (slideIndex: number) => {
+  const scrollToSlide = useCallback(async (slideIndex: number, isDirectJump?: boolean) => {
     // Enviar formulários completos antes de avançar
     if (reel?.slides && currentSlide < reel.slides.length) {
       const currentSlideData = reel.slides[currentSlide];
@@ -254,15 +254,40 @@ export default function PreviewQuiz() {
       // Marcar que o scroll é programático (não deve ser bloqueado)
       isProgrammaticScrollRef.current = true;
       
-      container.scrollTo({
-        top: slideIndex * container.clientHeight,
-        behavior: 'smooth',
-      });
+      // Detectar se é pulo direto (diferença > 1 entre slide atual e destino)
+      const slideDifference = Math.abs(slideIndex - currentSlide);
+      const isJump = isDirectJump !== undefined ? isDirectJump : slideDifference > 1;
       
-      // Limpar a flag após a animação de scroll completar (assumindo ~500ms para smooth scroll)
-      setTimeout(() => {
-        isProgrammaticScrollRef.current = false;
-      }, 600);
+      const targetScrollTop = slideIndex * container.clientHeight;
+      
+      // Para pulos diretos, usar scroll instantâneo (não mostrar slides intermediários)
+      if (isJump) {
+        // Scroll instantâneo sem animação
+        container.scrollTop = targetScrollTop;
+        // Garantir que o scroll foi aplicado
+        requestAnimationFrame(() => {
+          if (container.scrollTop !== targetScrollTop) {
+            container.scrollTop = targetScrollTop;
+          }
+        });
+        // Atualizar currentSlide imediatamente para pulos diretos
+        setCurrentSlide(slideIndex);
+        // Limpar flag rapidamente para pulos diretos
+        setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 100);
+      } else {
+        // Scroll suave para navegação sequencial
+        container.scrollTo({
+          top: targetScrollTop,
+          behavior: 'smooth',
+        });
+        
+        // Limpar a flag após a animação de scroll completar (assumindo ~500ms para smooth scroll)
+        setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 600);
+      }
     }
   }, [reel, currentSlide]);
 
@@ -371,7 +396,7 @@ export default function PreviewQuiz() {
         if (currentSlideIsLocked && newSlide > currentSlide && !isProgrammatic) {
           // Reverter scroll para o slide atual (não permitir sair do slide travado)
           scrollTimeout = setTimeout(() => {
-            scrollToSlide(currentSlide);
+            scrollToSlide(currentSlide, false);
           }, 50);
           return; // Não atualizar currentSlide
         }
@@ -392,14 +417,15 @@ export default function PreviewQuiz() {
                 if (currentSlideIsLocked && !isProgrammatic) {
                   // Reverter scroll para o slide atual
                   scrollTimeout = setTimeout(() => {
-                    scrollToSlide(currentSlide);
+                    scrollToSlide(currentSlide, false);
                   }, 50);
                   return;
                 }
               
               // Redirecionar para o slide conectado
+              const isDirectJump = Math.abs(targetIndex - currentSlide) > 1;
               scrollTimeout = setTimeout(() => {
-                scrollToSlide(targetIndex);
+                scrollToSlide(targetIndex, isDirectJump);
               }, 50);
               return;
             }
@@ -757,13 +783,14 @@ export default function PreviewQuiz() {
     return null;
   }, [reel]);
 
-  const getNextSlideIndex = useCallback((slideId: string, elementId?: string, optionId?: string, itemId?: string): number | null => {
+  const getNextSlideIndex = useCallback((slideId: string, elementId?: string, optionId?: string, itemId?: string): { index: number; isDirectJump: boolean } | null => {
     if (!reel?.slides) return null;
     
     const slide = reel.slides.find((s) => s.id === slideId);
     if (!slide) return null;
 
     const logicNext = slide.logicNext || {};
+    const currentIndex = reel.slides.findIndex((s) => s.id === slideId);
     
     // PRIORIDADE 1: Se há conexão de elemento específico com item (para Question/QuestionGrid)
     if (elementId && itemId) {
@@ -771,7 +798,10 @@ export default function PreviewQuiz() {
       if (logicNext.elements?.[elementItemKey]) {
         const targetSlideId = logicNext.elements[elementItemKey];
         const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
-        return targetIndex >= 0 ? targetIndex : null;
+        if (targetIndex >= 0) {
+          const isDirectJump = Math.abs(targetIndex - currentIndex) > 1;
+          return { index: targetIndex, isDirectJump };
+        }
       }
     }
     
@@ -779,27 +809,35 @@ export default function PreviewQuiz() {
     if (elementId && logicNext.elements?.[elementId]) {
       const targetSlideId = logicNext.elements[elementId];
       const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
-      return targetIndex >= 0 ? targetIndex : null;
+      if (targetIndex >= 0) {
+        const isDirectJump = Math.abs(targetIndex - currentIndex) > 1;
+        return { index: targetIndex, isDirectJump };
+      }
     }
     
     // PRIORIDADE 3: Se há conexão de opção específica
     if (optionId && logicNext.options?.[optionId]) {
       const targetSlideId = logicNext.options[optionId];
       const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
-      return targetIndex >= 0 ? targetIndex : null;
+      if (targetIndex >= 0) {
+        const isDirectJump = Math.abs(targetIndex - currentIndex) > 1;
+        return { index: targetIndex, isDirectJump };
+      }
     }
     
     // PRIORIDADE 4: Se há conexão padrão (defaultNext)
     if (logicNext.defaultNext) {
       const targetSlideId = logicNext.defaultNext;
       const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
-      return targetIndex >= 0 ? targetIndex : null;
+      if (targetIndex >= 0) {
+        const isDirectJump = Math.abs(targetIndex - currentIndex) > 1;
+        return { index: targetIndex, isDirectJump };
+      }
     }
     
     // Fallback: próxima na ordem
-    const currentIndex = reel.slides.findIndex((s) => s.id === slideId);
     if (currentIndex >= 0 && currentIndex < reel.slides.length - 1) {
-      return currentIndex + 1;
+      return { index: currentIndex + 1, isDirectJump: false };
     }
     
     return null;
@@ -852,18 +890,18 @@ export default function PreviewQuiz() {
       
       // PRIORIDADE 1: Verificar se há conexão no fluxo (sempre verificar primeiro)
       if (elementId) {
-        const nextIndex = getNextSlideIndex(currentSlideData.id, elementId);
+        const nextSlide = getNextSlideIndex(currentSlideData.id, elementId);
         
-        if (nextIndex !== null) {
+        if (nextSlide !== null) {
           // Há conexão no fluxo - usar ela (ignorar configuração do botão)
-          scrollToSlide(nextIndex);
+          scrollToSlide(nextSlide.index, nextSlide.isDirectJump);
           return; // IMPORTANTE: retornar aqui para não executar lógica padrão
         }
       }
       
       // PRIORIDADE 2: Se não há conexão no fluxo, usar comportamento padrão (próximo slide)
       if (currentSlide < reel.slides.length - 1) {
-        scrollToSlide(currentSlide + 1);
+        scrollToSlide(currentSlide + 1, false);
       }
     } else if (destination === 'url' && url) {
       // Validar e preparar URL
@@ -921,7 +959,8 @@ export default function PreviewQuiz() {
     if (nextIndex !== null) {
       // Há conexão no fluxo - usar ela (ignorar ação do item)
       setIsSlideLocked(false);
-      scrollToSlide(nextIndex);
+      const isDirectJump = Math.abs(nextIndex - currentSlide) > 1;
+      scrollToSlide(nextIndex, isDirectJump);
       return;
     }
     
@@ -932,7 +971,8 @@ export default function PreviewQuiz() {
       // Navegar para slide específico configurado no item
       const targetSlideIndex = reel.slides.findIndex((s: any) => s.id === slideId);
       if (targetSlideIndex !== -1) {
-        scrollToSlide(targetSlideIndex);
+        const isDirectJump = Math.abs(targetSlideIndex - currentSlide) > 1;
+        scrollToSlide(targetSlideIndex, isDirectJump);
       }
     } else if (actionType === 'url' && url) {
       // Abrir URL
@@ -970,17 +1010,17 @@ export default function PreviewQuiz() {
     const currentSlideData = reel.slides[currentSlide];
     
     // Verificar conexão no fluxo primeiro
-    const nextIndex = getNextSlideIndex(currentSlideData.id, elementId, undefined, itemId);
+    const nextSlide = getNextSlideIndex(currentSlideData.id, elementId, undefined, itemId);
     
-    if (nextIndex !== null) {
+    if (nextSlide !== null) {
       // Há conexão no fluxo - usar ela
       setIsSlideLocked(false);
-      scrollToSlide(nextIndex);
+      scrollToSlide(nextSlide.index, nextSlide.isDirectJump);
     } else {
       // Não há conexão - usar comportamento padrão (próximo slide)
       setIsSlideLocked(false);
       if (currentSlide < reel.slides.length - 1) {
-        scrollToSlide(currentSlide + 1);
+        scrollToSlide(currentSlide + 1, false);
       }
     }
   }, [reel, currentSlide, getNextSlideIndex, scrollToSlide]);
@@ -993,12 +1033,12 @@ export default function PreviewQuiz() {
       if (!reel?.slides || currentSlide >= reel.slides.length) return;
       
       const currentSlideData = reel.slides[currentSlide];
-      const nextIndex = getNextSlideIndex(currentSlideData.id, undefined, optionId);
+      const nextSlide = getNextSlideIndex(currentSlideData.id, undefined, optionId);
       
-      if (nextIndex !== null) {
-        scrollToSlide(nextIndex);
+      if (nextSlide !== null) {
+        scrollToSlide(nextSlide.index, nextSlide.isDirectJump);
       } else if (currentSlide < reel.slides.length - 1) {
-        scrollToSlide(currentSlide + 1);
+        scrollToSlide(currentSlide + 1, false);
       }
     }, 500);
   };
@@ -1009,7 +1049,7 @@ export default function PreviewQuiz() {
 
     if (destination === 'next-slide') {
       if (currentSlide < (reel?.slides?.length || 0) - 1) {
-        scrollToSlide(currentSlide + 1);
+        scrollToSlide(currentSlide + 1, false);
       }
     } else if (destination === 'url' && url) {
       // Validar e preparar URL

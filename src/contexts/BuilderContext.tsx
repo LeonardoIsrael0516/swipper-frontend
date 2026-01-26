@@ -216,6 +216,7 @@ export interface Reel {
   pixelsConfig?: PixelsConfig;
   socialConfig?: SocialConfig;
   gamificationConfig?: GamificationConfig;
+  uiConfig?: any; // Para armazenar pastas e outras configurações de UI
   slides: Slide[];
 }
 
@@ -1525,6 +1526,64 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     }
   }, [reel, selectedSlide]);
 
+  // Função auxiliar para calcular ordem hierárquica baseada na estrutura visual atual
+  // Esta função recalcula a ordem baseada na posição visual na sidebar (pastas + ordem dentro das pastas)
+  const calculateHierarchicalOrder = useCallback((slides: Slide[]): Slide[] => {
+    if (!reel) return slides;
+    
+    const folders = (reel.uiConfig?.folders || []).sort((a: any, b: any) => a.order - b.order);
+    const folderMap = new Map<string, Slide[]>();
+    const unassigned: Slide[] = [];
+    
+    // Criar um mapa de posição no array original para manter a ordem relativa após o movimento
+    const positionMap = new Map<string, number>();
+    slides.forEach((slide, index) => {
+      positionMap.set(slide.id, index);
+    });
+
+    // Organizar slides por pasta baseado na estrutura atual
+    slides.forEach((slide) => {
+      const folderId = slide.uiConfig?.folderId;
+      if (folderId) {
+        if (!folderMap.has(folderId)) {
+          folderMap.set(folderId, []);
+        }
+        folderMap.get(folderId)!.push(slide);
+      } else {
+        unassigned.push(slide);
+      }
+    });
+
+    // Ordenar slides dentro de cada pasta pela posição no array (não pela ordem antiga!)
+    folderMap.forEach((folderSlides) => {
+      folderSlides.sort((a, b) => {
+        const posA = positionMap.get(a.id) ?? 0;
+        const posB = positionMap.get(b.id) ?? 0;
+        return posA - posB;
+      });
+    });
+    unassigned.sort((a, b) => {
+      const posA = positionMap.get(a.id) ?? 0;
+      const posB = positionMap.get(b.id) ?? 0;
+      return posA - posB;
+    });
+
+    // Criar ordem hierárquica: pastas em ordem, depois slides sem pasta
+    // O primeiro slide da primeira pasta terá order = 1
+    const hierarchicalOrder: Slide[] = [];
+    folders.forEach((folder: any) => {
+      const folderSlides = folderMap.get(folder.id) || [];
+      hierarchicalOrder.push(...folderSlides);
+    });
+    hierarchicalOrder.push(...unassigned);
+
+    // Atualizar ordem de cada slide baseado na ordem hierárquica
+    return hierarchicalOrder.map((slide, index) => ({
+      ...slide,
+      order: index + 1,
+    }));
+  }, [reel]);
+
   const reorderSlides = useCallback(async (activeId: string, overId: string) => {
     if (!reel) return;
     if (activeId === overId) return;
@@ -1534,16 +1593,13 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 
     if (activeIndex === -1 || overIndex === -1) return;
 
-    // Criar nova ordem dos slides
+    // Criar nova ordem dos slides (movimento linear primeiro)
     const newSlides = [...reel.slides];
     const [movedSlide] = newSlides.splice(activeIndex, 1);
     newSlides.splice(overIndex, 0, movedSlide);
 
-    // Atualizar ordem de cada slide
-    const updatedSlides = newSlides.map((slide, index) => ({
-      ...slide,
-      order: index + 1,
-    }));
+    // Recalcular ordem hierárquica baseada na estrutura visual
+    const updatedSlides = calculateHierarchicalOrder(newSlides);
 
     // Atualizar estado local imediatamente
     const updatedReel = {
@@ -1595,7 +1651,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [reel, selectedSlide]);
+  }, [reel, selectedSlide, calculateHierarchicalOrder]);
 
   const saveReel = useCallback(async () => {
     if (!reel || isLoading) return;
@@ -1614,6 +1670,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         seoDescription: reel.seoDescription,
         faviconUrl: reel.faviconUrl,
         showProgressBar: reel.showProgressBar,
+        uiConfig: reel.uiConfig, // Salvar configurações de UI (pastas, etc)
         status: 'DRAFT', // Sempre salvar como rascunho
       });
 
@@ -1654,6 +1711,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         seoDescription: reel.seoDescription,
         faviconUrl: reel.faviconUrl,
         showProgressBar: reel.showProgressBar,
+        uiConfig: reel.uiConfig, // Salvar configurações de UI (pastas, etc)
         status: 'DRAFT',
       });
 
@@ -1756,6 +1814,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         seoDescription: reel.seoDescription,
         faviconUrl: reel.faviconUrl,
         showProgressBar: reel.showProgressBar,
+        uiConfig: reel.uiConfig, // Salvar configurações de UI (pastas, etc)
         status: 'ACTIVE',
       });
 

@@ -8,14 +8,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Eye, ArrowLeft, Send, CheckCircle2, Link as LinkIcon, ExternalLink, Copy, MoreVertical, Save, ChevronDown, FileText, GitBranch, Palette, BarChart3, Settings } from 'lucide-react';
+import { Eye, ArrowLeft, Send, CheckCircle2, Link as LinkIcon, ExternalLink, Copy, MoreVertical, Save, ChevronDown, FileText, GitBranch, Palette, BarChart3, Settings, Sun, Moon } from 'lucide-react';
 import { useBuilder } from '@/contexts/BuilderContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export function BuilderHeader() {
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
+  const { isAuthenticated } = useAuth();
   const { reel, saveReel, publishReel, hasUnsavedChanges, lastSavedAt, isLoading, selectedTab, setSelectedTab } = useBuilder();
   const [isPublishing, setIsPublishing] = useState(false);
   const isMobile = useIsMobile();
@@ -143,8 +145,20 @@ export function BuilderHeader() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-          {/* Right: Publicar + Dropdown - com margin-left auto para empurrar para direita */}
+          {/* Right: Theme Toggle + Publicar + Dropdown - com margin-left auto para empurrar para direita */}
           <div className="flex items-center gap-1 ml-auto">
+            {/* Theme Toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="relative h-8 w-8 hover:bg-surface-hover hover:text-foreground"
+            >
+              <Sun className={`w-4 h-4 transition-all duration-300 ${theme === 'dark' ? 'rotate-90 scale-0' : 'rotate-0 scale-100'}`} />
+              <Moon className={`absolute w-4 h-4 transition-all duration-300 ${theme === 'dark' ? 'rotate-0 scale-100' : '-rotate-90 scale-0'}`} />
+              <span className="sr-only">Toggle theme</span>
+            </Button>
+            
             {reel?.status === 'ACTIVE' && !hasUnsavedChanges && lastSavedAt ? (
               // Publicado
               <Button
@@ -214,7 +228,7 @@ export function BuilderHeader() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
           </Link>
-          <Link to="/" className="flex items-center gap-2 group">
+          <Link to={isAuthenticated ? '/dashboard' : '/'} className="flex items-center gap-2 group">
             <img
               src={theme === 'dark' ? '/logo-dark.png' : '/logo-white.png'}
               alt="ReelQuiz"
@@ -243,6 +257,18 @@ export function BuilderHeader() {
 
         {/* Right: Action Buttons */}
         <div className="flex items-center gap-2">
+          {/* Theme Toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            className="relative h-9 w-9 hover:bg-surface-hover hover:text-foreground"
+          >
+            <Sun className={`w-5 h-5 transition-all duration-300 ${theme === 'dark' ? 'rotate-90 scale-0' : 'rotate-0 scale-100'}`} />
+            <Moon className={`absolute w-5 h-5 transition-all duration-300 ${theme === 'dark' ? 'rotate-0 scale-100' : '-rotate-90 scale-0'}`} />
+            <span className="sr-only">Toggle theme</span>
+          </Button>
+          
           {/* Indicador Rascunho Salvo - apenas quando está em DRAFT */}
           {reel?.status === 'DRAFT' && !hasUnsavedChanges && lastSavedAt && (
             <span className="text-xs text-muted-foreground px-2">
