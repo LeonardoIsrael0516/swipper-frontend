@@ -201,9 +201,9 @@ const renderElement = (element: SlideElement, reelId?: string) => {
     case 'PLANS':
       return <PlansElement key={element.id} element={normalizedElement} isInBuilder={true} />;
     case 'QUESTIONNAIRE':
-      return <QuestionnaireElement key={element.id} element={normalizedElement} />;
+      return <QuestionnaireElement key={element.id} element={normalizedElement} isInBuilder={true} />;
     case 'QUESTION_GRID':
-      return <QuestionGridElement key={element.id} element={normalizedElement} />;
+      return <QuestionGridElement key={element.id} element={normalizedElement} isInBuilder={true} />;
     case 'PROGRESS':
       return <ProgressElement key={element.id} element={normalizedElement} />;
     case 'FORM':

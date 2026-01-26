@@ -20,9 +20,10 @@ const normalizeUiConfig = (uiConfig: any): any => {
 
 interface QuestionGridElementProps {
   element: SlideElement;
+  isInBuilder?: boolean;
 }
 
-export function QuestionGridElement({ element }: QuestionGridElementProps) {
+export function QuestionGridElement({ element, isInBuilder = false }: QuestionGridElementProps) {
   const config = normalizeUiConfig(element.uiConfig);
   const {
     items = [],
@@ -40,12 +41,14 @@ export function QuestionGridElement({ element }: QuestionGridElementProps) {
   const imagePlaceholderColor = '#f3f4f6';
   const imagePlaceholderBorderColor = '#d1d5db';
 
-  const [isVisible, setIsVisible] = useState(!delayEnabled);
-  const [opacity, setOpacity] = useState(delayEnabled ? 0 : 1);
+  // No builder, sempre mostrar (ignorar delay)
+  const shouldApplyDelay = !isInBuilder && delayEnabled && delaySeconds > 0;
+  const [isVisible, setIsVisible] = useState(!shouldApplyDelay);
+  const [opacity, setOpacity] = useState(shouldApplyDelay ? 0 : 1);
 
-  // Gerenciar delay
+  // Gerenciar delay (apenas se não estiver no builder)
   useEffect(() => {
-    if (delayEnabled && delaySeconds > 0) {
+    if (shouldApplyDelay) {
       setIsVisible(false);
       setOpacity(0);
       
@@ -60,7 +63,7 @@ export function QuestionGridElement({ element }: QuestionGridElementProps) {
       setIsVisible(true);
       setOpacity(1);
     }
-  }, [delayEnabled, delaySeconds]);
+  }, [shouldApplyDelay, delaySeconds]);
 
   // Normalizar items - apenas imageUrl, title, description
   const normalizedItems = Array.isArray(items) ? items.map((item: any) => ({

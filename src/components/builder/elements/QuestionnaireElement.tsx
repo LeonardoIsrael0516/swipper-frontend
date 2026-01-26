@@ -20,6 +20,7 @@ const normalizeUiConfig = (uiConfig: any): any => {
 
 interface QuestionnaireElementProps {
   element: SlideElement;
+  isInBuilder?: boolean;
 }
 
 // Função para obter o componente do ícone do Lucide React
@@ -159,7 +160,7 @@ const renderEndIcon = (endIcon: string, endIconCustom: string) => {
   return null;
 };
 
-export function QuestionnaireElement({ element }: QuestionnaireElementProps) {
+export function QuestionnaireElement({ element, isInBuilder = false }: QuestionnaireElementProps) {
   const config = normalizeUiConfig(element.uiConfig);
   const {
     items = [],
@@ -181,12 +182,14 @@ export function QuestionnaireElement({ element }: QuestionnaireElementProps) {
     borderWidth = 1,
   } = config;
 
-  const [isVisible, setIsVisible] = useState(!delayEnabled);
-  const [opacity, setOpacity] = useState(delayEnabled ? 0 : 1);
+  // No builder, sempre mostrar (ignorar delay)
+  const shouldApplyDelay = !isInBuilder && delayEnabled && delaySeconds > 0;
+  const [isVisible, setIsVisible] = useState(!shouldApplyDelay);
+  const [opacity, setOpacity] = useState(shouldApplyDelay ? 0 : 1);
 
-  // Gerenciar delay
+  // Gerenciar delay (apenas se não estiver no builder)
   useEffect(() => {
-    if (delayEnabled && delaySeconds > 0) {
+    if (shouldApplyDelay) {
       setIsVisible(false);
       setOpacity(0);
       
@@ -201,7 +204,7 @@ export function QuestionnaireElement({ element }: QuestionnaireElementProps) {
       setIsVisible(true);
       setOpacity(1);
     }
-  }, [delayEnabled, delaySeconds]);
+  }, [shouldApplyDelay, delaySeconds]);
 
   // Garantir que items é um array e normalizar cada item
   const normalizedItems = Array.isArray(items) ? items.map((item: any) => {

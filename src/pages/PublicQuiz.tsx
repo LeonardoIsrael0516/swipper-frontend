@@ -41,6 +41,8 @@ import { generateVisitorId, getUTMParams } from '@/lib/cookies';
 import { useAnalyticsBatch } from '@/hooks/useAnalyticsBatch';
 import { isCustomDomain, normalizeDomain, removeUtmParamsIfNeeded } from '@/lib/utils';
 import DOMPurify from 'dompurify';
+import { useTracking } from '@/contexts/TrackingContext';
+import { getUTM } from '@/lib/tracking';
 
 // Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
 // Movida para fora do componente para evitar recriação
@@ -172,6 +174,8 @@ export default function PublicQuiz() {
   const { queueEvent } = useAnalyticsBatch();
   const slideRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const isProgrammaticScrollRef = useRef<boolean>(false);
+  const { sendCapiEvent } = useTracking();
+  const pixelBlockedRef = useRef<boolean>(false); // Flag para indicar se o pixel foi bloqueado
   
   // Detectar se é domínio personalizado e normalizar o domínio
   const customDomain = isCustomDomain() ? normalizeDomain(window.location.hostname) : null;
@@ -478,16 +482,32 @@ export default function PublicQuiz() {
   // Atualizar título da página e meta tags
   useEffect(() => {
     if (reel) {
-      document.title = reel.seoTitle || reel.title || 'Quiz';
+      const seoTitle = reel.seoTitle || reel.title || 'Quiz';
+      const seoDescription = reel.seoDescription || reel.description || '';
+      const currentUrl = window.location.href;
       
+      // Atualizar título da página
+      document.title = seoTitle;
+      
+      // Helper para atualizar ou criar meta tag
+      const updateOrCreateMeta = (property: string, content: string, isProperty = true) => {
+        const selector = isProperty ? `meta[property="${property}"]` : `meta[name="${property}"]`;
+        let metaTag = document.querySelector(selector);
+        if (!metaTag) {
+          metaTag = document.createElement('meta');
+          if (isProperty) {
+            metaTag.setAttribute('property', property);
+          } else {
+            metaTag.setAttribute('name', property);
+          }
+          document.head.appendChild(metaTag);
+        }
+        metaTag.setAttribute('content', content);
+        return metaTag;
+      };
+
       // Atualizar meta description
-      let metaDescription = document.querySelector('meta[name="description"]');
-      if (!metaDescription) {
-        metaDescription = document.createElement('meta');
-        metaDescription.setAttribute('name', 'description');
-        document.head.appendChild(metaDescription);
-      }
-      metaDescription.setAttribute('content', reel.seoDescription || reel.description || '');
+      updateOrCreateMeta('description', seoDescription, false);
       
       // Atualizar favicon
       let faviconLink = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
@@ -499,15 +519,89 @@ export default function PublicQuiz() {
       if (reel.faviconUrl) {
         faviconLink.setAttribute('href', reel.faviconUrl);
       }
+
+      // Atualizar Open Graph meta tags
+      updateOrCreateMeta('og:title', seoTitle);
+      updateOrCreateMeta('og:description', seoDescription);
+      updateOrCreateMeta('og:url', currentUrl);
+      updateOrCreateMeta('og:type', 'website');
+      
+      // Helper para garantir URL absoluta
+      const ensureAbsoluteUrl = (url: string): string => {
+        // Se já é uma URL absoluta (http:// ou https://), retornar como está
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          return url;
+        }
+        // Se começa com /, adicionar origin
+        if (url.startsWith('/')) {
+          return `${window.location.origin}${url}`;
+        }
+        // Caso contrário, adicionar origin e /
+        return `${window.location.origin}/${url}`;
+      };
+
+      // Atualizar og:image com favicon (garantir URL absoluta)
+      if (reel.faviconUrl) {
+        const ogImageUrl = ensureAbsoluteUrl(reel.faviconUrl);
+        updateOrCreateMeta('og:image', ogImageUrl);
+      } else {
+        // Se não houver favicon, usar imagem padrão
+        const defaultImage = `${window.location.origin}/meta.png`;
+        updateOrCreateMeta('og:image', defaultImage);
+      }
+
+      // Atualizar Twitter Card meta tags
+      updateOrCreateMeta('twitter:card', 'summary_large_image', false);
+      updateOrCreateMeta('twitter:title', seoTitle, false);
+      updateOrCreateMeta('twitter:description', seoDescription, false);
+      
+      if (reel.faviconUrl) {
+        const twitterImageUrl = ensureAbsoluteUrl(reel.faviconUrl);
+        updateOrCreateMeta('twitter:image', twitterImageUrl, false);
+      } else {
+        // Se não houver favicon, usar imagem padrão
+        const defaultImage = `${window.location.origin}/meta.png`;
+        updateOrCreateMeta('twitter:image', defaultImage, false);
+      }
     }
     
     return () => {
       // Resetar título ao sair
-      document.title = 'Quizz Reels';
+      document.title = 'Swipper - Reels Sales';
+      
+      // Restaurar meta tags padrão
+      const defaultTitle = 'Swipper';
+      const defaultDescription = 'Crie e compartilhe quizzes interativos estilo reels com Swipper';
+      const defaultImage = `${window.location.origin}/meta.png`;
+      const defaultUrl = window.location.origin;
+
+      const updateOrCreateMeta = (property: string, content: string, isProperty = true) => {
+        const selector = isProperty ? `meta[property="${property}"]` : `meta[name="${property}"]`;
+        let metaTag = document.querySelector(selector);
+        if (!metaTag) {
+          metaTag = document.createElement('meta');
+          if (isProperty) {
+            metaTag.setAttribute('property', property);
+          } else {
+            metaTag.setAttribute('name', property);
+          }
+          document.head.appendChild(metaTag);
+        }
+        metaTag.setAttribute('content', content);
+      };
+
+      updateOrCreateMeta('description', defaultDescription, false);
+      updateOrCreateMeta('og:title', defaultTitle);
+      updateOrCreateMeta('og:description', defaultDescription);
+      updateOrCreateMeta('og:image', defaultImage);
+      updateOrCreateMeta('og:url', defaultUrl);
+      updateOrCreateMeta('twitter:title', defaultTitle, false);
+      updateOrCreateMeta('twitter:description', defaultDescription, false);
+      updateOrCreateMeta('twitter:image', defaultImage, false);
     };
   }, [reel]);
 
-  // Injetar Meta Pixel
+  // Injetar Meta Pixel e detectar bloqueio
   useEffect(() => {
     if (reel?.pixelsConfig?.metaPixel?.enabled && reel.pixelsConfig.metaPixel.pixelId) {
       const pixelId = reel.pixelsConfig.metaPixel.pixelId;
@@ -515,8 +609,12 @@ export default function PublicQuiz() {
       
       // Verificar se o pixel já foi injetado
       if ((window as any).fbq && (window as any).fbq.queue) {
+        pixelBlockedRef.current = false;
         return;
       }
+
+      // Resetar flag de bloqueio
+      pixelBlockedRef.current = false;
 
       // Injetar código oficial do Meta Pixel no head
       // Usar textContent em vez de innerHTML para segurança e performance
@@ -548,7 +646,49 @@ export default function PublicQuiz() {
       noscript.appendChild(img);
       document.body.appendChild(noscript);
 
+      // Sempre enviar PageView via CAPI também (dual tracking para garantir rastreamento)
+      // Isso garante que mesmo se o pixel for bloqueado, o evento será rastreado
+      // CAPI usa configurações globais do app, não do reel específico
+      const utmParams = getUTM();
+      sendCapiEvent('PageView', {
+        ipAddress: undefined, // Será preenchido pelo backend
+        userAgent: navigator.userAgent,
+      }, undefined).catch((error) => {
+        // Silenciosamente falhar se CAPI não estiver configurado (normal em páginas públicas)
+        // O pixel do reel ainda funcionará se não estiver bloqueado
+        if (import.meta.env.DEV) {
+          console.debug('[PublicQuiz] CAPI não disponível ou não configurado (normal em páginas públicas)');
+        }
+      });
+
+      // Detectar se o pixel foi bloqueado após alguns segundos
+      // Verificar se window.fbq foi carregado corretamente
+      const checkPixelBlocked = () => {
+        const fbq = (window as any).fbq;
+        if (!fbq || typeof fbq !== 'function') {
+          // Pixel foi bloqueado
+          if (!pixelBlockedRef.current) {
+            pixelBlockedRef.current = true;
+            
+            if (import.meta.env.DEV) {
+              console.log('[PublicQuiz] Meta Pixel bloqueado detectado - eventos serão enviados apenas via CAPI');
+            }
+          }
+        } else {
+          pixelBlockedRef.current = false;
+          if (import.meta.env.DEV) {
+            console.log('[PublicQuiz] Meta Pixel carregado com sucesso');
+          }
+        }
+      };
+
+      // Verificar após alguns segundos se o pixel carregou
+      const checkPixelBlockedTimeout = setTimeout(() => {
+        checkPixelBlocked();
+      }, 5000); // Aguardar 5 segundos para verificar se o pixel carregou
+
       return () => {
+        clearTimeout(checkPixelBlockedTimeout);
         // Cleanup: remover script e noscript
         const scriptElement = document.getElementById(`meta-pixel-script-${reel.id}`);
         if (scriptElement) {
@@ -560,7 +700,7 @@ export default function PublicQuiz() {
         }
       };
     }
-  }, [reel?.pixelsConfig?.metaPixel]);
+  }, [reel?.pixelsConfig?.metaPixel, sendCapiEvent]);
 
   // Injetar Scripts Personalizados
   useEffect(() => {

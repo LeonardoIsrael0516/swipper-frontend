@@ -55,16 +55,27 @@ export const ButtonElement = memo(function ButtonElement({ element, onButtonClic
     padding = { top: 12, right: 24, bottom: 12, left: 24 },
   } = config;
 
-  const [isVisible, setIsVisible] = useState(false);
-  const [opacity, setOpacity] = useState(0);
+  // No builder, sempre mostrar imediatamente (ignorar delay)
+  // Fora do builder, começar invisível se tiver delay
+  const shouldStartVisible = isInBuilder || !delayEnabled || delaySeconds === 0;
+  const [isVisible, setIsVisible] = useState(shouldStartVisible);
+  const [opacity, setOpacity] = useState(shouldStartVisible ? 1 : 0);
 
-  // Gerenciar delay - só começar quando o slide estiver ativo (ou se estiver no builder)
+  // Gerenciar delay - no builder, sempre mostrar (ignorar delay)
   useEffect(() => {
-    // No builder, sempre considerar ativo (isInBuilder = true)
-    const shouldBeActive = isInBuilder || isActive;
+    // No builder, sempre mostrar imediatamente (ignorar delay)
+    if (isInBuilder) {
+      setIsVisible(true);
+      setOpacity(1);
+      // Se não há delay, não deve ocultar elementos sociais
+      if (onVisibilityChange && hideSocialElementsOnDelay) {
+        onVisibilityChange(element.id, true, false);
+      }
+      return;
+    }
 
     // Se não está ativo (e não é builder), resetar
-    if (!shouldBeActive) {
+    if (!isActive) {
       if (delayEnabled && delaySeconds > 0) {
         setIsVisible(false);
         setOpacity(0);
@@ -76,7 +87,7 @@ export const ButtonElement = memo(function ButtonElement({ element, onButtonClic
       return;
     }
 
-    // Slide está ativo (ou é builder) - iniciar delay se habilitado
+    // Slide está ativo - iniciar delay se habilitado
     if (delayEnabled && delaySeconds > 0) {
       // Iniciar invisível
       setIsVisible(false);

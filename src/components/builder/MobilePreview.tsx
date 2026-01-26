@@ -138,9 +138,9 @@ function SortableElement({ element, reelId }: { element: SlideElement; reelId?: 
       case 'PLANS':
         return <PlansElement element={normalizedElement} isInBuilder={true} />;
       case 'QUESTIONNAIRE':
-        return <QuestionnaireElement element={normalizedElement} />;
+        return <QuestionnaireElement element={normalizedElement} isInBuilder={true} />;
       case 'QUESTION_GRID':
-        return <QuestionGridElement element={normalizedElement} />;
+        return <QuestionGridElement element={normalizedElement} isInBuilder={true} />;
       case 'PROGRESS':
         return <ProgressElement element={normalizedElement} />;
       case 'FORM':
