@@ -1354,6 +1354,28 @@ export function BackgroundEditor() {
           </p>
         </div>
       )}
+
+      {/* Ocultar Barra de Progresso de Gamificação */}
+      {reel?.gamificationConfig?.enabled && reel?.gamificationConfig?.elements?.pointsProgress?.enabled && (
+        <div className="mt-6 pt-6 border-t border-border/50 space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="hideGamificationProgress">Ocultar Barra de Progresso de Gamificação neste Slide</Label>
+            <Switch
+              id="hideGamificationProgress"
+              checked={selectedSlide?.hideGamificationProgress || false}
+              onCheckedChange={(checked) => {
+                if (selectedSlide) {
+                  updateSlide(selectedSlide.id, { hideGamificationProgress: checked });
+                }
+              }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Quando habilitado, a barra de progresso de pontos da gamificação ficará oculta apenas neste slide.
+          </p>
+        </div>
+      )}
+
     </div>
   );
 }

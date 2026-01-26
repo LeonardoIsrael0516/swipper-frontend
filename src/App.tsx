@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TrackingProvider } from "@/contexts/TrackingContext";
+import { PointsProvider } from "@/contexts/PointsContext";
+import { GamificationTriggerProvider } from "@/contexts/GamificationTriggerContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import { lazy, Suspense } from "react";
@@ -88,7 +90,9 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
-        <TrackingProvider>
+        <PointsProvider>
+          <GamificationTriggerProvider>
+            <TrackingProvider>
           <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -217,6 +221,8 @@ const App = () => (
           </BrowserRouter>
         </TooltipProvider>
         </TrackingProvider>
+          </GamificationTriggerProvider>
+        </PointsProvider>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>

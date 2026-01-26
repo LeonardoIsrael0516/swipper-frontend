@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, FileText, Copy, Trash2, X, Check, Pencil, GripVertical } from 'lucide-react';
+import { Plus, Copy, Trash2, X, Check, Pencil, GripVertical } from 'lucide-react';
 import { useBuilder, Slide } from '@/contexts/BuilderContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -68,15 +68,15 @@ function SortableSlideItem({ slide, isSelected, confirmingDelete, setConfirmingD
       )}
     >
       {confirmingDelete === slide.id ? (
-        <div className="p-3">
-          <div className="text-sm font-medium mb-2 text-center">
+        <div className="p-2">
+          <div className="text-xs font-medium mb-2 text-center">
             Excluir este card?
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             <Button
               size="sm"
               variant="destructive"
-              className="flex-1"
+              className="flex-1 text-xs h-7"
               onClick={async () => {
                 await onDelete(slide.id);
                 setConfirmingDelete(null);
@@ -88,7 +88,7 @@ function SortableSlideItem({ slide, isSelected, confirmingDelete, setConfirmingD
             <Button
               size="sm"
               variant="outline"
-              className="flex-1"
+              className="flex-1 text-xs h-7"
               onClick={() => setConfirmingDelete(null)}
             >
               <X className="w-3 h-3 mr-1" />
@@ -97,9 +97,8 @@ function SortableSlideItem({ slide, isSelected, confirmingDelete, setConfirmingD
           </div>
         </div>
       ) : editingSlideId === slide.id ? (
-        <div className="p-3">
-          <div className="flex items-start gap-2">
-            <FileText className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+        <div className="p-2">
+          <div className="flex items-start gap-1.5">
             <div className="flex-1 min-w-0">
               <Input
                 ref={inputRef}
@@ -117,46 +116,39 @@ function SortableSlideItem({ slide, isSelected, confirmingDelete, setConfirmingD
                 }}
                 placeholder={`Slide ${slide.order}`}
                 maxLength={100}
-                className="h-7 text-sm"
+                className="h-7 text-xs"
                 onClick={(e) => e.stopPropagation()}
               />
-              <div className="text-xs text-muted-foreground mt-1">
-                {(slide.elements || []).length} elemento{(slide.elements || []).length !== 1 ? 's' : ''}
-              </div>
             </div>
           </div>
         </div>
       ) : (
         <div
           onClick={() => onSelect(slide)}
-          className="w-full text-left p-3 cursor-pointer"
+          className="w-full text-left p-2 cursor-pointer"
         >
-          <div className="flex items-start gap-2">
+          <div className="flex items-start gap-1.5">
             <div
               {...attributes}
               {...listeners}
-              className="mt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors"
+              className="mt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
-              <GripVertical className="w-4 h-4" />
+              <GripVertical className="w-3.5 h-3.5" />
             </div>
-            <FileText className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
             <div 
               className="flex-1 min-w-0"
               onDoubleClick={(e) => onStartEdit(slide, e)}
             >
-              <div className="text-sm font-medium truncate">
+              <div className="text-xs font-medium truncate">
                 {slide.question || `Slide ${slide.order}`}
               </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {(slide.elements || []).length} elemento{(slide.elements || []).length !== 1 ? 's' : ''}
-              </div>
             </div>
-            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 w-6 p-0 hover:bg-surface-hover hover:text-foreground"
+                className="h-5 w-5 p-0 hover:bg-surface-hover hover:text-foreground"
                 onClick={(e) => onStartEdit(slide, e)}
                 title="Editar nome"
               >
@@ -165,7 +157,7 @@ function SortableSlideItem({ slide, isSelected, confirmingDelete, setConfirmingD
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 w-6 p-0 hover:bg-surface-hover hover:text-foreground"
+                className="h-5 w-5 p-0 hover:bg-surface-hover hover:text-foreground"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDuplicate(slide.id);
@@ -177,7 +169,7 @@ function SortableSlideItem({ slide, isSelected, confirmingDelete, setConfirmingD
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="h-5 w-5 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                 onClick={(e) => {
                   e.stopPropagation();
                   setConfirmingDelete(slide.id);
@@ -258,27 +250,27 @@ export function BuilderSidebar() {
 
   if (!reel) {
     return (
-      <div className="basis-64 min-w-[200px] max-w-[256px] border-r border-border/50 bg-background p-4">
+      <div className="basis-56 min-w-[180px] max-w-[224px] border-r border-border/50 bg-background p-4">
         <p className="text-sm text-muted-foreground">Nenhum reel carregado</p>
       </div>
     );
   }
 
   return (
-    <div className="basis-64 min-w-[200px] max-w-[256px] border-r border-border/50 bg-background flex flex-col">
-      <div className="p-4 border-b border-border/50">
-        <h2 className="text-sm font-semibold mb-2">Etapas</h2>
+    <div className="basis-56 min-w-[180px] max-w-[224px] border-r border-border/50 bg-background flex flex-col">
+      <div className="p-3 border-b border-border/50">
+        <h2 className="text-xs font-semibold mb-2">Etapas</h2>
         <Button
           onClick={() => addSlide()}
           size="sm"
-          className="w-full gradient-primary text-primary-foreground"
+          className="w-full gradient-primary text-primary-foreground text-xs h-8"
         >
-          <Plus className="w-4 h-4 mr-2" />
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
           Adicionar Card
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto p-2 hide-scrollbar">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}

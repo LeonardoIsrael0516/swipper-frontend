@@ -862,6 +862,125 @@ export function QuestionnaireElementEditor({ element, tab }: QuestionnaireElemen
             </SortableContext>
           </DndContext>
         )}
+
+        {/* Seção Gamificação - apenas se gamificação estiver habilitada */}
+        {reel?.gamificationConfig?.enabled && (
+          <>
+            <div className="mt-6 pt-6 border-t border-border/50 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Pontos por Resposta</h3>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Configure pontos por resposta neste questionário
+                </p>
+              </div>
+              
+              <div className="space-y-3">
+                {items.map((item: any, index: number) => (
+                  <div key={item.id} className="space-y-2 p-3 border border-border/50 rounded-lg">
+                    <Label className="text-xs font-medium">
+                      {item.title || `Item ${index + 1}`} - Pontos
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={item.points || reel?.gamificationConfig?.pointsConfig?.pointsPerAnswer || 10}
+                      onChange={(e) => {
+                        const points = parseInt(e.target.value) || 0;
+                        updateItem(item.id, { points });
+                      }}
+                      className="h-8"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Pontos ganhos ao selecionar esta resposta
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Configuração de Gamificação por Elemento */}
+            <div className="mt-6 pt-6 border-t border-border/50 space-y-4">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-semibold">Gamificação</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Configure quais elementos de gamificação aparecem quando este questionário é respondido. Sobrescreve configurações do slide.
+              </p>
+
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="gamification">
+                  <AccordionTrigger className="text-sm">Configurações de Gamificação</AccordionTrigger>
+                  <AccordionContent className="space-y-4 pt-2">
+                    {/* Elementos de Gamificação */}
+                    <div className="space-y-3">
+                      <Label className="text-xs font-medium">Elementos</Label>
+                      <div className="space-y-2">
+                        {[
+                          { key: 'enablePointsBadge', label: 'Badge de Pontos' },
+                          { key: 'enableSuccessSound', label: 'Som de Sucesso' },
+                          { key: 'enableConfetti', label: 'Confete' },
+                        ].map(({ key, label }) => (
+                          <div key={key} className="flex items-center justify-between">
+                            <Label htmlFor={`element-${element.id}-${key}`} className="text-xs">
+                              {label}
+                            </Label>
+                            <Switch
+                              id={`element-${element.id}-${key}`}
+                              checked={element.gamificationConfig?.[key as keyof typeof element.gamificationConfig] || false}
+                              onCheckedChange={(checked) => {
+                                const currentConfig = element.gamificationConfig || {};
+                                updateElement(element.id, {
+                                  gamificationConfig: {
+                                    ...currentConfig,
+                                    [key]: checked,
+                                  },
+                                });
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Triggers */}
+                    <div className="space-y-3">
+                      <Label className="text-xs font-medium">Triggers (Quando Ativar)</Label>
+                      <div className="space-y-2">
+                        {[
+                          { key: 'onButtonClick', label: 'Ao clicar em botão' },
+                          { key: 'onFormComplete', label: 'Ao completar formulário' },
+                        ].map(({ key, label }) => (
+                          <div key={key} className="flex items-center justify-between">
+                            <Label htmlFor={`element-${element.id}-trigger-${key}`} className="text-xs">
+                              {label}
+                            </Label>
+                            <Switch
+                              id={`element-${element.id}-trigger-${key}`}
+                              checked={element.gamificationConfig?.triggers?.[key as keyof typeof element.gamificationConfig.triggers] || false}
+                              onCheckedChange={(checked) => {
+                                const currentConfig = element.gamificationConfig || {};
+                                const currentTriggers = currentConfig.triggers || {};
+                                updateElement(element.id, {
+                                  gamificationConfig: {
+                                    ...currentConfig,
+                                    triggers: {
+                                      ...currentTriggers,
+                                      [key]: checked,
+                                    },
+                                  },
+                                });
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+          </>
+        )}
       </div>
     );
   }

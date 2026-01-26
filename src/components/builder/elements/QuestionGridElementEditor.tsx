@@ -706,6 +706,90 @@ export function QuestionGridElementEditor({ element, tab }: QuestionGridElementE
             </SortableContext>
           </DndContext>
         )}
+
+        {/* Configuração de Gamificação por Elemento */}
+        {reel?.gamificationConfig?.enabled && (
+          <div className="mt-6 pt-6 border-t border-border/50 space-y-4">
+            <div className="flex items-center gap-2">
+              <Label className="text-sm font-semibold">Gamificação</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Configure quais elementos de gamificação aparecem quando esta grade é respondida. Sobrescreve configurações do slide.
+            </p>
+
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="gamification">
+                <AccordionTrigger className="text-sm">Configurações de Gamificação</AccordionTrigger>
+                <AccordionContent className="space-y-4 pt-2">
+                  {/* Elementos de Gamificação */}
+                  <div className="space-y-3">
+                    <Label className="text-xs font-medium">Elementos</Label>
+                    <div className="space-y-2">
+                      {[
+                        { key: 'enablePointsBadge', label: 'Badge de Pontos' },
+                        { key: 'enableSuccessSound', label: 'Som de Sucesso' },
+                        { key: 'enableConfetti', label: 'Confete' },
+                      ].map(({ key, label }) => (
+                        <div key={key} className="flex items-center justify-between">
+                          <Label htmlFor={`element-${element.id}-${key}`} className="text-xs">
+                            {label}
+                          </Label>
+                          <Switch
+                            id={`element-${element.id}-${key}`}
+                            checked={element.gamificationConfig?.[key as keyof typeof element.gamificationConfig] || false}
+                            onCheckedChange={(checked) => {
+                              const currentConfig = element.gamificationConfig || {};
+                              updateElement(element.id, {
+                                gamificationConfig: {
+                                  ...currentConfig,
+                                  [key]: checked,
+                                },
+                              });
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Triggers */}
+                  <div className="space-y-3">
+                    <Label className="text-xs font-medium">Triggers (Quando Ativar)</Label>
+                    <div className="space-y-2">
+                      {[
+                        { key: 'onButtonClick', label: 'Ao clicar em botão' },
+                        { key: 'onFormComplete', label: 'Ao completar formulário' },
+                      ].map(({ key, label }) => (
+                        <div key={key} className="flex items-center justify-between">
+                          <Label htmlFor={`element-${element.id}-trigger-${key}`} className="text-xs">
+                            {label}
+                          </Label>
+                          <Switch
+                            id={`element-${element.id}-trigger-${key}`}
+                            checked={element.gamificationConfig?.triggers?.[key as keyof typeof element.gamificationConfig.triggers] || false}
+                            onCheckedChange={(checked) => {
+                              const currentConfig = element.gamificationConfig || {};
+                              const currentTriggers = currentConfig.triggers || {};
+                              updateElement(element.id, {
+                                gamificationConfig: {
+                                  ...currentConfig,
+                                  triggers: {
+                                    ...currentTriggers,
+                                    [key]: checked,
+                                  },
+                                },
+                              });
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
+        )}
       </div>
     );
   }

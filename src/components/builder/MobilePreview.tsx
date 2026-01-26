@@ -49,6 +49,7 @@ import { ReelSocialActionsTikTok } from '@/components/reels/ReelSocialActionsTik
 import { ReelUsername } from '@/components/reels/ReelUsername';
 import { ReelCaption } from '@/components/reels/ReelCaption';
 import { ReelAudioTag } from '@/components/reels/ReelAudioTag';
+import { GamificationOverlay } from './GamificationOverlay';
 
 // Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
 const normalizeUiConfig = (uiConfig: any): any => {
@@ -688,7 +689,7 @@ export function MobilePreview() {
               )}
               
               {/* Conteúdo com z-index para ficar acima do vídeo */}
-              <div ref={contentRef} className={`relative z-10 w-full h-full flex flex-col overflow-hidden`} style={{ maxHeight: '100%', maxWidth: '100%' }}>
+              <div ref={contentRef} className={`relative z-10 w-full h-full flex flex-col overflow-hidden`} style={{ maxHeight: '100%', maxWidth: '100%', position: 'relative' }}>
               {/* Indicador visual de espaço usado */}
               {spaceUsage > 90 && (
                 <div className="absolute top-0 left-0 right-0 h-1 bg-yellow-500/50 z-20" />
@@ -704,7 +705,7 @@ export function MobilePreview() {
                 onDragEnd={handleDragEnd}
               >
                 <SortableContext items={sortedElements.map((el) => el.id)} strategy={verticalListSortingStrategy}>
-                  <div ref={elementsContainerRef} className="p-4 pb-20" style={{ maxHeight: `${availableHeight}px`, overflow: 'hidden', width: '100%' }}>
+                  <div ref={elementsContainerRef} className="p-4 pb-20 relative" style={{ maxHeight: `${availableHeight}px`, overflow: 'hidden', width: '100%' }}>
                         {sortedElements.length > 0 ? (() => {
                           // Agrupar elementos (botões coluna consecutivos)
                           const grouped = groupElements(sortedElements);
@@ -768,6 +769,9 @@ export function MobilePreview() {
               {reel?.socialConfig?.enabled && selectedSlide && (selectedSlide.backgroundConfig?.type === 'video' || selectedSlide.uiConfig?.backgroundConfig?.type === 'video') && (
                 <ReelAudioTag slide={selectedSlide} />
               )}
+
+              {/* Gamification Elements */}
+              <GamificationOverlay isInBuilder={true} />
             </div>
           </div>
         </div>

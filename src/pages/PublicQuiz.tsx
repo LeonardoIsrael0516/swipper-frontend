@@ -44,6 +44,9 @@ import DOMPurify from 'dompurify';
 import { useTracking } from '@/contexts/TrackingContext';
 import { getUTM } from '@/lib/tracking';
 import { useWakeLock } from '@/hooks/useWakeLock';
+import { usePoints } from '@/contexts/PointsContext';
+import { useGamificationTrigger } from '@/contexts/GamificationTriggerContext';
+import { GamificationOverlay } from '@/components/builder/GamificationOverlay';
 
 // Função helper para normalizar uiConfig (pode vir como string JSON do Prisma/Redis)
 // Movida para fora do componente para evitar recriação
@@ -178,6 +181,8 @@ export default function PublicQuiz() {
   const { sendCapiEvent } = useTracking();
   const pixelBlockedRef = useRef<boolean>(false); // Flag para indicar se o pixel foi bloqueado
   const [isMediaPlaying, setIsMediaPlaying] = useState(false); // Estado para rastrear se há mídia tocando
+  const { addPoints, config: pointsConfig, resetPoints } = usePoints();
+  const { trigger: triggerGamification } = useGamificationTrigger();
   
   // Detectar se é domínio personalizado e normalizar o domínio
   const customDomain = isCustomDomain() ? normalizeDomain(window.location.hostname) : null;
@@ -1228,6 +1233,11 @@ export default function PublicQuiz() {
           eventType: 'view',
           slideId: currentSlideData.id,
         });
+
+        // Verificar se gamificação está habilitada e se algum elemento do slide tem gamificação habilitada
+        // onSlideChange não deve disparar gamificação automaticamente
+        // Apenas elementos específicos (botões, questions, etc.) devem disparar
+        // Removido trigger onSlideChange automático
       }
     };
 
@@ -1637,7 +1647,25 @@ export default function PublicQuiz() {
         metadata: { type: 'form_submit', elementId },
       });
     }
-  }, [reel, currentSlide, queueEvent]);
+
+    // Verificar se o elemento tem gamificação habilitada antes de adicionar pontos e disparar trigger
+    if (elementId && reel?.slides?.[currentSlide]) {
+      const element = reel.slides[currentSlide].elements?.find((el: any) => el.id === elementId);
+      const elementGamificationConfig = element?.gamificationConfig || element?.uiConfig?.gamificationConfig;
+      
+      // Só disparar trigger se o elemento tiver gamificação habilitada OU se gamificação global estiver habilitada
+      if (elementGamificationConfig?.enabled === true || (reel?.gamificationConfig?.enabled === true && !elementGamificationConfig)) {
+        // Adicionar pontos por formulário completo
+        const pointsToAdd = pointsConfig.pointsPerFormComplete || 50;
+        // Mover addPoints para setTimeout para evitar erro de renderização
+        setTimeout(() => {
+          addPoints(pointsToAdd, 'Formulário completo');
+          // Trigger gamification
+          triggerGamification('onFormComplete', { points: pointsToAdd, reason: 'Formulário completo', elementId });
+        }, 0);
+      }
+    }
+  }, [reel, currentSlide, queueEvent, pointsConfig, addPoints]);
 
   // Função para enviar formulários completos quando slide avançar
   const submitCompleteForms = useCallback(async () => {
@@ -1757,6 +1785,42 @@ export default function PublicQuiz() {
   }, [currentSlide]);
 
   const handleButtonClick = useCallback((destination: 'next-slide' | 'url', url?: string, openInNewTab?: boolean, elementId?: string) => {
+    // Verificar se o elemento tem gamificação habilitada antes de disparar
+    if (elementId && reel?.slides?.[currentSlide]) {
+      const element = reel.slides[currentSlide].elements?.find((el: any) => el.id === elementId);
+      const elementGamificationConfig = element?.gamificationConfig || element?.uiConfig?.gamificationConfig;
+      
+      // Debug em desenvolvimento
+      if (import.meta.env.DEV) {
+        console.log('[PublicQuiz] handleButtonClick:', {
+          elementId,
+          hasElement: !!element,
+          elementGamificationConfig,
+          reelGamificationEnabled: reel?.gamificationConfig?.enabled,
+        });
+      }
+      
+      // Só disparar trigger se o elemento tiver gamificação habilitada
+      // Verificar se há um campo 'enabled' que habilita tudo, ou se pelo menos um elemento está habilitado
+      const hasGamification = elementGamificationConfig?.enabled === true ||
+        elementGamificationConfig?.enablePointsBadge === true ||
+        elementGamificationConfig?.enableSuccessSound === true ||
+        elementGamificationConfig?.enableConfetti === true ||
+        elementGamificationConfig?.enableParticles === true ||
+        elementGamificationConfig?.enablePointsProgress === true ||
+        elementGamificationConfig?.enableAchievement === true;
+      
+      if (import.meta.env.DEV) {
+        console.log('[PublicQuiz] hasGamification:', hasGamification);
+      }
+      
+      if (hasGamification) {
+        if (import.meta.env.DEV) {
+          console.log('[PublicQuiz] Disparando trigger onButtonClick com elementId:', elementId);
+        }
+        triggerGamification('onButtonClick', { reason: 'Botão clicado', elementId });
+      }
+    }
     // Registrar interação
     if (visitIdRef.current && reel && reel.slides?.[currentSlide]) {
       queueEvent({
@@ -1957,7 +2021,16 @@ export default function PublicQuiz() {
       });
     }
 
+    // Adicionar pontos por resposta - verificar se há pontos específicos configurados
+    const currentSlide = reel?.slides?.find((s) => s.id === slideId);
+    const option = currentSlide?.options?.find((opt: any) => opt.id === optionId);
+    const pointsToAdd = option?.points || reel?.gamificationConfig?.pointsConfig?.pointsPerAnswer || pointsConfig.pointsPerAnswer || 10;
+    
     setSelectedAnswers((prev) => ({ ...prev, [slideId]: optionId }));
+    
+    // Questões de slide (não elementos) não têm gamificationConfig individual
+    // Não devem disparar gamificação - apenas elementos específicos (QUESTIONNAIRE, QUESTION_GRID) devem disparar
+    // Removido trigger onQuestionAnswer para questões de slide
 
     // Auto-scroll to next slide after selection usando logicNext
     setTimeout(() => {
@@ -2400,10 +2473,15 @@ export default function PublicQuiz() {
                               const showQuestionnaireAnimation = blockedScrollAttempt && 
                                                                  questionnaireConfig.lockSlide === true && 
                                                                  isElementVisible(element, index);
+                              // Extrair gamificationConfig do uiConfig se existir
+                              const questionnaireElementWithGamification = {
+                                ...elementWithConfig,
+                                gamificationConfig: elementWithConfig.gamificationConfig || elementWithConfig.uiConfig?.gamificationConfig,
+                              };
                               return (
                                 <ReelQuestionnaire
                                   key={element.id}
-                                  element={elementWithConfig}
+                                  element={questionnaireElementWithGamification}
                                   isActive={index === currentSlide}
                                   onNextSlide={handleQuestionnaireNext}
                                   onItemAction={handleItemAction}
@@ -2422,10 +2500,102 @@ export default function PublicQuiz() {
 
                                     // Atualizar estado de respostas do questionário
                                     // O useEffect que verifica lockSlide será acionado automaticamente
-                                    setQuestionnaireResponses((prev) => ({
-                                      ...prev,
-                                      [element.id]: selectedIds,
-                                    }));
+                                    setQuestionnaireResponses((prev) => {
+                                      const prevResponses = prev[element.id] || [];
+                                      const isNewResponse = selectedIds.length > prevResponses.length;
+                                      
+                                      if (isNewResponse) {
+                                        // Verificar se o elemento tem gamificação habilitada
+                                        // Extrair gamificationConfig do elemento (pode estar em uiConfig ou no nível do elemento)
+                                        const elementGamificationConfig = questionnaireElementWithGamification.gamificationConfig;
+                                        
+                                        // Debug em desenvolvimento
+                                        if (import.meta.env.DEV) {
+                                          console.log('[PublicQuiz] Questionnaire onSelectionChange:', {
+                                            elementId: element.id,
+                                            selectedIds,
+                                            prevResponses,
+                                            hasGamificationConfig: !!elementGamificationConfig,
+                                            elementGamificationConfig,
+                                            elementFull: questionnaireElementWithGamification,
+                                          });
+                                        }
+                                        
+                                        // Só disparar se o elemento tiver gamificação habilitada
+                                        // Verificar se há um campo 'enabled' que habilita tudo, ou se pelo menos um elemento está habilitado
+                                        const shouldTriggerGamification = elementGamificationConfig && (
+                                          elementGamificationConfig.enabled === true ||
+                                          elementGamificationConfig.enablePointsBadge === true ||
+                                          elementGamificationConfig.enableSuccessSound === true ||
+                                          elementGamificationConfig.enableConfetti === true ||
+                                          elementGamificationConfig.enableParticles === true ||
+                                          elementGamificationConfig.enablePointsProgress === true ||
+                                          elementGamificationConfig.enableAchievement === true
+                                        );
+                                        
+                                        if (import.meta.env.DEV) {
+                                          console.log('[PublicQuiz] Questionnaire shouldTriggerGamification:', shouldTriggerGamification);
+                                        }
+                                        
+                                        if (shouldTriggerGamification) {
+                                          // Adicionar pontos por resposta de questionário
+                                          // Verificar se há pontos específicos configurados no item
+                                          const newSelectedIds = selectedIds.filter((id: string) => !prevResponses.includes(id));
+                                          let totalPoints = 0;
+                                          
+                                          newSelectedIds.forEach((itemId: string) => {
+                                            const item = questionnaireElementWithGamification.uiConfig?.items?.find((it: any) => it.id === itemId);
+                                            // Se o item tiver pointsEnabled explicitamente como false, não adicionar pontos
+                                            // Caso contrário, adicionar pontos (padrão ou do item)
+                                            if (item?.pointsEnabled === false) {
+                                              // Não adicionar pontos se explicitamente desabilitado
+                                            } else {
+                                              // Adicionar pontos: usar pontos do item, ou pontos padrão da configuração
+                                              const itemPoints = item?.points || reel?.gamificationConfig?.pointsConfig?.pointsPerAnswer || pointsConfig.pointsPerAnswer || 10;
+                                            totalPoints += itemPoints;
+                                            }
+                                          });
+                                          
+                                          // Mover addPoints para setTimeout para evitar erro de renderização
+                                          // Só adicionar pontos se houver pontos para adicionar
+                                          if (totalPoints > 0) {
+                                            setTimeout(() => {
+                                              addPoints(totalPoints, 'Resposta de questionário');
+                                              // Trigger gamification
+                                              if (import.meta.env.DEV) {
+                                                console.log('[PublicQuiz] Disparando trigger onQuestionAnswer para questionnaire:', {
+                                                  elementId: element.id,
+                                                  totalPoints,
+                                                });
+                                              }
+                                              triggerGamification('onQuestionAnswer', { points: totalPoints, reason: 'Resposta de questionário', elementId: element.id });
+                                            }, 0);
+                                          } else {
+                                            // Mesmo sem pontos, disparar trigger se gamificação estiver habilitada
+                                            if (import.meta.env.DEV) {
+                                              console.log('[PublicQuiz] Disparando trigger onQuestionAnswer sem pontos:', {
+                                                elementId: element.id,
+                                              });
+                                            }
+                                            setTimeout(() => {
+                                              triggerGamification('onQuestionAnswer', { points: 0, reason: 'Resposta de questionário', elementId: element.id });
+                                            }, 0);
+                                          }
+                                        } else {
+                                          if (import.meta.env.DEV) {
+                                            console.log('[PublicQuiz] Questionnaire não deve disparar gamificação:', {
+                                              elementId: element.id,
+                                              hasGamificationConfig: !!elementGamificationConfig,
+                                            });
+                                          }
+                                        }
+                                      }
+                                      
+                                      return {
+                                        ...prev,
+                                        [element.id]: selectedIds,
+                                      };
+                                    });
                                   }}
                                 />
                               );
@@ -2434,10 +2604,15 @@ export default function PublicQuiz() {
                               const showQuestionGridAnimation = blockedScrollAttempt && 
                                                                 questionGridConfig.lockSlide === true && 
                                                                 isElementVisible(element, index);
+                              // Extrair gamificationConfig do uiConfig se existir
+                              const questionGridElementWithGamification = {
+                                ...elementWithConfig,
+                                gamificationConfig: elementWithConfig.gamificationConfig || elementWithConfig.uiConfig?.gamificationConfig,
+                              };
                               return (
                                 <ReelQuestionGrid
                                   key={element.id}
-                                  element={elementWithConfig}
+                                  element={questionGridElementWithGamification}
                                   isActive={index === currentSlide}
                                   onNextSlide={handleQuestionnaireNext}
                                   onItemAction={handleItemAction}
@@ -2446,10 +2621,78 @@ export default function PublicQuiz() {
                                   onSelectionChange={(selectedIds) => {
                                     // Atualizar estado de respostas do question grid
                                     // O useEffect que verifica lockSlide será acionado automaticamente
-                                    setQuestionnaireResponses((prev) => ({
-                                      ...prev,
-                                      [element.id]: selectedIds,
-                                    }));
+                                    setQuestionnaireResponses((prev) => {
+                                      const prevResponses = prev[element.id] || [];
+                                      const isNewResponse = selectedIds.length > prevResponses.length;
+                                      
+                                      if (isNewResponse) {
+                                        // Verificar se o elemento tem gamificação habilitada
+                                        // Extrair gamificationConfig do elemento (pode estar em uiConfig ou no nível do elemento)
+                                        const elementGamificationConfig = questionGridElementWithGamification.gamificationConfig;
+                                        // Só disparar se o elemento tiver gamificação habilitada
+                                        // Verificar se há um campo 'enabled' que habilita tudo, ou se pelo menos um elemento está habilitado
+                                        const shouldTriggerGamification = elementGamificationConfig && (
+                                          elementGamificationConfig.enabled === true ||
+                                          elementGamificationConfig.enablePointsBadge === true ||
+                                          elementGamificationConfig.enableSuccessSound === true ||
+                                          elementGamificationConfig.enableConfetti === true ||
+                                          elementGamificationConfig.enableParticles === true ||
+                                          elementGamificationConfig.enablePointsProgress === true ||
+                                          elementGamificationConfig.enableAchievement === true
+                                        );
+                                        
+                                        if (shouldTriggerGamification) {
+                                          // Adicionar pontos por resposta de question grid
+                                          // Verificar se há pontos específicos configurados no item
+                                          const newSelectedIds = selectedIds.filter((id: string) => !prevResponses.includes(id));
+                                          let totalPoints = 0;
+                                          
+                                          newSelectedIds.forEach((itemId: string) => {
+                                            const item = questionGridElementWithGamification.uiConfig?.items?.find((it: any) => it.id === itemId);
+                                            // Se o item tiver pointsEnabled explicitamente como false, não adicionar pontos
+                                            // Caso contrário, adicionar pontos (padrão ou do item)
+                                            if (item?.pointsEnabled === false) {
+                                              // Não adicionar pontos se explicitamente desabilitado
+                                            } else {
+                                              // Adicionar pontos: usar pontos do item, ou pontos padrão da configuração
+                                              const itemPoints = item?.points || reel?.gamificationConfig?.pointsConfig?.pointsPerAnswer || pointsConfig.pointsPerAnswer || 10;
+                                            totalPoints += itemPoints;
+                                            }
+                                          });
+                                          
+                                          // Mover addPoints para setTimeout para evitar erro de renderização
+                                          // Só adicionar pontos se houver pontos para adicionar
+                                          if (totalPoints > 0) {
+                                            setTimeout(() => {
+                                              addPoints(totalPoints, 'Resposta de question grid');
+                                              // Trigger gamification
+                                              if (import.meta.env.DEV) {
+                                                console.log('[PublicQuiz] Disparando trigger onQuestionAnswer para question grid:', {
+                                                  elementId: element.id,
+                                                  totalPoints,
+                                                });
+                                              }
+                                              triggerGamification('onQuestionAnswer', { points: totalPoints, reason: 'Resposta de question grid', elementId: element.id });
+                                            }, 0);
+                                          } else {
+                                            // Mesmo sem pontos, disparar trigger se gamificação estiver habilitada
+                                            if (import.meta.env.DEV) {
+                                              console.log('[PublicQuiz] Disparando trigger onQuestionAnswer sem pontos para question grid:', {
+                                                elementId: element.id,
+                                              });
+                                            }
+                                            setTimeout(() => {
+                                              triggerGamification('onQuestionAnswer', { points: 0, reason: 'Resposta de question grid', elementId: element.id });
+                                            }, 0);
+                                          }
+                                        }
+                                      }
+                                      
+                                      return {
+                                        ...prev,
+                                        [element.id]: selectedIds,
+                                      };
+                                    });
                                   }}
                                 />
                               );
@@ -2574,9 +2817,14 @@ export default function PublicQuiz() {
           );
         })}
           </div>
+          </div>
         </div>
       </div>
-      </div>
+
+      {/* Gamification Elements - passar slide atual para verificar configurações */}
+      {reel?.slides && reel.slides[currentSlide] && (
+        <GamificationOverlay isInBuilder={false} reel={reel} selectedSlide={reel.slides[currentSlide]} currentSlide={currentSlide} />
+      )}
     </ReelSoundProvider>
   );
 }

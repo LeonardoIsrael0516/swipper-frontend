@@ -20,6 +20,9 @@ import { DashElement } from '@/components/builder/elements/DashElement';
 import { ChartElement } from '@/components/builder/elements/ChartElement';
 import { SpacingElement } from '@/components/builder/elements/SpacingElement';
 import { ScoreElement } from '@/components/builder/elements/ScoreElement';
+import { GamificationOverlay } from '@/components/builder/GamificationOverlay';
+import { usePoints } from '@/contexts/PointsContext';
+import { useGamificationTrigger } from '@/contexts/GamificationTriggerContext';
 import { ReelVideo } from '@/components/reels/elements/ReelVideo';
 import { ReelComparativo } from '@/components/reels/elements/ReelComparativo';
 import { ReelPrice } from '@/components/reels/elements/ReelPrice';
@@ -101,6 +104,9 @@ export default function PreviewQuiz() {
   const formRefs = useRef<Record<string, ReelFormRef>>({});
   const prevIsSlideLockedRef = useRef<boolean>(false);
   const isProgrammaticScrollRef = useRef<boolean>(false);
+  
+  const { addPoints, config: pointsConfig } = usePoints();
+  const { trigger: triggerGamification } = useGamificationTrigger();
 
   const { data: reel, isLoading, error } = useQuery({
     queryKey: ['preview-reel', slug],
@@ -198,8 +204,32 @@ export default function PreviewQuiz() {
 
   // Handler para submit do formulário
   const handleFormSubmit = useCallback((elementId: string, data: Record<string, any>) => {
-    // Formulário já foi submetido pelo próprio componente, apenas atualizar estado se necessário
-  }, []);
+    // Verificar se o elemento tem gamificação habilitada
+    if (elementId && reel?.slides?.[currentSlide]) {
+      const element = reel.slides[currentSlide].elements?.find((el: any) => el.id === elementId);
+      const elementGamificationConfig = element?.gamificationConfig || element?.uiConfig?.gamificationConfig;
+      
+      // Só disparar se o elemento tiver gamificação habilitada
+      const hasGamification = elementGamificationConfig?.enabled === true ||
+        elementGamificationConfig?.enablePointsBadge === true ||
+        elementGamificationConfig?.enableSuccessSound === true ||
+        elementGamificationConfig?.enableConfetti === true ||
+        elementGamificationConfig?.enableParticles === true ||
+        elementGamificationConfig?.enablePointsProgress === true ||
+        elementGamificationConfig?.enableAchievement === true;
+      
+      if (hasGamification) {
+        // Adicionar pontos por formulário completo
+        const pointsToAdd = pointsConfig.pointsPerFormComplete || 50;
+        // Mover addPoints para setTimeout para evitar erro de renderização
+        setTimeout(() => {
+          addPoints(pointsToAdd, 'Formulário completo');
+          // Trigger gamification
+          triggerGamification('onFormComplete', { points: pointsToAdd, reason: 'Formulário completo', elementId });
+        }, 0);
+      }
+    }
+  }, [reel, currentSlide, pointsConfig, addPoints, triggerGamification]);
 
   const scrollToSlide = useCallback(async (slideIndex: number) => {
     // Enviar formulários completos antes de avançar
@@ -776,6 +806,25 @@ export default function PreviewQuiz() {
   }, [reel]);
 
   const handleButtonClick = useCallback((destination: 'next-slide' | 'url', url?: string, openInNewTab?: boolean, elementId?: string) => {
+    // Verificar se o elemento tem gamificação habilitada antes de disparar
+    if (elementId && reel?.slides?.[currentSlide]) {
+      const element = reel.slides[currentSlide].elements?.find((el: any) => el.id === elementId);
+      const elementGamificationConfig = element?.gamificationConfig || element?.uiConfig?.gamificationConfig;
+      
+      // Só disparar trigger se o elemento tiver gamificação habilitada
+      const hasGamification = elementGamificationConfig?.enabled === true ||
+        elementGamificationConfig?.enablePointsBadge === true ||
+        elementGamificationConfig?.enableSuccessSound === true ||
+        elementGamificationConfig?.enableConfetti === true ||
+        elementGamificationConfig?.enableParticles === true ||
+        elementGamificationConfig?.enablePointsProgress === true ||
+        elementGamificationConfig?.enableAchievement === true;
+      
+      if (hasGamification) {
+        triggerGamification('onButtonClick', { reason: 'Botão clicado', elementId });
+      }
+    }
+    
     // Enviar formulários completos antes de avançar
     if (reel?.slides && currentSlide < reel.slides.length) {
       const currentSlideData = reel.slides[currentSlide];
@@ -1219,6 +1268,8 @@ export default function PreviewQuiz() {
                         const elementWithConfig = {
                           ...element,
                           uiConfig: normalizeUiConfig(element.uiConfig),
+                          // Extrair gamificationConfig do uiConfig se existir
+                          gamificationConfig: element.gamificationConfig || normalizeUiConfig(element.uiConfig)?.gamificationConfig,
                         };
                         
                         // Wrapper para elementos que precisam de espaçamento
@@ -1256,7 +1307,7 @@ export default function PreviewQuiz() {
                                 <ButtonElement
                                   key={element.id}
                                   element={elementWithConfig}
-                                  onButtonClick={handleButtonClick}
+                                  onButtonClick={(dest, url, openInNewTab) => handleButtonClick(dest, url, openInNewTab, element.id)}
                                   isActive={index === currentSlide}
                                 />
                               );
@@ -1336,38 +1387,150 @@ export default function PreviewQuiz() {
                                 />
                               );
                             case 'QUESTIONNAIRE':
+                              const questionnaireElementWithGamification = {
+                                ...elementWithConfig,
+                                gamificationConfig: elementWithConfig.gamificationConfig || elementWithConfig.uiConfig?.gamificationConfig,
+                              };
                               return (
                                 <ReelQuestionnaire
                                   key={element.id}
-                                  element={elementWithConfig}
+                                  element={questionnaireElementWithGamification}
                                   isActive={index === currentSlide}
                                   onNextSlide={handleQuestionnaireNext}
                                   onItemAction={handleItemAction}
                                   onSelectionChange={(selectedIds) => {
                                     // Atualizar estado de respostas do questionário
-                                    // O useEffect que verifica lockSlide será acionado automaticamente
-                                    setQuestionnaireResponses((prev) => ({
-                                      ...prev,
-                                      [element.id]: selectedIds,
-                                    }));
+                                    setQuestionnaireResponses((prev) => {
+                                      const prevResponses = prev[element.id] || [];
+                                      const isNewResponse = selectedIds.length > prevResponses.length;
+                                      
+                                      if (isNewResponse) {
+                                        // Verificar se o elemento tem gamificação habilitada
+                                        const elementGamificationConfig = questionnaireElementWithGamification.gamificationConfig;
+                                        
+                                        // Só disparar se o elemento tiver gamificação habilitada
+                                        const shouldTriggerGamification = elementGamificationConfig && (
+                                          elementGamificationConfig.enabled === true ||
+                                          elementGamificationConfig.enablePointsBadge === true ||
+                                          elementGamificationConfig.enableSuccessSound === true ||
+                                          elementGamificationConfig.enableConfetti === true ||
+                                          elementGamificationConfig.enableParticles === true ||
+                                          elementGamificationConfig.enablePointsProgress === true ||
+                                          elementGamificationConfig.enableAchievement === true
+                                        );
+                                        
+                                        if (shouldTriggerGamification) {
+                                          // Adicionar pontos por resposta de questionário
+                                          const newSelectedIds = selectedIds.filter((id: string) => !prevResponses.includes(id));
+                                          let totalPoints = 0;
+                                          
+                                          newSelectedIds.forEach((itemId: string) => {
+                                            const item = questionnaireElementWithGamification.uiConfig?.items?.find((it: any) => it.id === itemId);
+                                            // Se o item tiver pointsEnabled explicitamente como false, não adicionar pontos
+                                            // Caso contrário, adicionar pontos (padrão ou do item)
+                                            if (item?.pointsEnabled === false) {
+                                              // Não adicionar pontos se explicitamente desabilitado
+                                            } else {
+                                              // Adicionar pontos: usar pontos do item, ou pontos padrão da configuração
+                                              const itemPoints = item?.points || reel?.gamificationConfig?.pointsConfig?.pointsPerAnswer || pointsConfig.pointsPerAnswer || 10;
+                                              totalPoints += itemPoints;
+                                            }
+                                          });
+                                          
+                                          // Mover addPoints para setTimeout para evitar erro de renderização
+                                          if (totalPoints > 0) {
+                                            setTimeout(() => {
+                                              addPoints(totalPoints, 'Resposta de questionário');
+                                              triggerGamification('onQuestionAnswer', { points: totalPoints, reason: 'Resposta de questionário', elementId: element.id });
+                                            }, 0);
+                                          } else {
+                                            // Mesmo sem pontos, disparar trigger se gamificação estiver habilitada
+                                            setTimeout(() => {
+                                              triggerGamification('onQuestionAnswer', { points: 0, reason: 'Resposta de questionário', elementId: element.id });
+                                            }, 0);
+                                          }
+                                        }
+                                      }
+                                      
+                                      return {
+                                        ...prev,
+                                        [element.id]: selectedIds,
+                                      };
+                                    });
                                   }}
                                 />
                               );
                             case 'QUESTION_GRID':
+                              const questionGridElementWithGamification = {
+                                ...elementWithConfig,
+                                gamificationConfig: elementWithConfig.gamificationConfig || elementWithConfig.uiConfig?.gamificationConfig,
+                              };
                               return (
                                 <ReelQuestionGrid
                                   key={element.id}
-                                  element={elementWithConfig}
+                                  element={questionGridElementWithGamification}
                                   isActive={index === currentSlide}
                                   onNextSlide={handleQuestionnaireNext}
                                   onItemAction={handleItemAction}
                                   onSelectionChange={(selectedIds) => {
                                     // Atualizar estado de respostas do question grid
-                                    // O useEffect que verifica lockSlide será acionado automaticamente
-                                    setQuestionnaireResponses((prev) => ({
-                                      ...prev,
-                                      [element.id]: selectedIds,
-                                    }));
+                                    setQuestionnaireResponses((prev) => {
+                                      const prevResponses = prev[element.id] || [];
+                                      const isNewResponse = selectedIds.length > prevResponses.length;
+                                      
+                                      if (isNewResponse) {
+                                        // Verificar se o elemento tem gamificação habilitada
+                                        const elementGamificationConfig = questionGridElementWithGamification.gamificationConfig;
+                                        
+                                        // Só disparar se o elemento tiver gamificação habilitada
+                                        const shouldTriggerGamification = elementGamificationConfig && (
+                                          elementGamificationConfig.enabled === true ||
+                                          elementGamificationConfig.enablePointsBadge === true ||
+                                          elementGamificationConfig.enableSuccessSound === true ||
+                                          elementGamificationConfig.enableConfetti === true ||
+                                          elementGamificationConfig.enableParticles === true ||
+                                          elementGamificationConfig.enablePointsProgress === true ||
+                                          elementGamificationConfig.enableAchievement === true
+                                        );
+                                        
+                                        if (shouldTriggerGamification) {
+                                          // Adicionar pontos por resposta de question grid
+                                          const newSelectedIds = selectedIds.filter((id: string) => !prevResponses.includes(id));
+                                          let totalPoints = 0;
+                                          
+                                          newSelectedIds.forEach((itemId: string) => {
+                                            const item = questionGridElementWithGamification.uiConfig?.items?.find((it: any) => it.id === itemId);
+                                            // Se o item tiver pointsEnabled explicitamente como false, não adicionar pontos
+                                            // Caso contrário, adicionar pontos (padrão ou do item)
+                                            if (item?.pointsEnabled === false) {
+                                              // Não adicionar pontos se explicitamente desabilitado
+                                            } else {
+                                              // Adicionar pontos: usar pontos do item, ou pontos padrão da configuração
+                                              const itemPoints = item?.points || reel?.gamificationConfig?.pointsConfig?.pointsPerAnswer || pointsConfig.pointsPerAnswer || 10;
+                                              totalPoints += itemPoints;
+                                            }
+                                          });
+                                          
+                                          // Mover addPoints para setTimeout para evitar erro de renderização
+                                          if (totalPoints > 0) {
+                                            setTimeout(() => {
+                                              addPoints(totalPoints, 'Resposta de question grid');
+                                              triggerGamification('onQuestionAnswer', { points: totalPoints, reason: 'Resposta de question grid', elementId: element.id });
+                                            }, 0);
+                                          } else {
+                                            // Mesmo sem pontos, disparar trigger se gamificação estiver habilitada
+                                            setTimeout(() => {
+                                              triggerGamification('onQuestionAnswer', { points: 0, reason: 'Resposta de question grid', elementId: element.id });
+                                            }, 0);
+                                          }
+                                        }
+                                      }
+                                      
+                                      return {
+                                        ...prev,
+                                        [element.id]: selectedIds,
+                                      };
+                                    });
                                   }}
                                 />
                               );
@@ -1495,8 +1658,13 @@ export default function PreviewQuiz() {
         })}
           </div>
         </div>
+        </div>
       </div>
-      </div>
+
+      {/* Gamification Elements */}
+      {reel?.slides && reel.slides[currentSlide] && (
+        <GamificationOverlay isInBuilder={false} reel={reel} selectedSlide={reel.slides[currentSlide]} currentSlide={currentSlide} />
+      )}
     </ReelSoundProvider>
   );
 }

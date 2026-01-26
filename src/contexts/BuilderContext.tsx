@@ -24,6 +24,8 @@ export interface SlideElement {
   elementType: string;
   order: number;
   uiConfig?: any;
+  // Configuração de gamificação por elemento
+  gamificationConfig?: GamificationElementConfig;
 }
 
 export interface BackgroundConfig {
@@ -61,6 +63,25 @@ export interface BackgroundConfig {
   };
 }
 
+export interface GamificationElementConfig {
+  // Configuração por elemento (botão, questionário, etc.)
+  enablePointsBadge?: boolean;
+  enableSuccessSound?: boolean;
+  enableConfetti?: boolean;
+  enableParticles?: boolean;
+  enablePointsProgress?: boolean;
+  enableAchievement?: boolean;
+  
+  // Triggers específicos
+  triggers?: {
+    onButtonClick?: boolean;
+    onQuestionAnswer?: boolean;
+    onSlideChange?: boolean;
+    onFormComplete?: boolean;
+    onPointsGained?: boolean;
+  };
+}
+
 export interface Slide {
   id: string;
   order: number;
@@ -74,6 +95,7 @@ export interface Slide {
   caption?: string;
   audioTag?: string;
   hideSocialElements?: boolean;
+  hideGamificationProgress?: boolean;
   elements: SlideElement[];
   options?: Array<{
     id: string;
@@ -81,6 +103,8 @@ export interface Slide {
     emoji?: string;
     order?: number;
   }>;
+  // Configuração de gamificação por slide
+  gamificationConfig?: GamificationElementConfig;
 }
 
 export interface PixelsConfig {
@@ -118,6 +142,67 @@ export interface SocialConfig {
   incrementInterval?: number; // em segundos
 }
 
+export interface GamificationConfig {
+  enabled: boolean;
+  pointsConfig: {
+    pointsPerAnswer: number;
+    pointsPerCorrectAnswer: number;
+    pointsPerWrongAnswer: number;
+    pointsPerFormComplete: number;
+    pointsPerSlideVisit: number;
+  };
+  elements: {
+    pointsBadge: {
+      enabled: boolean;
+      position: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
+      duration: number;
+      textFormat: string;
+      backgroundColor: string;
+      textColor: string;
+    };
+    successSound: {
+      enabled: boolean;
+      soundType: 'success' | 'coin' | 'ding' | 'achievement';
+      volume: number;
+    };
+    confetti: {
+      enabled: boolean;
+      colors: string[];
+      particleCount: number;
+      duration: number;
+      direction: 'top' | 'bottom' | 'center';
+    };
+    particles: {
+      enabled: boolean;
+      particleType: 'star' | 'heart' | 'sparkle';
+      colors: string[];
+      particleCount: number;
+    };
+    pointsProgress: {
+      enabled: boolean;
+      position: 'top' | 'bottom' | 'top-left' | 'top-right';
+      style: 'bar' | 'circular';
+      milestone: number;
+      progressColor?: string;
+      backgroundColor?: string;
+      textColor?: string;
+      cardBackgroundColor?: string;
+      circularProgressColor?: string;
+      circularBackgroundColor?: string;
+    };
+    achievement: {
+      enabled: boolean;
+      title: string;
+      description: string;
+      icon: string;
+      condition: {
+        type: 'points';
+        value: number;
+      };
+    };
+  };
+}
+
 export interface Reel {
   id: string;
   title: string;
@@ -130,6 +215,7 @@ export interface Reel {
   showProgressBar?: boolean;
   pixelsConfig?: PixelsConfig;
   socialConfig?: SocialConfig;
+  gamificationConfig?: GamificationConfig;
   slides: Slide[];
 }
 
@@ -138,7 +224,7 @@ interface BuilderContextType {
   selectedSlide: Slide | null;
   selectedElement: SlideElement | null;
   isEditingBackground: boolean;
-  selectedTab: 'edit' | 'theme' | 'flow' | 'settings';
+  selectedTab: 'edit' | 'theme' | 'gamification' | 'flow' | 'settings';
   setReel: (reel: Reel | null) => void;
   setSelectedSlide: (slide: Slide | null) => void;
   setSelectedElement: (element: SlideElement | null) => void;
@@ -175,7 +261,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   const [selectedSlideInternal, setSelectedSlideInternal] = useState<Slide | null>(null);
   const [selectedElementInternal, setSelectedElementInternal] = useState<SlideElement | null>(null);
   const [isEditingBackgroundInternal, setIsEditingBackgroundInternal] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<'edit' | 'theme' | 'flow' | 'settings'>('edit');
+  const [selectedTab, setSelectedTab] = useState<'edit' | 'theme' | 'gamification' | 'flow' | 'settings'>('edit');
 
   // Wrappers que também mudam a tab para 'edit' quando um elemento/slide/background é selecionado
   const setSelectedSlide = useCallback((slide: Slide | null) => {
@@ -826,13 +912,24 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     }
 
     // Atualizar estado local imediatamente (otimista)
+    // Separar gamificationConfig de config (similar ao backgroundConfig no updateSlide)
+    const { gamificationConfig, ...restConfig } = config;
+    
     const updatedSlide = {
       ...selectedSlide,
       elements: selectedSlide.elements.map((el) => {
         if (el.id === elementId) {
           // Normalizar uiConfig antes de fazer merge
           const currentUiConfig = normalizeUiConfig(el.uiConfig);
-          const mergedConfig = { ...currentUiConfig, ...config };
+          let mergedConfig = { ...currentUiConfig, ...restConfig };
+          
+          // Se gamificationConfig estiver presente, salvar no uiConfig
+          if (gamificationConfig) {
+            mergedConfig = {
+              ...mergedConfig,
+              gamificationConfig: gamificationConfig,
+            };
+          }
           
           // Debug em desenvolvimento
           if (import.meta.env.DEV) {
@@ -844,7 +941,11 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
             });
           }
           
-          return { ...el, uiConfig: mergedConfig };
+          return { 
+            ...el, 
+            uiConfig: mergedConfig,
+            gamificationConfig: gamificationConfig || el.gamificationConfig || currentUiConfig.gamificationConfig,
+          };
         }
         return el;
       }),
@@ -872,11 +973,24 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     setIsEditingBackground(false);
 
     // Salvar no backend de forma assíncrona (sem bloquear UI)
+    // Preparar uiConfig para o backend - incluir gamificationConfig se presente
+    const element = selectedSlide.elements.find((el) => el.id === elementId);
+    const currentUiConfig = element ? normalizeUiConfig(element.uiConfig) : {};
+    const backendUiConfig: any = {
+      ...currentUiConfig,
+      ...restConfig,
+    };
+    
+    // Se gamificationConfig estiver presente, salvar no uiConfig
+    if (gamificationConfig) {
+      backendUiConfig.gamificationConfig = gamificationConfig;
+    }
+    
     try {
       await api.patch(
         `/reels/${reel.id}/slides/${selectedSlide.id}/elements/${elementId}`,
         {
-          uiConfig: config,
+          uiConfig: backendUiConfig,
         }
       );
       
@@ -987,7 +1101,8 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 
       const data = (response as any).data || response;
       
-      // Extract backgroundConfig from uiConfig if present
+      // Extract backgroundConfig and gamificationConfig from uiConfig if present
+      const normalizedUiConfig = normalizeUiConfig(data.uiConfig);
       const newSlide: Slide = {
         id: data.id,
         order: data.order,
@@ -995,14 +1110,19 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         type: data.type,
         backgroundColor: data.backgroundColor,
         accentColor: data.accentColor,
-        backgroundConfig: data.backgroundConfig || data.uiConfig?.backgroundConfig,
-        uiConfig: data.uiConfig,
-        elements: (data.elements || []).map((el: any) => ({
-          id: el.id,
-          elementType: el.elementType,
-          order: el.order,
-          uiConfig: normalizeUiConfig(el.uiConfig),
-        })),
+        backgroundConfig: data.backgroundConfig || normalizedUiConfig.backgroundConfig,
+        gamificationConfig: data.gamificationConfig || normalizedUiConfig.gamificationConfig,
+        uiConfig: normalizedUiConfig,
+        elements: (data.elements || []).map((el: any) => {
+          const normalizedElementUiConfig = normalizeUiConfig(el.uiConfig);
+          return {
+            id: el.id,
+            elementType: el.elementType,
+            order: el.order,
+            uiConfig: normalizedElementUiConfig,
+            gamificationConfig: el.gamificationConfig || normalizedElementUiConfig.gamificationConfig,
+          };
+        }),
         options: (data.options || []).map((opt: any) => ({
           id: opt.id,
           text: opt.text,
@@ -1105,8 +1225,8 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     const slide = reel.slides.find((s) => s.id === slideId);
     if (!slide) return;
 
-    // Preparar dados para o backend - remover backgroundConfig e salvar apenas no uiConfig
-    const { backgroundConfig, ...restData } = data;
+    // Preparar dados para o backend - remover backgroundConfig e gamificationConfig e salvar apenas no uiConfig
+    const { backgroundConfig, gamificationConfig, ...restData } = data;
     
     const backendData: any = {
       ...restData,
@@ -1129,6 +1249,14 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
       };
     }
 
+    // Se gamificationConfig estiver presente, salvar no uiConfig
+    if (gamificationConfig) {
+      backendData.uiConfig = {
+        ...(backendData.uiConfig || currentUiConfig),
+        gamificationConfig: gamificationConfig,
+      };
+    }
+
     // Atualizar estado local imediatamente usando função funcional para evitar condições de corrida
     // Isso garante que sempre pegamos o estado mais recente do reel
     let updatedSlideForSelection: Slide | null = null;
@@ -1143,10 +1271,14 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
       const prevUiConfig = prevSlide.uiConfig || {};
       const mergedUiConfig = backendData.uiConfig || prevUiConfig;
       
+      // Extrair gamificationConfig do uiConfig se presente
+      const extractedGamificationConfig = data.gamificationConfig || mergedUiConfig.gamificationConfig || prevSlide.gamificationConfig;
+      
       const updatedSlide = {
         ...prevSlide,
         ...data,
         uiConfig: mergedUiConfig,
+        gamificationConfig: extractedGamificationConfig,
       };
       
       // Armazenar para uso após setReel
@@ -1293,7 +1425,8 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 
       const data = (response as any).data || response;
 
-      // Extract backgroundConfig from uiConfig if present
+      // Extract backgroundConfig and gamificationConfig from uiConfig if present
+      const normalizedUiConfig = normalizeUiConfig(data.uiConfig);
       const newSlide: Slide = {
         id: data.id,
         order: data.order,
@@ -1301,14 +1434,19 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         type: data.type,
         backgroundColor: data.backgroundColor,
         accentColor: data.accentColor,
-        backgroundConfig: data.backgroundConfig || data.uiConfig?.backgroundConfig,
-        uiConfig: data.uiConfig,
-        elements: (data.elements || []).map((el: any) => ({
-          id: el.id,
-          elementType: el.elementType,
-          order: el.order,
-          uiConfig: normalizeUiConfig(el.uiConfig),
-        })),
+        backgroundConfig: data.backgroundConfig || normalizedUiConfig.backgroundConfig,
+        gamificationConfig: data.gamificationConfig || normalizedUiConfig.gamificationConfig,
+        uiConfig: normalizedUiConfig,
+        elements: (data.elements || []).map((el: any) => {
+          const normalizedElementUiConfig = normalizeUiConfig(el.uiConfig);
+          return {
+            id: el.id,
+            elementType: el.elementType,
+            order: el.order,
+            uiConfig: normalizedElementUiConfig,
+            gamificationConfig: el.gamificationConfig || normalizedElementUiConfig.gamificationConfig,
+          };
+        }),
         options: (data.options || []).map((opt: any) => ({
           id: opt.id,
           text: opt.text,
@@ -1470,6 +1608,12 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         description: reel.description,
         slug: reel.slug,
         pixelsConfig: reel.pixelsConfig,
+        socialConfig: reel.socialConfig,
+        gamificationConfig: reel.gamificationConfig,
+        seoTitle: reel.seoTitle,
+        seoDescription: reel.seoDescription,
+        faviconUrl: reel.faviconUrl,
+        showProgressBar: reel.showProgressBar,
         status: 'DRAFT', // Sempre salvar como rascunho
       });
 
@@ -1504,6 +1648,12 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         description: reel.description,
         slug: reel.slug,
         pixelsConfig: reel.pixelsConfig,
+        socialConfig: reel.socialConfig,
+        gamificationConfig: reel.gamificationConfig,
+        seoTitle: reel.seoTitle,
+        seoDescription: reel.seoDescription,
+        faviconUrl: reel.faviconUrl,
+        showProgressBar: reel.showProgressBar,
         status: 'DRAFT',
       });
 
@@ -1600,6 +1750,12 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         description: reel.description,
         slug: reel.slug,
         pixelsConfig: reel.pixelsConfig,
+        socialConfig: reel.socialConfig,
+        gamificationConfig: reel.gamificationConfig,
+        seoTitle: reel.seoTitle,
+        seoDescription: reel.seoDescription,
+        faviconUrl: reel.faviconUrl,
+        showProgressBar: reel.showProgressBar,
         status: 'ACTIVE',
       });
 

@@ -31,7 +31,7 @@ const normalizeUiConfig = (uiConfig: any): any => {
   return {};
 };
 
-// Função helper para normalizar backgroundConfig (pode estar dentro de uiConfig como string JSON)
+// Função helper para normalizar backgroundConfig e gamificationConfig (podem estar dentro de uiConfig como string JSON)
 const normalizeBackgroundConfig = (slide: any): any => {
   // Normalizar uiConfig primeiro
   const normalizedUiConfig = normalizeUiConfig(slide.uiConfig);
@@ -45,11 +45,21 @@ const normalizeBackgroundConfig = (slide: any): any => {
     }
   }
   
-  // Retornar slide com uiConfig normalizado e backgroundConfig extraído
+  // Se gamificationConfig dentro de uiConfig for string, parsear
+  if (normalizedUiConfig.gamificationConfig && typeof normalizedUiConfig.gamificationConfig === 'string') {
+    try {
+      normalizedUiConfig.gamificationConfig = JSON.parse(normalizedUiConfig.gamificationConfig);
+    } catch {
+      // Se falhar o parse, manter como está
+    }
+  }
+  
+  // Retornar slide com uiConfig normalizado e backgroundConfig/gamificationConfig extraídos
   return {
     ...slide,
     uiConfig: normalizedUiConfig,
     backgroundConfig: slide.backgroundConfig || normalizedUiConfig.backgroundConfig,
+    gamificationConfig: slide.gamificationConfig || normalizedUiConfig.gamificationConfig,
   };
 };
 
@@ -93,10 +103,14 @@ function BuilderContent() {
               return {
                 ...normalizedSlide,
                 // Garantir que elements existe e está no formato correto
-                elements: (normalizedSlide.elements || []).map((element: any) => ({
-                  ...element,
-                  uiConfig: normalizeUiConfig(element.uiConfig),
-                })),
+                elements: (normalizedSlide.elements || []).map((element: any) => {
+                  const normalizedElementUiConfig = normalizeUiConfig(element.uiConfig);
+                  return {
+                    ...element,
+                    uiConfig: normalizedElementUiConfig,
+                    gamificationConfig: element.gamificationConfig || normalizedElementUiConfig.gamificationConfig,
+                  };
+                }),
               };
             });
           }
@@ -122,10 +136,14 @@ function BuilderContent() {
               return {
                 ...normalizedSlide,
                 // Garantir que elements existe e está no formato correto
-                elements: (normalizedSlide.elements || []).map((element: any) => ({
-                  ...element,
-                  uiConfig: normalizeUiConfig(element.uiConfig),
-                })),
+                elements: (normalizedSlide.elements || []).map((element: any) => {
+                  const normalizedElementUiConfig = normalizeUiConfig(element.uiConfig);
+                  return {
+                    ...element,
+                    uiConfig: normalizedElementUiConfig,
+                    gamificationConfig: element.gamificationConfig || normalizedElementUiConfig.gamificationConfig,
+                  };
+                }),
               };
             });
           }

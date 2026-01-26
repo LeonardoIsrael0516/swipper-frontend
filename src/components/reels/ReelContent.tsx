@@ -15,6 +15,7 @@ export const ReelContent = memo(function ReelContent({ children, type = 'mixed',
         position: 'absolute',
         isolation: 'isolate', // Criar novo contexto de empilhamento
         overflow: 'hidden', // Garantir que elementos não escapem
+        pointerEvents: 'auto', // Garantir que elementos sejam clicáveis
       }}
     >
       {/* 

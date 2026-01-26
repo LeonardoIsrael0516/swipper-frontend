@@ -424,11 +424,14 @@ const ReelSlideComponent = forwardRef<HTMLDivElement, ReelSlideProps>(
         {hasVideoBackground && isActive && !isSoundUnlocked && config?.backgroundConfig?.type === 'video' && config.backgroundConfig.video?.autoplay !== false && (
           <button
             onClick={unlockSound}
-            className="absolute bottom-4 right-4 w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center cursor-pointer transition-all hover:bg-black/70 hover:scale-110"
+            className="absolute bottom-4 right-4 md:bottom-4 md:right-4 w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center cursor-pointer transition-all hover:bg-black/70 hover:scale-110"
             style={{
               zIndex: 100, // Acima do ReelContent (z-index 30)
               position: 'absolute',
               pointerEvents: 'auto',
+              bottom: '1rem',
+              right: '1rem',
+              left: 'auto',
             }}
             aria-label="Ativar som"
           >
@@ -438,11 +441,14 @@ const ReelSlideComponent = forwardRef<HTMLDivElement, ReelSlideProps>(
         {hasVideoBackground && isActive && !isSoundUnlocked && config?.backgroundVideo && !config?.backgroundConfig && (
           <button
             onClick={unlockSound}
-            className="absolute bottom-4 right-4 w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center cursor-pointer transition-all hover:bg-black/70 hover:scale-110"
+            className="absolute bottom-4 right-4 md:bottom-4 md:right-4 w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center cursor-pointer transition-all hover:bg-black/70 hover:scale-110"
             style={{
               zIndex: 100, // Acima do ReelContent (z-index 30)
               position: 'absolute',
               pointerEvents: 'auto',
+              bottom: '1rem',
+              right: '1rem',
+              left: 'auto',
             }}
             aria-label="Ativar som"
           >

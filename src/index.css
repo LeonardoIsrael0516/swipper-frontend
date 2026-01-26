@@ -396,13 +396,51 @@
     }
     
     /* Overlay também ocupa tela inteira - ajustar para não sobrescrever o background */
-    .reel-quiz-fullscreen .reels-container-card .reel-slide > div[class*="absolute"]:first-child {
+    /* EXCLUIR o ReelContent desta regra para permitir cliques */
+    .reel-quiz-fullscreen .reels-container-card .reel-slide > div[class*="absolute"]:first-child:not(.reel-content-wrapper) {
       position: fixed !important;
       inset: 0 !important;
       width: 100vw !important;
       height: 100vh !important;
       z-index: 1;
       pointer-events: none;
+    }
+    
+    /* Garantir que o ReelContent e seus elementos sejam sempre clicáveis */
+    .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper {
+      pointer-events: auto !important;
+      position: relative !important;
+      z-index: 30 !important;
+    }
+    
+    .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper * {
+      pointer-events: auto !important;
+    }
+    
+    /* Garantir que botões e elementos interativos sejam sempre clicáveis */
+    .reel-quiz-fullscreen .reels-container-card .reel-slide button,
+    .reel-quiz-fullscreen .reels-container-card .reel-slide [role="button"],
+    .reel-quiz-fullscreen .reels-container-card .reel-slide [data-interactive="true"],
+    .reel-quiz-fullscreen .reels-container-card .reel-slide a,
+    .reel-quiz-fullscreen .reels-container-card .reel-slide [onClick],
+    .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper button,
+    .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper [role="button"],
+    .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper [data-interactive="true"],
+    .reel-quiz-fullscreen .reels-container-card .reel-slide .reel-content-wrapper a {
+      pointer-events: auto !important;
+      cursor: pointer !important;
+      position: relative !important;
+      z-index: 31 !important;
+    }
+    
+    /* Botão de som do vídeo - garantir que fique no canto direito no desktop */
+    .reel-quiz-fullscreen .reels-container-card .reel-slide button[aria-label="Ativar som"] {
+      position: absolute !important;
+      bottom: 1rem !important;
+      right: 1rem !important;
+      left: auto !important;
+      top: auto !important;
+      z-index: 100 !important;
     }
     
     /* Conteúdo do slide fica no tamanho mobile e visível */

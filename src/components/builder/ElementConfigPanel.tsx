@@ -22,9 +22,25 @@ import { ScoreElementEditor } from '@/components/builder/elements/ScoreElementEd
 import { SpacingElementEditor } from '@/components/builder/elements/SpacingElementEditor';
 import { BackgroundEditor } from '@/components/builder/BackgroundEditor';
 import { ThemeEditor } from '@/components/builder/ThemeEditor';
+import { GamificationEditor } from '@/components/builder/GamificationEditor';
 
 export function ElementConfigPanel() {
   const { selectedElement, isEditingBackground, selectedTab } = useBuilder();
+
+  // Se estiver na aba Gamificação, mostrar GamificationEditor
+  if (selectedTab === 'gamification') {
+    return (
+      <div className="basis-96 min-w-[300px] max-w-[384px] border-l border-border/50 bg-background flex flex-col">
+        <div className="p-4 border-b border-border/50">
+          <h2 className="text-sm font-semibold">Configurações</h2>
+          <p className="text-xs text-muted-foreground mt-1">Gamificação</p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          <GamificationEditor />
+        </div>
+      </div>
+    );
+  }
 
   // Se estiver na aba Tema, mostrar ThemeEditor
   if (selectedTab === 'theme') {
