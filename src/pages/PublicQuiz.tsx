@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo, useReducer } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -169,6 +170,7 @@ export default function PublicQuiz() {
   const [formValidStates, setFormValidStates] = useState<Record<string, boolean>>({}); // elementId -> isValid
   const [elementsHidingSocial, setElementsHidingSocial] = useState<Set<string>>(new Set()); // elementId -> should hide social
   const [blockedScrollAttempt, setBlockedScrollAttempt] = useState(false); // Flag para animação quando bloqueia scroll
+  const [isTransitioning, setIsTransitioning] = useState(false); // Flag para indicar transição programática em andamento
   const containerRef = useRef<HTMLDivElement>(null);
   const formRefs = useRef<Record<string, ReelFormRef>>({});
   const prevIsSlideLockedRef = useRef<boolean>(false);
@@ -1067,56 +1069,117 @@ export default function PublicQuiz() {
       const slideDifference = Math.abs(slideIndex - currentSlide);
       const isJump = isDirectJump !== undefined ? isDirectJump : slideDifference > 1;
       
-      // No mobile, sempre usar scroll instantâneo para evitar conflitos com touch events
-      // Para pulos diretos, sempre usar scroll instantâneo (não mostrar slides intermediários)
-      // No desktop, usar smooth apenas se não for pulo direto e o slide destino não estiver travado
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      // Melhorar detecção de mobile - incluir todos os dispositivos iOS e Safari iOS
+      const userAgent = navigator.userAgent;
+      const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
+      const isSafariIOS = /iPhone|iPad|iPod/i.test(userAgent) && /Safari/i.test(userAgent) && !/CriOS|FxiOS|OPiOS/i.test(userAgent);
+      const isAndroid = /Android/i.test(userAgent);
+      const isMobile = isIOS || isSafariIOS || isAndroid || (window.innerWidth && window.innerWidth <= 768);
+      
       const scrollBehavior = (isMobile || targetSlideIsLocked || isJump) ? 'auto' : 'smooth';
       
       const targetScrollTop = slideIndex * container.clientHeight;
       
-      // Para pulos diretos ou mobile, usar scrollTop direto para ser instantâneo
-      if (isMobile || isJump) {
-        // Forçar scroll imediatamente sem animação
-        container.scrollTop = targetScrollTop;
-        // Garantir que o scroll foi aplicado em múltiplos frames para evitar interferência do monitor
-        requestAnimationFrame(() => {
-          if (container.scrollTop !== targetScrollTop) {
-            container.scrollTop = targetScrollTop;
-          }
-        });
-        requestAnimationFrame(() => {
-          if (container.scrollTop !== targetScrollTop) {
-            container.scrollTop = targetScrollTop;
-          }
-        });
-      } else {
-        container.scrollTo({
-          top: targetScrollTop,
-          behavior: scrollBehavior,
-        });
+      // CRÍTICO: Sempre atualizar currentSlide ANTES do scroll
+      // Isso garante que os elementos sejam renderizados antes do scroll
+      // Usar flushSync para forçar renderização síncrona
+      flushSync(() => {
+        dispatchSlide({ type: 'SET_CURRENT_SLIDE', payload: slideIndex });
+      });
+      
+      // Marcar como em transição apenas para pulos diretos
+      if (isJump) {
+        setIsTransitioning(true);
       }
       
-      // Atualizar currentSlide imediatamente para pulos diretos (evitar renderizar intermediários)
-      if (isJump) {
-        setCurrentSlide(slideIndex);
+      // Adicionar classe CSS temporária para desabilitar scroll suave durante transição
+      if (isJump || isMobile) {
+        container.style.scrollBehavior = 'auto';
+        // Adicionar will-change durante transição para melhor performance
+        container.style.willChange = 'scroll-position';
+      }
+      
+      // Função auxiliar para aplicar scroll e resetar estados
+      const applyScroll = () => {
+        container.scrollTop = targetScrollTop;
+        
+        // Resetar isTransitioning imediatamente para garantir que elementos apareçam
+        if (isJump) {
+          setIsTransitioning(false);
+        }
+        
+        // Múltiplas tentativas de scrollTop para garantir no iOS (especialmente iPhone)
+        requestAnimationFrame(() => {
+          if (container.scrollTop !== targetScrollTop) {
+            container.scrollTop = targetScrollTop;
+          }
+        });
+        requestAnimationFrame(() => {
+          if (container.scrollTop !== targetScrollTop) {
+            container.scrollTop = targetScrollTop;
+          }
+        });
+        requestAnimationFrame(() => {
+          if (container.scrollTop !== targetScrollTop) {
+            container.scrollTop = targetScrollTop;
+          }
+        });
+        setTimeout(() => {
+          if (container.scrollTop !== targetScrollTop) {
+            container.scrollTop = targetScrollTop;
+          }
+          // Garantir reset final
+          if (isJump) {
+            setIsTransitioning(false);
+          }
+        }, 50);
+      };
+      
+      // Para pulos diretos ou mobile, usar scrollTop direto para ser instantâneo
+      if (isMobile || isJump) {
+        // Aguardar dois frames para garantir que o DOM foi completamente atualizado
+        // Isso é especialmente importante no modo mobile do navegador
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            applyScroll();
+          });
+        });
+      } else {
+        // Para scroll suave, aguardar um frame para garantir que o DOM foi atualizado
+        requestAnimationFrame(() => {
+          container.scrollTo({
+            top: targetScrollTop,
+            behavior: scrollBehavior,
+          });
+        });
       }
       
       // Aumentar tempo para cobrir toda a transição (smooth pode levar até 800ms)
-      // No mobile ou pulos diretos, usar tempo menor (scroll instantâneo)
-      // Dar tempo suficiente para o estado atualizar e o monitor parar completamente
-      const timeoutDuration = isMobile || isJump ? 100 : (targetSlideIsLocked ? 200 : 800);
+      // No mobile ou pulos diretos, usar tempo maior para garantir que o handler de scroll não interfira
+      // iOS pode precisar de mais tempo para processar o scroll
+      const timeoutDuration = isMobile || isJump ? (isIOS ? 300 : 200) : (targetSlideIsLocked ? 200 : 800);
       
       setTimeout(() => {
         isProgrammaticScrollRef.current = false;
+        // Remover classe CSS temporária e estados de transição
+        if (isJump || isMobile) {
+          container.style.scrollBehavior = '';
+          container.style.willChange = '';
+        }
+        // isTransitioning já foi resetado no requestAnimationFrame acima para pulos diretos
+        // Apenas garantir reset se não foi resetado ainda (para scrolls suaves)
+        if (!isJump) {
+          setIsTransitioning(false);
+        }
       }, timeoutDuration);
     }
-  }, [reel, currentSlide, checkIfSlideIsLocked]);
+  }, [reel, currentSlide, checkIfSlideIsLocked, dispatchSlide]);
 
 
   // Throttle scroll handler com requestAnimationFrame
   const scrollHandlerRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef<number>(0);
+  const scrollDirectionRef = useRef<'up' | 'down' | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -1125,6 +1188,12 @@ export default function PublicQuiz() {
     let scrollTimeout: NodeJS.Timeout;
 
     const handleScroll = () => {
+      // CRÍTICO: Ignorar completamente eventos de scroll se isProgrammaticScrollRef estiver ativo
+      // Isso previne interferência durante transições programáticas (botões, questionários, etc)
+      if (isProgrammaticScrollRef.current) {
+        return;
+      }
+
       // Cancelar frame anterior se existir
       if (scrollHandlerRef.current !== null) {
         cancelAnimationFrame(scrollHandlerRef.current);
@@ -1135,8 +1204,16 @@ export default function PublicQuiz() {
         const scrollTop = container.scrollTop;
         const slideHeight = container.clientHeight;
         
-        // Evitar processar se scrollTop não mudou significativamente
-        if (Math.abs(scrollTop - lastScrollTopRef.current) < slideHeight * 0.1) {
+        // Detectar direção do scroll
+        const scrollDiff = scrollTop - lastScrollTopRef.current;
+        if (Math.abs(scrollDiff) > 0) {
+          scrollDirectionRef.current = scrollDiff > 0 ? 'down' : 'up';
+        }
+        
+        // Aumentar threshold de detecção de mudança (de 10% para 30%)
+        // Isso previne detecções incorretas durante scroll suave ou transições
+        const threshold = slideHeight * 0.3;
+        if (Math.abs(scrollTop - lastScrollTopRef.current) < threshold) {
           return;
         }
         
@@ -1151,6 +1228,11 @@ export default function PublicQuiz() {
           // MAS apenas se o scroll não for programático (feito pelo botão)
           const currentSlideIsLocked = checkIfSlideIsLocked(currentSlide);
           const isProgrammatic = isProgrammaticScrollRef.current;
+          
+          // Se o scroll é programático, ignorar completamente (já retornamos no início, mas garantir)
+          if (isProgrammatic) {
+            return;
+          }
           
           // Se o slide atual está travado, o usuário está tentando ir para frente
           // E o scroll NÃO é programático (é manual), bloquear
@@ -2256,7 +2338,11 @@ export default function PublicQuiz() {
           <div 
             ref={containerRef} 
             className="reels-container-card hide-scrollbar"
-            style={{ overflowY: isSlideLocked ? 'hidden' : 'scroll' }}
+            style={{ 
+              overflowY: isSlideLocked ? 'hidden' : 'scroll',
+              // Otimizar performance durante transições
+              willChange: isTransitioning ? 'scroll-position' : 'auto',
+            }}
           >
         {slides.map((slide: any, index: number) => {
           // Usar slideConfig memoizado
@@ -2305,6 +2391,7 @@ export default function PublicQuiz() {
                       flexDirection: 'column',
                       width: '100%',
                       gap: '16px', // Espaçamento entre elementos
+                      // Garantir que o slide atual sempre seja visível, mesmo durante transições
                       visibility: index === currentSlide ? 'visible' : 'hidden',
                       pointerEvents: index === currentSlide ? 'auto' : 'none',
                     }}
