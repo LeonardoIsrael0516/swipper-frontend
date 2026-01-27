@@ -32,15 +32,6 @@ export function GamificationOverlay({ isInBuilder = false, reel: reelProp, selec
 
   // Verificar se gamificação está habilitada globalmente
   if (!gamificationConfig?.enabled) {
-    // No builder, mostrar preview mesmo se não estiver habilitado
-    if (isInBuilder) {
-      return (
-        <div className="fixed bottom-4 right-4 z-50 bg-muted/50 border border-border/50 rounded-lg p-3 text-xs text-muted-foreground">
-          <p>Gamificação desabilitada</p>
-          <p className="text-[10px] mt-1">Ative em Gamificação para ver elementos</p>
-        </div>
-      );
-    }
     return null;
   }
 
