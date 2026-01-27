@@ -1977,7 +1977,18 @@ export default function PublicQuiz() {
     // Verificar se o elemento tem gamificação habilitada antes de disparar
     if (elementId && reel?.slides?.[currentSlide]) {
       const element = reel.slides[currentSlide].elements?.find((el: any) => el.id === elementId);
-      const elementGamificationConfig = element?.gamificationConfig || element?.uiConfig?.gamificationConfig;
+      
+      // Normalizar uiConfig se for string JSON
+      let normalizedUiConfig = element?.uiConfig;
+      if (typeof normalizedUiConfig === 'string') {
+        try {
+          normalizedUiConfig = JSON.parse(normalizedUiConfig);
+        } catch {
+          normalizedUiConfig = {};
+        }
+      }
+      
+      const elementGamificationConfig = element?.gamificationConfig || normalizedUiConfig?.gamificationConfig;
       
       // Debug em desenvolvimento
       if (import.meta.env.DEV) {
@@ -1990,25 +2001,45 @@ export default function PublicQuiz() {
       }
       
       // Só disparar trigger se o elemento tiver gamificação habilitada
-      // Verificar se há um campo 'enabled' que habilita tudo, ou se pelo menos um elemento está habilitado
-      const hasGamification = elementGamificationConfig?.enabled === true ||
-        elementGamificationConfig?.enablePointsBadge === true ||
-        elementGamificationConfig?.enableSuccessSound === true ||
-        elementGamificationConfig?.enableConfetti === true ||
-        elementGamificationConfig?.enableParticles === true ||
-        elementGamificationConfig?.enablePointsProgress === true ||
-        elementGamificationConfig?.enableAchievement === true;
-      
-      if (import.meta.env.DEV) {
-        console.log('[PublicQuiz] hasGamification:', hasGamification);
-      }
-      
-      if (hasGamification) {
+      // IMPORTANTE: Se não há configuração de gamificação no elemento, NÃO disparar trigger
+      // Cada elemento de gamificação (confetti, som, etc) vai verificar individualmente se está habilitado
+      if (!elementGamificationConfig) {
         if (import.meta.env.DEV) {
-          console.log('[PublicQuiz] Disparando trigger onButtonClick com elementId:', elementId);
+          console.log('[PublicQuiz] handleButtonClick - Sem configuração de gamificação no elemento, NÃO disparando trigger');
         }
-        triggerGamification('onButtonClick', { reason: 'Botão clicado', elementId });
+        // Continuar com a ação do botão mesmo sem gamificação (não retornar aqui)
+      } else {
+        // Verificar se há um campo 'enabled' que habilita tudo, ou se pelo menos um elemento está habilitado
+        const hasGamification = (
+          elementGamificationConfig.enabled === true ||
+          elementGamificationConfig.enablePointsBadge === true ||
+          elementGamificationConfig.enableSuccessSound === true ||
+          elementGamificationConfig.enableConfetti === true ||
+          elementGamificationConfig.enableParticles === true ||
+          elementGamificationConfig.enablePointsProgress === true ||
+          elementGamificationConfig.enableAchievement === true
+        );
+        
+        if (import.meta.env.DEV) {
+          console.log('[PublicQuiz] handleButtonClick - hasGamification:', {
+            hasGamification,
+            elementGamificationConfig,
+            enableConfetti: elementGamificationConfig.enableConfetti,
+          });
+        }
+        
+        if (hasGamification) {
+          if (import.meta.env.DEV) {
+            console.log('[PublicQuiz] Disparando trigger onButtonClick com elementId:', elementId);
+          }
+          triggerGamification('onButtonClick', { reason: 'Botão clicado', elementId });
+        } else {
+          if (import.meta.env.DEV) {
+            console.log('[PublicQuiz] handleButtonClick - Nenhuma gamificação habilitada, NÃO disparando trigger');
+          }
+        }
       }
+      
     }
     // Registrar interação
     if (visitIdRef.current && reel && reel.slides?.[currentSlide]) {
@@ -2669,10 +2700,11 @@ export default function PublicQuiz() {
                               const showQuestionnaireAnimation = blockedScrollAttempt && 
                                                                  questionnaireConfig.lockSlide === true && 
                                                                  isElementVisible(element, index);
-                              // Extrair gamificationConfig do uiConfig se existir
+                              // Extrair gamificationConfig do uiConfig normalizado se existir
                               const questionnaireElementWithGamification = {
                                 ...elementWithConfig,
-                                gamificationConfig: elementWithConfig.gamificationConfig || elementWithConfig.uiConfig?.gamificationConfig,
+                                uiConfig: questionnaireConfig, // Usar uiConfig normalizado
+                                gamificationConfig: elementWithConfig.gamificationConfig || questionnaireConfig?.gamificationConfig,
                               };
                               return (
                                 <ReelQuestionnaire
@@ -2800,10 +2832,11 @@ export default function PublicQuiz() {
                               const showQuestionGridAnimation = blockedScrollAttempt && 
                                                                 questionGridConfig.lockSlide === true && 
                                                                 isElementVisible(element, index);
-                              // Extrair gamificationConfig do uiConfig se existir
+                              // Extrair gamificationConfig do uiConfig normalizado se existir
                               const questionGridElementWithGamification = {
                                 ...elementWithConfig,
-                                gamificationConfig: elementWithConfig.gamificationConfig || elementWithConfig.uiConfig?.gamificationConfig,
+                                uiConfig: questionGridConfig, // Usar uiConfig normalizado
+                                gamificationConfig: elementWithConfig.gamificationConfig || questionGridConfig?.gamificationConfig,
                               };
                               return (
                                 <ReelQuestionGrid

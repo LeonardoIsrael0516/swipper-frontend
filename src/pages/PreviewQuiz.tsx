@@ -1039,19 +1039,39 @@ export default function PreviewQuiz() {
     // Verificar se o elemento tem gamificação habilitada antes de disparar
     if (elementId && reel?.slides?.[currentSlide]) {
       const element = reel.slides[currentSlide].elements?.find((el: any) => el.id === elementId);
-      const elementGamificationConfig = element?.gamificationConfig || element?.uiConfig?.gamificationConfig;
+      
+      // Normalizar uiConfig se for string JSON
+      let normalizedUiConfig = element?.uiConfig;
+      if (typeof normalizedUiConfig === 'string') {
+        try {
+          normalizedUiConfig = JSON.parse(normalizedUiConfig);
+        } catch {
+          normalizedUiConfig = {};
+        }
+      }
+      
+      const elementGamificationConfig = element?.gamificationConfig || normalizedUiConfig?.gamificationConfig;
       
       // Só disparar trigger se o elemento tiver gamificação habilitada
-      const hasGamification = elementGamificationConfig?.enabled === true ||
-        elementGamificationConfig?.enablePointsBadge === true ||
-        elementGamificationConfig?.enableSuccessSound === true ||
-        elementGamificationConfig?.enableConfetti === true ||
-        elementGamificationConfig?.enableParticles === true ||
-        elementGamificationConfig?.enablePointsProgress === true ||
-        elementGamificationConfig?.enableAchievement === true;
-      
-      if (hasGamification) {
-        triggerGamification('onButtonClick', { reason: 'Botão clicado', elementId });
+      // IMPORTANTE: Se não há configuração de gamificação no elemento, NÃO disparar trigger
+      // Cada elemento de gamificação (confetti, som, etc) vai verificar individualmente se está habilitado
+      if (!elementGamificationConfig) {
+        // Continuar com a ação do botão mesmo sem gamificação (não retornar aqui)
+      } else {
+        // Verificar se há um campo 'enabled' que habilita tudo, ou se pelo menos um elemento está habilitado
+        const hasGamification = (
+          elementGamificationConfig.enabled === true ||
+          elementGamificationConfig.enablePointsBadge === true ||
+          elementGamificationConfig.enableSuccessSound === true ||
+          elementGamificationConfig.enableConfetti === true ||
+          elementGamificationConfig.enableParticles === true ||
+          elementGamificationConfig.enablePointsProgress === true ||
+          elementGamificationConfig.enableAchievement === true
+        );
+        
+        if (hasGamification) {
+          triggerGamification('onButtonClick', { reason: 'Botão clicado', elementId });
+        }
       }
     }
     
@@ -1626,9 +1646,12 @@ export default function PreviewQuiz() {
                                 />
                               );
                             case 'QUESTIONNAIRE':
+                              // Normalizar uiConfig para garantir que gamificationConfig seja extraído corretamente
+                              const normalizedQuestionnaireUiConfig = normalizeUiConfig(elementWithConfig.uiConfig);
                               const questionnaireElementWithGamification = {
                                 ...elementWithConfig,
-                                gamificationConfig: elementWithConfig.gamificationConfig || elementWithConfig.uiConfig?.gamificationConfig,
+                                uiConfig: normalizedQuestionnaireUiConfig, // Usar uiConfig normalizado
+                                gamificationConfig: elementWithConfig.gamificationConfig || normalizedQuestionnaireUiConfig?.gamificationConfig,
                               };
                               return (
                                 <ReelQuestionnaire
@@ -1700,9 +1723,12 @@ export default function PreviewQuiz() {
                                 />
                               );
                             case 'QUESTION_GRID':
+                              // Normalizar uiConfig para garantir que gamificationConfig seja extraído corretamente
+                              const normalizedQuestionGridUiConfig = normalizeUiConfig(elementWithConfig.uiConfig);
                               const questionGridElementWithGamification = {
                                 ...elementWithConfig,
-                                gamificationConfig: elementWithConfig.gamificationConfig || elementWithConfig.uiConfig?.gamificationConfig,
+                                uiConfig: normalizedQuestionGridUiConfig, // Usar uiConfig normalizado
+                                gamificationConfig: elementWithConfig.gamificationConfig || normalizedQuestionGridUiConfig?.gamificationConfig,
                               };
                               return (
                                 <ReelQuestionGrid

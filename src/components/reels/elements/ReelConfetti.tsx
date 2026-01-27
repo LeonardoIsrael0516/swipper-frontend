@@ -20,7 +20,12 @@ export interface ReelConfettiRef {
 
 // Função helper para verificar se elemento tem gamificação habilitada
 const checkElementGamification = (elementId: string | undefined, reel: any, currentSlide?: number, checkSpecificElement?: 'pointsBadge' | 'successSound' | 'confetti' | 'particles'): boolean => {
-  if (!elementId || !reel) return false;
+  if (!elementId || !reel) {
+    if (import.meta.env.DEV && checkSpecificElement === 'confetti') {
+      console.log('[ReelConfetti] checkElementGamification - sem elementId ou reel:', { elementId, hasReel: !!reel });
+    }
+    return false;
+  }
   
   // Buscar elemento em todos os slides (currentSlide pode não estar sincronizado)
   const slidesToCheck = reel.slides || [];
@@ -29,25 +34,96 @@ const checkElementGamification = (elementId: string | undefined, reel: any, curr
     if (!slide?.elements) continue;
     const element = slide.elements.find((el: any) => el.id === elementId);
     if (element) {
-      const elementGamificationConfig = element?.gamificationConfig || element?.uiConfig?.gamificationConfig;
-      
-      // Se há um campo 'enabled' que habilita tudo, usar ele
-      if (elementGamificationConfig?.enabled === true) {
-        return true;
+      // Normalizar uiConfig se for string JSON
+      let normalizedUiConfig = element.uiConfig;
+      if (typeof normalizedUiConfig === 'string') {
+        try {
+          normalizedUiConfig = JSON.parse(normalizedUiConfig);
+        } catch {
+          normalizedUiConfig = {};
+        }
       }
       
-      // Se está verificando um elemento específico, verificar se está habilitado
+      const elementGamificationConfig = element?.gamificationConfig || normalizedUiConfig?.gamificationConfig;
+      
+      // Debug em desenvolvimento
+      if (import.meta.env.DEV && checkSpecificElement === 'confetti') {
+        console.log('[ReelConfetti] Elemento encontrado:', {
+          elementId,
+          hasGamificationConfig: !!elementGamificationConfig,
+          elementGamificationConfig,
+          elementGamificationConfigRaw: element?.gamificationConfig,
+          uiConfigGamificationConfig: normalizedUiConfig?.gamificationConfig,
+        });
+      }
+      
+      // Se não há configuração de gamificação, retornar false
+      if (!elementGamificationConfig) {
+        if (import.meta.env.DEV && checkSpecificElement === 'confetti') {
+          console.log('[ReelConfetti] Sem configuração de gamificação no elemento - retornando false');
+        }
+        return false;
+      }
+      
+      // Se está verificando um elemento específico, verificar se está explicitamente habilitado
       if (checkSpecificElement) {
         const elementKey = checkSpecificElement === 'pointsBadge' ? 'enablePointsBadge' :
                           checkSpecificElement === 'successSound' ? 'enableSuccessSound' :
                           checkSpecificElement === 'confetti' ? 'enableConfetti' :
                           checkSpecificElement === 'particles' ? 'enableParticles' : null;
         
-        if (elementKey && elementGamificationConfig?.[elementKey] === true) {
-          return true;
+        if (!elementKey) {
+          return false;
         }
+        
+        // Debug em desenvolvimento
+        if (import.meta.env.DEV && checkSpecificElement === 'confetti') {
+          console.log('[ReelConfetti] checkElementGamification:', {
+            elementId,
+            elementKey,
+            elementGamificationConfig,
+            enableConfetti: elementGamificationConfig[elementKey],
+            enabled: elementGamificationConfig.enabled,
+          });
+        }
+        
+        // PRIORIDADE 1: Se o elemento específico está explicitamente desabilitado, retornar false
+        if (elementGamificationConfig[elementKey] === false) {
+          if (import.meta.env.DEV && checkSpecificElement === 'confetti') {
+            console.log('[ReelConfetti] Confetti DESABILITADO no elemento - retornando false');
+          }
+          return false; // Explicitamente desabilitado - sempre respeitar
+        }
+        
+        // PRIORIDADE 2: Se o elemento específico está explicitamente habilitado, retornar true
+        if (elementGamificationConfig[elementKey] === true) {
+          if (import.meta.env.DEV && checkSpecificElement === 'confetti') {
+            console.log('[ReelConfetti] Confetti HABILITADO no elemento - retornando true');
+          }
+          return true; // Explicitamente habilitado
+        }
+        
+        // PRIORIDADE 3: Se há um campo 'enabled' que habilita tudo, mas o elemento específico não está definido
+        // NÃO assumir habilitado - retornar false (o elemento específico deve estar explicitamente habilitado)
+        if (elementGamificationConfig.enabled === true) {
+          // Mesmo que enabled esteja true, se o elemento específico não está definido ou não está true, retornar false
+          if (import.meta.env.DEV && checkSpecificElement === 'confetti') {
+            console.log('[ReelConfetti] enabled=true mas enableConfetti não está definido - retornando false');
+          }
+          return false;
+        }
+        
+        // Se não está explicitamente habilitado e enabled não está true, retornar false
+        if (import.meta.env.DEV && checkSpecificElement === 'confetti') {
+          console.log('[ReelConfetti] Confetti não está habilitado - retornando false');
+        }
+        return false;
       } else {
         // Se não está verificando elemento específico, verificar se pelo menos um está habilitado
+        if (elementGamificationConfig.enabled === true) {
+          return true;
+        }
+        
         if (elementGamificationConfig?.enablePointsBadge === true ||
             elementGamificationConfig?.enableSuccessSound === true ||
             elementGamificationConfig?.enableConfetti === true ||
@@ -144,15 +220,19 @@ export const ReelConfetti = forwardRef<ReelConfettiRef, ReelConfettiProps>(({
   }));
 
   // Escutar pontos ganhos
+  // IMPORTANTE: onPointsGained não deve disparar confetti automaticamente
+  // O confetti só deve ser disparado por triggers específicos de elementos (onButtonClick, onQuestionAnswer, etc)
+  // que têm elementId e verificam se o elemento tem enableConfetti habilitado
   useEffect(() => {
     if (!triggers.includes('onPointsGained')) return;
 
     const handlePointsGained = () => {
-      // onPointsGained não tem elementId, então verificar gamificação global
-      if (!reel?.gamificationConfig?.enabled) {
-        return; // Não disparar confetti se gamificação global não está habilitada
+      // NÃO disparar confetti por onPointsGained - precisa de trigger específico com elementId
+      // Isso evita que confetti apareça quando pontos são adicionados por elementos sem confetti habilitado
+      if (import.meta.env.DEV) {
+        console.log('[ReelConfetti] onPointsGained recebido mas NÃO disparando confetti (precisa de trigger com elementId)');
       }
-      activateConfetti();
+      return;
     };
     const unsubscribe = subscribeToPointsGained(handlePointsGained);
 
@@ -171,16 +251,35 @@ export const ReelConfetti = forwardRef<ReelConfettiRef, ReelConfettiProps>(({
           
           if (elementId) {
             // Se há elementId, verificar se o elemento tem gamificação habilitada especificamente para confetti
-            if (!checkElementGamification(elementId, reel, currentSlide, 'confetti')) {
+            const shouldActivate = checkElementGamification(elementId, reel, currentSlide, 'confetti');
+            
+            if (import.meta.env.DEV) {
+              console.log('[ReelConfetti] Trigger recebido:', {
+                triggerType,
+                elementId,
+                shouldActivate,
+                reelGamificationEnabled: reel?.gamificationConfig?.enabled,
+              });
+            }
+            
+            if (!shouldActivate) {
+              if (import.meta.env.DEV) {
+                console.log('[ReelConfetti] Confetti NÃO será disparado - elemento não tem enableConfetti habilitado');
+              }
               return; // Não disparar confetti se elemento não tem gamificação habilitada
             }
           } else {
-            // Se não há elementId, verificar gamificação global (para casos como onPointsGained direto)
-            if (!reel?.gamificationConfig?.enabled) {
-              return; // Não disparar confetti se gamificação global não está habilitada
+            // Se não há elementId, NÃO disparar confetti baseado apenas na configuração global
+            // O confetti só deve ser disparado quando há um elemento específico com enableConfetti habilitado
+            if (import.meta.env.DEV) {
+              console.log('[ReelConfetti] Trigger sem elementId - NÃO disparando confetti (precisa de elemento específico)');
             }
+            return; // Não disparar confetti sem elementId
           }
           
+          if (import.meta.env.DEV) {
+            console.log('[ReelConfetti] Disparando confetti');
+          }
           activateConfetti();
         });
         unsubscribes.push(unsubscribe);

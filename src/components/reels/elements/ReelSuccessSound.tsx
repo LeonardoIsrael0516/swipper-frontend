@@ -27,25 +27,57 @@ const checkElementGamification = (elementId: string | undefined, reel: any, curr
     if (!slide?.elements) continue;
     const element = slide.elements.find((el: any) => el.id === elementId);
     if (element) {
-      const elementGamificationConfig = element?.gamificationConfig || element?.uiConfig?.gamificationConfig;
-      
-      // Se há um campo 'enabled' que habilita tudo, usar ele
-      if (elementGamificationConfig?.enabled === true) {
-        return true;
+      // Normalizar uiConfig se for string JSON
+      let normalizedUiConfig = element.uiConfig;
+      if (typeof normalizedUiConfig === 'string') {
+        try {
+          normalizedUiConfig = JSON.parse(normalizedUiConfig);
+        } catch {
+          normalizedUiConfig = {};
+        }
       }
       
-      // Se está verificando um elemento específico, verificar se está habilitado
+      const elementGamificationConfig = element?.gamificationConfig || normalizedUiConfig?.gamificationConfig;
+      
+      // Se não há configuração de gamificação, retornar false
+      if (!elementGamificationConfig) {
+        return false;
+      }
+      
+      // Se está verificando um elemento específico, verificar se está explicitamente habilitado
       if (checkSpecificElement) {
         const elementKey = checkSpecificElement === 'pointsBadge' ? 'enablePointsBadge' :
                           checkSpecificElement === 'successSound' ? 'enableSuccessSound' :
                           checkSpecificElement === 'confetti' ? 'enableConfetti' :
                           checkSpecificElement === 'particles' ? 'enableParticles' : null;
         
-        if (elementKey && elementGamificationConfig?.[elementKey] === true) {
+        // Se há um campo 'enabled' que habilita tudo, verificar se o elemento específico também está habilitado
+        if (elementGamificationConfig.enabled === true) {
+          // Se enabled está true, verificar se o elemento específico não está explicitamente desabilitado
+          if (elementKey && elementGamificationConfig[elementKey] === false) {
+            return false; // Explicitamente desabilitado
+          }
+          // Se enabled está true e o elemento específico não está desabilitado, verificar se está habilitado
+          if (elementKey && elementGamificationConfig[elementKey] === true) {
+            return true; // Explicitamente habilitado
+          }
+          // Se enabled está true mas o elemento específico não está definido, retornar false (não assumir habilitado)
+          return false;
+        }
+        
+        // Se enabled não está true, verificar se o elemento específico está explicitamente habilitado
+        if (elementKey && elementGamificationConfig[elementKey] === true) {
           return true;
         }
+        
+        // Se não está explicitamente habilitado, retornar false
+        return false;
       } else {
         // Se não está verificando elemento específico, verificar se pelo menos um está habilitado
+        if (elementGamificationConfig.enabled === true) {
+          return true;
+        }
+        
         if (elementGamificationConfig?.enablePointsBadge === true ||
             elementGamificationConfig?.enableSuccessSound === true ||
             elementGamificationConfig?.enableConfetti === true ||
@@ -59,6 +91,13 @@ const checkElementGamification = (elementId: string | undefined, reel: any, curr
   }
   
   return false;
+};
+
+// Detectar iOS
+const isIOSDevice = () => {
+  if (typeof window === 'undefined') return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 };
 
 export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSoundProps>(({
@@ -75,6 +114,8 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const activeAudiosRef = useRef<Set<HTMLAudioElement>>(new Set()); // Rastrear todos os áudios ativos
   const isMountedRef = useRef(true);
+  const hasUserInteractedRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // Sons padrão - usar arquivos locais ou sua CDN
   // Se você tiver uma CDN, substitua estas URLs pelas suas
@@ -86,10 +127,58 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
     achievement: '/sounds/achievement.wav',
   };
 
+  // Inicializar AudioContext após primeira interação (necessário para iOS)
+  const initAudioContext = useCallback(() => {
+    if (!audioContextRef.current) {
+      try {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      } catch (error) {
+        console.warn('Erro ao criar AudioContext:', error);
+      }
+    }
+    // Retomar contexto se estiver suspenso (iOS)
+    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume().catch(() => {
+        // Ignorar erro se não conseguir retomar
+      });
+    }
+  }, []);
+
+  // Marcar que usuário interagiu (necessário para iOS)
+  useEffect(() => {
+    if (isIOSDevice()) {
+      const handleUserInteraction = () => {
+        hasUserInteractedRef.current = true;
+        initAudioContext();
+        // Remover listeners após primeira interação
+        document.removeEventListener('touchstart', handleUserInteraction);
+        document.removeEventListener('touchend', handleUserInteraction);
+        document.removeEventListener('click', handleUserInteraction);
+      };
+      
+      document.addEventListener('touchstart', handleUserInteraction, { once: true, passive: true });
+      document.addEventListener('touchend', handleUserInteraction, { once: true, passive: true });
+      document.addEventListener('click', handleUserInteraction, { once: true, passive: true });
+    } else {
+      // Em outros dispositivos, marcar como interagido imediatamente
+      hasUserInteractedRef.current = true;
+      initAudioContext();
+    }
+  }, [initAudioContext]);
+
   // Fallback: sons sintéticos usando Web Audio API (sempre funciona)
   const createFallbackSound = useCallback((type: string) => {
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Garantir que AudioContext está inicializado
+      if (!audioContextRef.current) {
+        initAudioContext();
+      }
+      
+      if (!audioContextRef.current) {
+        return false;
+      }
+      
+      const audioContext = audioContextRef.current;
       
       // Configurações de som para cada tipo
       const soundConfigs: Record<string, { frequencies: number[]; duration: number; type: OscillatorType }> = {
@@ -128,9 +217,16 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
       console.warn('Erro ao criar som de fallback:', error);
       return false;
     }
-  }, [volume]);
+  }, [volume, initAudioContext]);
 
   const playSound = useCallback(() => {
+    // No iOS, só tocar se usuário já interagiu
+    if (isIOSDevice() && !hasUserInteractedRef.current) {
+      // Tentar usar fallback que funciona melhor no iOS
+      createFallbackSound(soundType);
+      return;
+    }
+
     try {
       // Prioridade: 1. URL customizada, 2. URL padrão, 3. Fallback
       const soundToPlay = soundUrl || defaultSounds[soundType] || defaultSounds.success;
@@ -139,6 +235,11 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
       const audio = new Audio(soundToPlay);
       audio.volume = Math.max(0, Math.min(1, volume));
       audio.preload = 'auto';
+      
+      // No iOS, adicionar atributos necessários
+      if (isIOSDevice()) {
+        audio.setAttribute('playsinline', '');
+      }
       
       // Adicionar ao conjunto de áudios ativos
       activeAudiosRef.current.add(audio);
@@ -198,15 +299,19 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
   }));
 
   // Escutar pontos ganhos
+  // IMPORTANTE: onPointsGained não deve tocar som automaticamente
+  // O som só deve ser tocado por triggers específicos de elementos (onButtonClick, onQuestionAnswer, etc)
+  // que têm elementId e verificam se o elemento tem enableSuccessSound habilitado
   useEffect(() => {
     if (!triggers.includes('onPointsGained')) return;
 
     const handlePointsGained = () => {
-      // onPointsGained não tem elementId, então verificar gamificação global
-      if (!reel?.gamificationConfig?.enabled) {
-        return; // Não tocar som se gamificação global não está habilitada
+      // NÃO tocar som por onPointsGained - precisa de trigger específico com elementId
+      // Isso evita que som toque quando pontos são adicionados por elementos sem som habilitado
+      if (import.meta.env.DEV) {
+        console.log('[ReelSuccessSound] onPointsGained recebido mas NÃO tocando som (precisa de trigger com elementId)');
       }
-      playSound();
+      return;
     };
     const unsubscribe = subscribeToPointsGained(handlePointsGained);
 
@@ -238,10 +343,12 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
               return; // Não tocar som se elemento não tem gamificação habilitada
             }
           } else {
-            // Se não há elementId, verificar gamificação global (para casos como onPointsGained direto)
-            if (!reel?.gamificationConfig?.enabled) {
-              return; // Não tocar som se gamificação global não está habilitada
+            // Se não há elementId, NÃO tocar som baseado apenas na configuração global
+            // O som só deve ser tocado quando há um elemento específico com enableSuccessSound habilitado
+            if (import.meta.env.DEV) {
+              console.log('[ReelSuccessSound] Trigger sem elementId - NÃO tocando som (precisa de elemento específico)');
             }
+            return; // Não tocar som sem elementId
           }
           
           playSound();
