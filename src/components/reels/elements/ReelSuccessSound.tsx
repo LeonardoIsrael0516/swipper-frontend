@@ -116,6 +116,7 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
   const isMountedRef = useRef(true);
   const hasUserInteractedRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const isAudioUnlockedRef = useRef(false); // Flag para verificar se áudio foi destravado
 
   // Sons padrão - usar arquivos locais ou sua CDN
   // Se você tiver uma CDN, substitua estas URLs pelas suas
@@ -126,6 +127,74 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
     ding: '/sounds/ding.wav',
     achievement: '/sounds/achievement.wav',
   };
+
+  // Destravar áudio no primeiro toque real (CRÍTICO para iOS)
+  // No iOS, é necessário chamar audio.play() silenciosamente no primeiro toque
+  // para "destravar" o contexto de áudio
+  const unlockAudio = useCallback(async (): Promise<boolean> => {
+    if (isAudioUnlockedRef.current) {
+      return true; // Já foi destravado
+    }
+
+    try {
+      if (import.meta.env.DEV) {
+        console.log('[ReelSuccessSound] Destravando áudio no primeiro toque...');
+      }
+
+      // Criar Audio temporário com som padrão
+      const soundToPlay = soundUrl || defaultSounds[soundType] || defaultSounds.success;
+      const unlockAudio = new Audio(soundToPlay);
+      
+      // Configurar volume muito baixo (quase silencioso) para não assustar o usuário
+      unlockAudio.volume = 0.01;
+      
+      // No iOS, adicionar atributos necessários
+      if (isIOSDevice()) {
+        unlockAudio.setAttribute('playsinline', '');
+      }
+      
+      // Pré-carregar o áudio (evita delay)
+      unlockAudio.load();
+      
+      // Tentar tocar silenciosamente para destravar
+      try {
+        await unlockAudio.play();
+        
+        // Imediatamente pausar e resetar
+        unlockAudio.pause();
+        unlockAudio.currentTime = 0;
+        
+        // Marcar como destravado
+        isAudioUnlockedRef.current = true;
+        hasUserInteractedRef.current = true;
+        
+        // Inicializar AudioContext também
+        await initAudioContext();
+        
+        if (import.meta.env.DEV) {
+          console.log('[ReelSuccessSound] Áudio destravado com sucesso!');
+        }
+        
+        return true;
+      } catch (playError) {
+        // Se falhar, tentar inicializar AudioContext mesmo assim
+        await initAudioContext();
+        
+        if (import.meta.env.DEV) {
+          console.warn('[ReelSuccessSound] Erro ao tocar áudio de destravamento, mas AudioContext pode estar pronto:', playError);
+        }
+        
+        // Marcar como interagido mesmo se falhar (pode funcionar depois)
+        hasUserInteractedRef.current = true;
+        return false;
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('[ReelSuccessSound] Erro ao destravar áudio:', error);
+      }
+      return false;
+    }
+  }, [soundUrl, soundType]);
 
   // Inicializar AudioContext após primeira interação (necessário para iOS)
   // Retorna Promise para garantir que o contexto esteja pronto
@@ -165,64 +234,64 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
     }
   }, []);
 
-  // Marcar que usuário interagiu (necessário para iOS)
-  // Manter listeners ativos até AudioContext estar pronto
+  // Destravar áudio no primeiro toque real (CRÍTICO para iOS)
+  // No iOS, apenas eventos de toque real contam: touchstart, click, pointerdown
+  // Scroll, touchmove, touchend NÃO contam como interação válida
   useEffect(() => {
     if (isIOSDevice()) {
       const handleUserInteraction = async () => {
+        // Se já foi destravado, não fazer nada
+        if (isAudioUnlockedRef.current) {
+          return;
+        }
+
         if (import.meta.env.DEV) {
-          console.log('[ReelSuccessSound] Interação do usuário detectada');
+          console.log('[ReelSuccessSound] Toque real detectado - destravando áudio...');
         }
         
-        hasUserInteractedRef.current = true;
-        const isReady = await initAudioContext();
+        // Destravar áudio no primeiro toque real
+        const unlocked = await unlockAudio();
         
-        if (import.meta.env.DEV) {
-          console.log('[ReelSuccessSound] AudioContext após interação:', {
-            isReady,
-            state: audioContextRef.current?.state,
+        if (unlocked) {
+          // Remover listeners após destravar com sucesso
+          // Usar once: true para garantir que só execute uma vez
+          validInteractionEvents.forEach((eventType) => {
+            document.removeEventListener(eventType, handleUserInteraction);
+            window.removeEventListener(eventType, handleUserInteraction);
           });
-        }
-        
-        // Se AudioContext está pronto, podemos remover alguns listeners
-        // Mas manter alguns ativos para garantir que sempre funcione
-        if (isReady && audioContextRef.current?.state === 'running') {
-          // AudioContext está pronto, mas manter listeners para garantir que continue funcionando
         }
       };
       
-      // Adicionar mais tipos de eventos de interação
-      const interactionEvents = [
-        'touchstart',
-        'touchend',
-        'touchmove',
-        'click',
-        'scroll',
-        'pointerdown',
-        'pointerup',
+      // APENAS eventos válidos no iOS (toque real)
+      // REMOVER: scroll, touchmove, touchend, pointerup (não contam)
+      const validInteractionEvents = [
+        'touchstart',  // ✅ Válido - primeiro toque
+        'click',       // ✅ Válido - clique
+        'pointerdown', // ✅ Válido - ponteiro pressionado
       ];
       
-      const options = { passive: true };
+      const options = { passive: true, once: true };
       
-      // Adicionar listeners (não usar once: true para manter ativos)
-      interactionEvents.forEach((eventType) => {
+      // Adicionar listeners apenas para eventos válidos
+      validInteractionEvents.forEach((eventType) => {
         document.addEventListener(eventType, handleUserInteraction, options);
         window.addEventListener(eventType, handleUserInteraction, options);
       });
       
       return () => {
         // Cleanup: remover listeners quando componente desmontar
-        interactionEvents.forEach((eventType) => {
+        validInteractionEvents.forEach((eventType) => {
           document.removeEventListener(eventType, handleUserInteraction);
           window.removeEventListener(eventType, handleUserInteraction);
         });
       };
     } else {
-      // Em outros dispositivos, marcar como interagido imediatamente
+      // Em outros dispositivos, marcar como interagido e destravado imediatamente
       hasUserInteractedRef.current = true;
+      isAudioUnlockedRef.current = true;
       initAudioContext();
     }
-  }, [initAudioContext]);
+  }, [unlockAudio, initAudioContext]);
 
   // Fallback: sons sintéticos usando Web Audio API (sempre funciona)
   // No iOS, este é o método preferido pois funciona melhor
@@ -282,8 +351,10 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
         oscillator.type = config.type;
 
         // Envelope ADSR simples
+        // Usar volume configurado (respeita volume do sistema - funciona no silencioso)
         const startTime = now + index * 0.05; // Pequeno delay entre frequências
         gainNode.gain.setValueAtTime(0, startTime);
+        // Volume respeita o sistema - se estiver no silencioso, o sistema controla o volume
         gainNode.gain.linearRampToValueAtTime(volume * 0.2, startTime + 0.01);
         gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + config.duration);
 
@@ -309,11 +380,32 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
       console.log('[ReelSuccessSound] playSound chamado:', {
         isIOS: isIOSDevice(),
         hasUserInteracted: hasUserInteractedRef.current,
+        isAudioUnlocked: isAudioUnlockedRef.current,
         audioContextState: audioContextRef.current?.state,
       });
     }
     
     const isIOS = isIOSDevice();
+    
+    // No iOS, verificar se áudio foi destravado antes de tentar tocar
+    if (isIOS && !isAudioUnlockedRef.current) {
+      if (import.meta.env.DEV) {
+        console.warn('[ReelSuccessSound] Áudio não foi destravado ainda - tentando destravar agora...');
+      }
+      // Tentar destravar agora (pode não funcionar se não for de um toque real)
+      const unlocked = await unlockAudio();
+      if (!unlocked) {
+        if (import.meta.env.DEV) {
+          console.warn('[ReelSuccessSound] Não foi possível destravar áudio - aguardando primeiro toque do usuário');
+        }
+        // Tentar usar Web Audio API mesmo assim (pode funcionar)
+        const fallbackSuccess = await createFallbackSound(soundType);
+        if (fallbackSuccess) {
+          return;
+        }
+        return; // Não conseguiu tocar
+      }
+    }
     
     // No iOS, priorizar Web Audio API (fallback) pois funciona melhor
     if (isIOS) {
@@ -346,11 +438,19 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
       
       // Criar novo elemento de áudio (sempre criar nova instância para não cortar sons anteriores)
       const audio = new Audio(soundToPlay);
+      
+      // No iOS, sempre chamar load() antes de tocar (evita delay)
+      if (isIOS) {
+        audio.load();
+      }
+      
+      // Configurar volume (respeitar volume do sistema - funciona no silencioso)
+      // Não forçar volume máximo - respeitar o volume configurado e o sistema
       audio.volume = Math.max(0, Math.min(1, volume));
       audio.preload = 'auto';
       
       // No iOS, adicionar atributos necessários
-      if (isIOSDevice()) {
+      if (isIOS) {
         audio.setAttribute('playsinline', '');
       }
       
@@ -376,6 +476,12 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
       };
 
       // Tentar tocar o áudio
+      // No iOS, aguardar um pouco após load() para garantir que está pronto
+      if (isIOS) {
+        // Pequeno delay para garantir que load() terminou
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      
       const playPromise = audio.play();
       
       if (playPromise !== undefined) {
@@ -414,7 +520,7 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
       // Último recurso: usar fallback
       await createFallbackSound(soundType);
     }
-  }, [soundUrl, soundType, volume, createFallbackSound, initAudioContext]);
+  }, [soundUrl, soundType, volume, createFallbackSound, initAudioContext, unlockAudio]);
 
   // Expor método trigger via ref
   useImperativeHandle(ref, () => ({
