@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -100,6 +101,7 @@ export default function PreviewQuiz() {
   const [showSwipeHintOnUnlock, setShowSwipeHintOnUnlock] = useState(false);
   const [renderedSlides, setRenderedSlides] = useState(2);
   const [isSlideLocked, setIsSlideLocked] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false); // Flag para indicar transição programática em andamento
   const containerRef = useRef<HTMLDivElement>(null);
   const formRefs = useRef<Record<string, ReelFormRef>>({});
   const prevIsSlideLockedRef = useRef<boolean>(false);
@@ -231,65 +233,17 @@ export default function PreviewQuiz() {
     }
   }, [reel, currentSlide, pointsConfig, addPoints, triggerGamification]);
 
-  const scrollToSlide = useCallback(async (slideIndex: number, isDirectJump?: boolean) => {
-    // Enviar formulários completos antes de avançar
-    if (reel?.slides && currentSlide < reel.slides.length) {
-      const currentSlideData = reel.slides[currentSlide];
-      if (currentSlideData?.elements) {
-        for (const element of currentSlideData.elements) {
-          if (element.elementType === 'FORM') {
-            const formRef = formRefs.current[element.id];
-            
-            if (formRef && formRef.isFormValid()) {
-              // Sempre enviar formulários válidos automaticamente
-              await formRef.submitForm();
-            }
-          }
-        }
-      }
+  // Função helper para verificar se um slide específico está travado pelo background
+  const isLockedByBackground = useCallback((slideIndex: number): boolean => {
+    if (!reel?.slides || slideIndex >= reel.slides.length || slideIndex < 0) {
+      return false;
     }
-
-    const container = containerRef.current;
-    if (container) {
-      // Marcar que o scroll é programático (não deve ser bloqueado)
-      isProgrammaticScrollRef.current = true;
-      
-      // Detectar se é pulo direto (diferença > 1 entre slide atual e destino)
-      const slideDifference = Math.abs(slideIndex - currentSlide);
-      const isJump = isDirectJump !== undefined ? isDirectJump : slideDifference > 1;
-      
-      const targetScrollTop = slideIndex * container.clientHeight;
-      
-      // Para pulos diretos, usar scroll instantâneo (não mostrar slides intermediários)
-      if (isJump) {
-        // Scroll instantâneo sem animação
-        container.scrollTop = targetScrollTop;
-        // Garantir que o scroll foi aplicado
-        requestAnimationFrame(() => {
-          if (container.scrollTop !== targetScrollTop) {
-            container.scrollTop = targetScrollTop;
-          }
-        });
-        // Atualizar currentSlide imediatamente para pulos diretos
-        setCurrentSlide(slideIndex);
-        // Limpar flag rapidamente para pulos diretos
-        setTimeout(() => {
-          isProgrammaticScrollRef.current = false;
-        }, 100);
-      } else {
-        // Scroll suave para navegação sequencial
-        container.scrollTo({
-          top: targetScrollTop,
-          behavior: 'smooth',
-        });
-        
-        // Limpar a flag após a animação de scroll completar (assumindo ~500ms para smooth scroll)
-        setTimeout(() => {
-          isProgrammaticScrollRef.current = false;
-        }, 600);
-      }
-    }
-  }, [reel, currentSlide]);
+    
+    const slideData = reel.slides[slideIndex];
+    const backgroundConfig = slideData?.backgroundConfig || slideData?.uiConfig?.backgroundConfig;
+    
+    return backgroundConfig?.lockSlide === true;
+  }, [reel?.slides]);
 
   // Função helper para verificar se um slide específico está travado
   const checkIfSlideIsLocked = useCallback((slideIndex: number): boolean => {
@@ -298,6 +252,14 @@ export default function PreviewQuiz() {
     }
     
     const slideData = reel.slides[slideIndex];
+    
+    // Verificar primeiro se está travado pelo background
+    const backgroundConfig = slideData?.backgroundConfig || slideData?.uiConfig?.backgroundConfig;
+    if (backgroundConfig?.lockSlide === true) {
+      return true;
+    }
+    
+    // Se não tiver elementos, não está travado por elementos
     if (!slideData?.elements) {
       return false;
     }
@@ -352,6 +314,145 @@ export default function PreviewQuiz() {
     return hasLocked || questionnaireLocked || progressLocked || formLocked;
   }, [reel?.slides, questionnaireResponses, progressStates, formValidStates]);
 
+  const scrollToSlide = useCallback(async (slideIndex: number, isDirectJump?: boolean) => {
+    // Enviar formulários completos antes de avançar
+    if (reel?.slides && currentSlide < reel.slides.length) {
+      const currentSlideData = reel.slides[currentSlide];
+      if (currentSlideData?.elements) {
+        for (const element of currentSlideData.elements) {
+          if (element.elementType === 'FORM') {
+            const formRef = formRefs.current[element.id];
+            
+            if (formRef && formRef.isFormValid()) {
+              // Sempre enviar formulários válidos automaticamente
+              await formRef.submitForm();
+            }
+          }
+        }
+      }
+    }
+
+    const container = containerRef.current;
+    if (container) {
+      // IMPORTANTE: Marcar ANTES de qualquer operação de scroll
+      // Se já está marcado (ex: botão clicado), não remarcar
+      if (!isProgrammaticScrollRef.current) {
+        isProgrammaticScrollRef.current = true;
+      }
+      
+      // Verificar se o slide destino está travado
+      const targetSlideIsLocked = checkIfSlideIsLocked(slideIndex);
+      
+      // Detectar se é pulo direto (diferença > 1 entre slide atual e destino)
+      const slideDifference = Math.abs(slideIndex - currentSlide);
+      const isJump = isDirectJump !== undefined ? isDirectJump : slideDifference > 1;
+      
+      // Melhorar detecção de mobile - incluir todos os dispositivos iOS e Safari iOS
+      const userAgent = navigator.userAgent;
+      const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
+      const isSafariIOS = /iPhone|iPad|iPod/i.test(userAgent) && /Safari/i.test(userAgent) && !/CriOS|FxiOS|OPiOS/i.test(userAgent);
+      const isAndroid = /Android/i.test(userAgent);
+      const isMobile = isIOS || isSafariIOS || isAndroid || (window.innerWidth && window.innerWidth <= 768);
+      
+      const scrollBehavior = (isMobile || targetSlideIsLocked || isJump) ? 'auto' : 'smooth';
+      
+      const targetScrollTop = slideIndex * container.clientHeight;
+      
+      // CRÍTICO: Sempre atualizar currentSlide ANTES do scroll
+      // Isso garante que os elementos sejam renderizados antes do scroll
+      // Usar flushSync para forçar renderização síncrona
+      flushSync(() => {
+        setCurrentSlide(slideIndex);
+      });
+      
+      // Marcar como em transição apenas para pulos diretos
+      if (isJump) {
+        setIsTransitioning(true);
+      }
+      
+      // Adicionar classe CSS temporária para desabilitar scroll suave durante transição
+      if (isJump || isMobile) {
+        container.style.scrollBehavior = 'auto';
+        // Adicionar will-change durante transição para melhor performance
+        container.style.willChange = 'scroll-position';
+      }
+      
+      // Função auxiliar para aplicar scroll e resetar estados
+      const applyScroll = () => {
+        container.scrollTop = targetScrollTop;
+        
+        // Resetar isTransitioning imediatamente para garantir que elementos apareçam
+        if (isJump) {
+          setIsTransitioning(false);
+        }
+        
+        // Múltiplas tentativas de scrollTop para garantir no iOS (especialmente iPhone)
+        requestAnimationFrame(() => {
+          if (container.scrollTop !== targetScrollTop) {
+            container.scrollTop = targetScrollTop;
+          }
+        });
+        requestAnimationFrame(() => {
+          if (container.scrollTop !== targetScrollTop) {
+            container.scrollTop = targetScrollTop;
+          }
+        });
+        requestAnimationFrame(() => {
+          if (container.scrollTop !== targetScrollTop) {
+            container.scrollTop = targetScrollTop;
+          }
+        });
+        setTimeout(() => {
+          if (container.scrollTop !== targetScrollTop) {
+            container.scrollTop = targetScrollTop;
+          }
+          // Garantir reset final
+          if (isJump) {
+            setIsTransitioning(false);
+          }
+        }, 50);
+      };
+      
+      // Para pulos diretos ou mobile, usar scrollTop direto para ser instantâneo
+      if (isMobile || isJump) {
+        // Aguardar dois frames para garantir que o DOM foi completamente atualizado
+        // Isso é especialmente importante no modo mobile do navegador
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            applyScroll();
+          });
+        });
+      } else {
+        // Para scroll suave, aguardar um frame para garantir que o DOM foi atualizado
+        requestAnimationFrame(() => {
+          container.scrollTo({
+            top: targetScrollTop,
+            behavior: scrollBehavior,
+          });
+        });
+      }
+      
+      // Aumentar tempo para cobrir toda a transição (smooth pode levar até 800ms)
+      // No mobile ou pulos diretos, usar tempo maior para garantir que o handler de scroll não interfira
+      // iOS pode precisar de mais tempo para processar o scroll
+      const timeoutDuration = isMobile || isJump ? (isIOS ? 300 : 200) : (targetSlideIsLocked ? 200 : 800);
+      
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+        // Remover classe CSS temporária e estados de transição
+        if (isJump || isMobile) {
+          container.style.scrollBehavior = '';
+          container.style.willChange = '';
+        }
+        // isTransitioning já foi resetado no applyScroll acima para pulos diretos
+        // Apenas garantir reset se não foi resetado ainda (para scrolls suaves)
+        if (!isJump) {
+          setIsTransitioning(false);
+        }
+      }, timeoutDuration);
+    }
+  }, [reel, currentSlide, checkIfSlideIsLocked]);
+
   // Inicializar renderedSlides quando os slides carregarem
   useEffect(() => {
     if (reel?.slides && reel.slides.length > 0) {
@@ -371,6 +472,11 @@ export default function PreviewQuiz() {
     }
   }, [currentSlide, renderedSlides, reel?.slides]);
 
+  // Throttle scroll handler com requestAnimationFrame
+  const scrollHandlerRef = useRef<number | null>(null);
+  const lastScrollTopRef = useRef<number>(0);
+  const scrollDirectionRef = useRef<'up' | 'down' | null>(null);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !reel?.slides) return;
@@ -378,38 +484,71 @@ export default function PreviewQuiz() {
     let scrollTimeout: NodeJS.Timeout;
 
     const handleScroll = () => {
-      const scrollTop = container.scrollTop;
-      const slideHeight = container.clientHeight;
-      const newSlide = Math.round(scrollTop / slideHeight);
+      // CRÍTICO: Ignorar completamente eventos de scroll se isProgrammaticScrollRef estiver ativo
+      // Isso previne interferência durante transições programáticas (botões, questionários, etc)
+      if (isProgrammaticScrollRef.current) {
+        return;
+      }
 
-      // Limpar timeout anterior
-      clearTimeout(scrollTimeout);
+      // Cancelar frame anterior se existir
+      if (scrollHandlerRef.current !== null) {
+        cancelAnimationFrame(scrollHandlerRef.current);
+      }
 
-      if (newSlide !== currentSlide && newSlide < reel.slides.length && newSlide >= 0) {
-        // Verificar se o slide atual está travado e o usuário está tentando sair
-        // MAS apenas se o scroll não for programático (feito pelo botão)
-        const currentSlideIsLocked = checkIfSlideIsLocked(currentSlide);
-        const isProgrammatic = isProgrammaticScrollRef.current;
+      // Usar requestAnimationFrame para throttling
+      scrollHandlerRef.current = requestAnimationFrame(() => {
+        const scrollTop = container.scrollTop;
+        const slideHeight = container.clientHeight;
         
-        // Se o slide atual está travado, o usuário está tentando ir para frente
-        // E o scroll NÃO é programático (é manual), bloquear
-        if (currentSlideIsLocked && newSlide > currentSlide && !isProgrammatic) {
-          // Reverter scroll para o slide atual (não permitir sair do slide travado)
-          scrollTimeout = setTimeout(() => {
-            scrollToSlide(currentSlide, false);
-          }, 50);
-          return; // Não atualizar currentSlide
+        // Detectar direção do scroll
+        const scrollDiff = scrollTop - lastScrollTopRef.current;
+        if (Math.abs(scrollDiff) > 0) {
+          scrollDirectionRef.current = scrollDiff > 0 ? 'down' : 'up';
         }
         
-        // Verificar se há uma conexão defaultNext no slide atual
-        const currentSlideData = reel.slides[currentSlide];
-        if (currentSlideData && newSlide === currentSlide + 1) {
-          // Usuário está tentando ir para o próximo slide sequencial
-          const logicNext = currentSlideData.logicNext || {};
-          if (logicNext.defaultNext) {
-            // Encontrar o índice do slide conectado
-            const targetSlideId = logicNext.defaultNext;
-            const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
+        // Aumentar threshold de detecção de mudança (de 10% para 30%)
+        // Isso previne detecções incorretas durante scroll suave ou transições
+        const threshold = slideHeight * 0.3;
+        if (Math.abs(scrollTop - lastScrollTopRef.current) < threshold) {
+          return;
+        }
+        
+        lastScrollTopRef.current = scrollTop;
+        const newSlide = Math.round(scrollTop / slideHeight);
+
+        // Limpar timeout anterior
+        clearTimeout(scrollTimeout);
+
+        if (newSlide !== currentSlide && newSlide < reel.slides.length && newSlide >= 0) {
+          // Verificar se o slide atual está travado e o usuário está tentando sair
+          // MAS apenas se o scroll não for programático (feito pelo botão)
+          const currentSlideIsLocked = checkIfSlideIsLocked(currentSlide);
+          const isProgrammatic = isProgrammaticScrollRef.current;
+          
+          // Se o scroll é programático, ignorar completamente (já retornamos no início, mas garantir)
+          if (isProgrammatic) {
+            return;
+          }
+          
+          // Se o slide atual está travado, o usuário está tentando ir para frente
+          // E o scroll NÃO é programático (é manual), bloquear
+          if (currentSlideIsLocked && newSlide > currentSlide && !isProgrammatic) {
+            // Reverter scroll para o slide atual (não permitir sair do slide travado)
+            scrollTimeout = setTimeout(() => {
+              scrollToSlide(currentSlide, false);
+            }, 50);
+            return; // Não atualizar currentSlide
+          }
+          
+          // Verificar se há uma conexão defaultNext no slide atual
+          const currentSlideData = reel.slides[currentSlide];
+          if (currentSlideData && newSlide === currentSlide + 1) {
+            // Usuário está tentando ir para o próximo slide sequencial
+            const logicNext = currentSlideData.logicNext || {};
+            if (logicNext.defaultNext) {
+              // Encontrar o índice do slide conectado
+              const targetSlideId = logicNext.defaultNext;
+              const targetIndex = reel.slides.findIndex((s) => s.id === targetSlideId);
               if (targetIndex >= 0 && targetIndex !== newSlide) {
                 // Verificar se o slide atual está travado antes de permitir redirecionamento
                 // Mas apenas se o scroll não for programático
@@ -422,29 +561,33 @@ export default function PreviewQuiz() {
                   return;
                 }
               
-              // Redirecionar para o slide conectado
-              const isDirectJump = Math.abs(targetIndex - currentSlide) > 1;
-              scrollTimeout = setTimeout(() => {
-                scrollToSlide(targetIndex, isDirectJump);
-              }, 50);
-              return;
+                // Redirecionar para o slide conectado
+                const isDirectJump = Math.abs(targetIndex - currentSlide) > 1;
+                scrollTimeout = setTimeout(() => {
+                  scrollToSlide(targetIndex, isDirectJump);
+                }, 50);
+                return;
+              }
             }
           }
-        }
 
-        // Scroll normal - permitir mudança de slide
-        setCurrentSlide(newSlide);
-      }
+          // Scroll normal - permitir mudança de slide
+          setCurrentSlide(newSlide);
+        }
+      });
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       container.removeEventListener('scroll', handleScroll);
       clearTimeout(scrollTimeout);
+      if (scrollHandlerRef.current !== null) {
+        cancelAnimationFrame(scrollHandlerRef.current);
+      }
     };
   }, [currentSlide, reel, scrollToSlide, checkIfSlideIsLocked]);
 
-  // Verificar se o slide atual está travado por algum botão
+  // Verificar se o slide atual está travado por algum botão ou background
   useEffect(() => {
     if (!reel?.slides || currentSlide >= reel.slides.length) {
       const newIsLocked = false;
@@ -454,6 +597,16 @@ export default function PreviewQuiz() {
     }
 
     const currentSlideData = reel.slides[currentSlide];
+    
+    // Verificar primeiro se está travado pelo background
+    const backgroundConfig = currentSlideData?.backgroundConfig || currentSlideData?.uiConfig?.backgroundConfig;
+    if (backgroundConfig?.lockSlide === true) {
+      const newIsLocked = true;
+      prevIsSlideLockedRef.current = newIsLocked;
+      setIsSlideLocked(newIsLocked);
+      return;
+    }
+    
     if (!currentSlideData?.elements) {
       const newIsLocked = false;
       prevIsSlideLockedRef.current = newIsLocked;
@@ -626,14 +779,27 @@ export default function PreviewQuiz() {
       // Só bloquear se realmente estiver no slide travado (usar currentSlide do estado)
       if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
         const expectedScrollTop = currentSlide * slideHeight;
+        const lockedByBackground = isLockedByBackground(currentSlide);
         
-        // Bloquear imediatamente qualquer scroll para baixo (avançar) sem tolerância
-        if (e.deltaY > 0) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          // Forçar scrollTop de volta imediatamente
-          container.scrollTop = expectedScrollTop;
-          return false;
+        // Se travado pelo background, bloquear ambos os lados (cima e baixo)
+        if (lockedByBackground) {
+          // Bloquear qualquer movimento (para cima ou para baixo)
+          if (e.deltaY !== 0) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            // Forçar scrollTop de volta imediatamente
+            container.scrollTop = expectedScrollTop;
+            return false;
+          }
+        } else {
+          // Se travado por elementos, bloquear apenas para baixo (avançar)
+          if (e.deltaY > 0) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            // Forçar scrollTop de volta imediatamente
+            container.scrollTop = expectedScrollTop;
+            return false;
+          }
         }
         
         // Também garantir que o scrollTop esteja exatamente na posição esperada
@@ -661,17 +827,31 @@ export default function PreviewQuiz() {
       // Só bloquear se realmente estiver no slide travado (usar currentSlide do estado)
       if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
         const expectedScrollTop = currentSlide * slideHeight;
+        const lockedByBackground = isLockedByBackground(currentSlide);
         const touchY = e.touches[0].clientY;
         const deltaY = touchY - touchStartY;
         
-        // Bloquear imediatamente qualquer movimento para baixo (deltaY positivo = swipe down = avançar) sem tolerância
-        if (deltaY > 0) {
-          isScrollingForward = true;
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          // Forçar scrollTop de volta imediatamente
-          container.scrollTop = expectedScrollTop;
-          return false;
+        // Se travado pelo background, bloquear ambos os lados (cima e baixo)
+        if (lockedByBackground) {
+          // Bloquear qualquer movimento vertical significativo
+          if (Math.abs(deltaY) > 5) {
+            isScrollingForward = deltaY > 0;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            // Forçar scrollTop de volta imediatamente
+            container.scrollTop = expectedScrollTop;
+            return false;
+          }
+        } else {
+          // Se travado por elementos, bloquear apenas para baixo (swipe down = avançar)
+          if (deltaY > 0) {
+            isScrollingForward = true;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            // Forçar scrollTop de volta imediatamente
+            container.scrollTop = expectedScrollTop;
+            return false;
+          }
         }
         
         // Também garantir que o scrollTop esteja exatamente na posição esperada
@@ -705,14 +885,26 @@ export default function PreviewQuiz() {
     };
 
     const preventKeys = (e: KeyboardEvent) => {
-      if (isSlideLocked && !isProgrammaticScrollRef.current) {
-        // Bloquear apenas teclas que avançam para frente
-        if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          return false;
+      if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
+        const lockedByBackground = isLockedByBackground(currentSlide);
+        
+        // Se travado pelo background, bloquear ambos os lados (cima e baixo)
+        if (lockedByBackground) {
+          if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ' || 
+              e.key === 'ArrowUp' || e.key === 'PageUp') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return false;
+          }
+        } else {
+          // Se travado por elementos, bloquear apenas teclas que avançam para frente
+          if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return false;
+          }
+          // Permitir ArrowUp e PageUp para voltar
         }
-        // Permitir ArrowUp e PageUp para voltar
       }
     };
 
@@ -750,7 +942,7 @@ export default function PreviewQuiz() {
       container.removeEventListener('scroll', preventScroll, { capture: true } as EventListenerOptions);
       document.removeEventListener('keydown', preventKeys, { capture: true } as EventListenerOptions);
     };
-  }, [isSlideLocked, currentSlide, reel?.slides]);
+  }, [isSlideLocked, currentSlide, reel?.slides, isLockedByBackground]);
 
   // Função helper para obter o próximo slide baseado em logicNext
   // Função para verificar apenas conexões do fluxo (sem fallback)
@@ -1189,7 +1381,11 @@ export default function PreviewQuiz() {
           <div 
             ref={containerRef} 
             className="reels-container-card hide-scrollbar"
-            style={{ overflowY: isSlideLocked ? 'hidden' : 'scroll' }}
+            style={{ 
+              overflowY: isSlideLocked ? 'hidden' : 'scroll',
+              // Otimizar performance durante transições
+              willChange: isTransitioning ? 'scroll-position' : 'auto',
+            }}
           >
         {slides.map((slide: any, index: number) => {
           // Renderizar apenas os slides até renderedSlides
@@ -1240,6 +1436,9 @@ export default function PreviewQuiz() {
                       flexDirection: 'column',
                       width: '100%',
                       gap: '16px', // Espaçamento entre elementos
+                      // Garantir que o slide atual sempre seja visível, mesmo durante transições
+                      visibility: index === currentSlide ? 'visible' : 'hidden',
+                      pointerEvents: index === currentSlide ? 'auto' : 'none',
                     }}
                   >
                   {(() => {

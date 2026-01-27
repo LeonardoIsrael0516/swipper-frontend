@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, useLayoutEffect, useState } from 'react';
+import { useMemo, useRef, useEffect, useLayoutEffect, useState, useCallback } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -181,11 +181,13 @@ function SortableElement({ element, reelId }: { element: SlideElement; reelId?: 
 }
 
 // Constantes para cálculo de altura
-const PREVIEW_HEIGHT = 819; // altura total do preview (480 * 15.35 / 9 = proporção 9:15.35)
+const PREVIEW_HEIGHT = 852; // altura mais realista de viewport mobile (iPhone 14 Pro = 852px viewport)
 const PADDING_TOP = 16; // padding do container (p-4 = 16px)
 const PADDING_BOTTOM = 16; // padding do container
 const ELEMENT_MARGIN = 16; // margin-bottom entre elementos (mb-4 = 16px)
-const AVAILABLE_HEIGHT = PREVIEW_HEIGHT - PADDING_TOP - PADDING_BOTTOM; // ~787px
+const AVAILABLE_HEIGHT = PREVIEW_HEIGHT - PADDING_TOP - PADDING_BOTTOM; // ~820px
+// Limite mínimo de escala para manter legibilidade (mesmo do PublicQuiz)
+const MIN_CONTENT_SCALE = 0.72;
 
 export function MobilePreview() {
   const { selectedSlide, reel, setReel, setSelectedSlide, setHasUnsavedChanges, setLastSavedAt, setHasAvailableSpace } = useBuilder();
@@ -193,9 +195,12 @@ export function MobilePreview() {
   const elementsContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const slideContentRef = useRef<HTMLDivElement>(null);
+  const slideContentInnerRef = useRef<HTMLDivElement>(null);
   const [spaceUsage, setSpaceUsage] = useState(0);
   const [availableHeight, setAvailableHeight] = useState(AVAILABLE_HEIGHT);
-  const [previewSize, setPreviewSize] = useState({ width: 480, height: 819 });
+  const [previewSize, setPreviewSize] = useState({ width: 480, height: 852 });
+  const [contentScale, setContentScale] = useState(1);
   
   // Calcular índice do slide atual para a barra de progresso
   const currentPreviewSlide = useMemo(() => {
@@ -232,6 +237,51 @@ export function MobilePreview() {
       .sort((a, b) => a.order - b.order);
   }, [selectedSlide?.elements]);
 
+  // Função para atualizar escala do conteúdo
+  const updateScale = useCallback(() => {
+    const container = slideContentRef.current;
+    const inner = slideContentInnerRef.current;
+    if (!container || !inner) return;
+
+    // Usar requestAnimationFrame para garantir que o layout está completo
+    requestAnimationFrame(() => {
+      // Calcular altura disponível considerando padding do container
+      const containerRect = container.getBoundingClientRect();
+      const containerStyle = window.getComputedStyle(container);
+      const paddingTop = parseFloat(containerStyle.paddingTop) || 16;
+      const paddingBottom = parseFloat(containerStyle.paddingBottom) || 16;
+      
+      // Altura disponível = altura total do container menos os paddings
+      let availableHeightForScale = containerRect.height - paddingTop - paddingBottom;
+      
+      // Fallback: se a altura calculada for muito pequena ou inválida, usar availableHeight do estado
+      if (availableHeightForScale <= 0 || availableHeightForScale < 400) {
+        availableHeightForScale = availableHeight;
+      }
+      
+      // Medir altura real do conteúdo (scrollHeight é mais confiável para conteúdo que pode ser maior)
+      // Aguardar um frame adicional para garantir que espaçamentos e outros elementos dinâmicos estejam renderizados
+      requestAnimationFrame(() => {
+        const contentHeight = inner.scrollHeight;
+        
+        if (!availableHeightForScale || !contentHeight || contentHeight <= 0 || availableHeightForScale <= 0) {
+          setContentScale(1);
+          return;
+        }
+
+        // Calcular escala necessária para caber todo o conteúdo
+        const rawScale = availableHeightForScale / contentHeight;
+        const nextScale = Math.max(MIN_CONTENT_SCALE, Math.min(1, rawScale));
+
+        setContentScale((prev) => {
+          // Só atualizar se a diferença for significativa (mais de 1%)
+          if (Math.abs(prev - nextScale) < 0.01) return prev;
+          return nextScale;
+        });
+      });
+    });
+  }, [availableHeight]);
+
   // Calcular altura disponível no mobile baseado no container
   useEffect(() => {
     if (!isMobile || !containerRef.current) {
@@ -243,8 +293,13 @@ export function MobilePreview() {
       if (containerRef.current) {
         const containerHeight = containerRef.current.clientHeight;
         const padding = 16; // p-4 = 16px
-        const calculatedHeight = containerHeight - (padding * 2);
-        setAvailableHeight(Math.max(calculatedHeight, 400)); // Mínimo de 400px
+        // Considerar safe-area insets no mobile para altura mais realista
+        const safeAreaBottom = typeof window !== 'undefined' && window.CSS && window.CSS.supports('padding: env(safe-area-inset-bottom)') 
+          ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-bottom)')) || 0
+          : 0;
+        const calculatedHeight = containerHeight - (padding * 2) - Math.max(0, safeAreaBottom - 16);
+        // Usar altura mais realista de viewport mobile (similar ao PublicQuiz)
+        setAvailableHeight(Math.max(calculatedHeight, AVAILABLE_HEIGHT));
       }
     };
 
@@ -307,9 +362,36 @@ export function MobilePreview() {
     };
   }, [isMobile]);
 
+  // Atualizar escala quando elementos, slide ou altura disponível mudarem
+  useEffect(() => {
+    if (!selectedSlide || !slideContentRef.current || !slideContentInnerRef.current) {
+      setContentScale(1);
+      return;
+    }
+
+    // Aguardar um pouco para garantir que o DOM foi totalmente renderizado
+    const timeoutId = setTimeout(() => {
+      updateScale();
+    }, 100);
+
+    // Criar ResizeObserver para atualizar escala quando elementos mudarem
+    const resizeObserver = new ResizeObserver(() => {
+      updateScale();
+    });
+
+    if (slideContentInnerRef.current) {
+      resizeObserver.observe(slideContentInnerRef.current);
+    }
+
+    return () => {
+      clearTimeout(timeoutId);
+      resizeObserver.disconnect();
+    };
+  }, [selectedSlide?.id, sortedElements.length, availableHeight, updateScale]);
+
   // Medir altura do conteúdo e atualizar disponibilidade de espaço
   useLayoutEffect(() => {
-    if (!elementsContainerRef.current || !setHasAvailableSpace || !selectedSlide) {
+    if (!slideContentInnerRef.current || !setHasAvailableSpace || !selectedSlide) {
       // Resetar estado quando não há slide selecionado
       if (!selectedSlide) {
         setHasAvailableSpace(true);
@@ -322,12 +404,14 @@ export function MobilePreview() {
     }
 
     const measureHeight = () => {
-      const container = elementsContainerRef.current;
-      if (!container) return;
+      // Usar o container interno para medir altura real do conteúdo (antes da escala)
+      const innerContainer = slideContentInnerRef.current;
+      if (!innerContainer) return;
 
       // Medir altura real do conteúdo (scrollHeight inclui todo o conteúdo, mesmo que não visível)
       // Como o container tem maxHeight e overflow:hidden, scrollHeight nos dá a altura total do conteúdo
-      const contentHeight = container.scrollHeight;
+      // IMPORTANTE: Medir no container interno (antes da escala) para obter altura real
+      const contentHeight = innerContainer.scrollHeight;
       const availableSpace = availableHeight;
 
       // Não medir se ainda não há conteúdo
@@ -343,9 +427,12 @@ export function MobilePreview() {
 
       measurementRef.current.lastHeight = contentHeight;
 
-      // Verificar se há espaço disponível (deixar margem de segurança de 25px para evitar flickering)
-      // Usar < em vez de <= para ter margem extra
-      const hasSpace = contentHeight < availableSpace - 25;
+      // Calcular escala que seria necessária para caber o conteúdo atual
+      const requiredScale = availableSpace / contentHeight;
+      
+      // Bloquear apenas quando a escala necessária for menor que a escala mínima
+      // Isso permite adicionar mais elementos até atingir o limite de escala mínima
+      const hasSpace = requiredScale >= MIN_CONTENT_SCALE;
       
       // Só atualizar estado se realmente mudou
       if (hasSpace !== measurementRef.current.lastHasSpace) {
@@ -390,8 +477,8 @@ export function MobilePreview() {
       debouncedMeasure();
     });
 
-    if (elementsContainerRef.current) {
-      resizeObserver.observe(elementsContainerRef.current);
+    if (slideContentInnerRef.current) {
+      resizeObserver.observe(slideContentInnerRef.current);
     }
 
     return () => {
@@ -405,14 +492,15 @@ export function MobilePreview() {
 
   // Medir novamente quando elementos mudarem (mas com debounce maior)
   useEffect(() => {
-    if (!elementsContainerRef.current || !selectedSlide) return;
+    if (!slideContentInnerRef.current || !selectedSlide) return;
 
     // Aguardar um pouco mais para garantir que o DOM foi totalmente renderizado
     const timeoutId = setTimeout(() => {
-      const container = elementsContainerRef.current;
-      if (!container) return;
+      const innerContainer = slideContentInnerRef.current;
+      if (!innerContainer) return;
 
-      const contentHeight = container.scrollHeight;
+      // Medir no container interno (antes da escala) para obter altura real
+      const contentHeight = innerContainer.scrollHeight;
       const availableSpace = availableHeight;
       
       if (contentHeight === 0) return;
@@ -422,7 +510,12 @@ export function MobilePreview() {
       if (heightDiff >= 25) {
         measurementRef.current.lastHeight = contentHeight;
         
-        const hasSpace = contentHeight < availableSpace - 25;
+        // Calcular escala que seria necessária para caber o conteúdo atual
+        const requiredScale = availableSpace / contentHeight;
+        
+        // Bloquear apenas quando a escala necessária for menor que a escala mínima
+        const hasSpace = requiredScale >= MIN_CONTENT_SCALE;
+        
         if (hasSpace !== measurementRef.current.lastHasSpace) {
           measurementRef.current.lastHasSpace = hasSpace;
           setHasAvailableSpace(hasSpace);
@@ -705,7 +798,41 @@ export function MobilePreview() {
                 onDragEnd={handleDragEnd}
               >
                 <SortableContext items={sortedElements.map((el) => el.id)} strategy={verticalListSortingStrategy}>
-                  <div ref={elementsContainerRef} className="p-4 pb-20 relative" style={{ maxHeight: `${availableHeight}px`, overflow: 'hidden', width: '100%' }}>
+                  <div 
+                    ref={(el) => {
+                      if (el) {
+                        slideContentRef.current = el;
+                        elementsContainerRef.current = el;
+                      } else {
+                        slideContentRef.current = null;
+                        elementsContainerRef.current = null;
+                      }
+                    }}
+                    className="p-4 pb-20 relative" 
+                    style={{ 
+                      maxHeight: `${availableHeight}px`, 
+                      overflow: 'hidden', 
+                      width: '100%',
+                    }}
+                  >
+                    <div
+                      ref={(el) => {
+                        if (el) {
+                          slideContentInnerRef.current = el;
+                        } else {
+                          slideContentInnerRef.current = null;
+                        }
+                      }}
+                      style={{
+                        transform: `scale(${contentScale})`,
+                        transformOrigin: 'top center',
+                        willChange: 'transform',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        width: '100%',
+                        gap: '16px',
+                      }}
+                    >
                         {sortedElements.length > 0 ? (() => {
                           // Agrupar elementos (botões coluna consecutivos)
                           const grouped = groupElements(sortedElements);
@@ -757,6 +884,7 @@ export function MobilePreview() {
                         <p className="text-sm">Adicione elementos ao card</p>
                       </div>
                     )}
+                    </div>
                   </div>
                 </SortableContext>
               </DndContext>

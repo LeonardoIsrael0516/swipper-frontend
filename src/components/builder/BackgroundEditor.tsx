@@ -23,12 +23,17 @@ export function BackgroundEditor() {
   // Estados para legenda e tag de áudio
   const [caption, setCaption] = useState(selectedSlide?.caption || '');
   const [audioTag, setAudioTag] = useState(selectedSlide?.audioTag || '');
+  const [lockSlide, setLockSlide] = useState(false);
   
   // Sincronizar quando slide mudar
   useEffect(() => {
     setCaption(selectedSlide?.caption || '');
     setAudioTag(selectedSlide?.audioTag || '');
-  }, [selectedSlide?.id, selectedSlide?.caption, selectedSlide?.audioTag]);
+    
+    // Sincronizar lockSlide do backgroundConfig
+    const bgConfig = selectedSlide?.backgroundConfig || selectedSlide?.uiConfig?.backgroundConfig;
+    setLockSlide(bgConfig?.lockSlide || false);
+  }, [selectedSlide?.id, selectedSlide?.caption, selectedSlide?.audioTag, selectedSlide?.backgroundConfig, selectedSlide?.uiConfig?.backgroundConfig]);
 
   // Inicializar backgroundConfig a partir do backgroundColor ou uiConfig ou criar novo
   const getInitialConfig = useCallback((): BackgroundConfig => {
@@ -1270,6 +1275,26 @@ export function BackgroundEditor() {
             </SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Travar Slide */}
+      <div className="mt-4 pt-4 border-t border-border/50 space-y-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="lockSlide">Travar Slide</Label>
+          <Switch
+            id="lockSlide"
+            checked={lockSlide}
+            onCheckedChange={(checked) => {
+              setLockSlide(checked);
+              // Atualizar config com lockSlide
+              const newConfig = { ...config, lockSlide: checked || undefined };
+              updateConfig(newConfig);
+            }}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Quando habilitado, o usuário não poderá rolar para cima nem para baixo neste slide.
+        </p>
       </div>
 
       {/* Conteúdo baseado no tipo selecionado */}

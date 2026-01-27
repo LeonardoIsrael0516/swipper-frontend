@@ -975,6 +975,18 @@ export default function PublicQuiz() {
     return elapsed >= delay;
   }, [currentSlide]);
 
+  // Função helper para verificar se um slide específico está travado pelo background
+  const isLockedByBackground = useCallback((slideIndex: number): boolean => {
+    if (!reel?.slides || slideIndex >= reel.slides.length || slideIndex < 0) {
+      return false;
+    }
+    
+    const slideData = reel.slides[slideIndex];
+    const backgroundConfig = slideData?.backgroundConfig || slideData?.uiConfig?.backgroundConfig;
+    
+    return backgroundConfig?.lockSlide === true;
+  }, [reel?.slides]);
+
   // Função helper para verificar se um slide específico está travado
   const checkIfSlideIsLocked = useCallback((slideIndex: number): boolean => {
     if (!reel?.slides || slideIndex >= reel.slides.length || slideIndex < 0) {
@@ -982,6 +994,14 @@ export default function PublicQuiz() {
     }
     
     const slideData = reel.slides[slideIndex];
+    
+    // Verificar primeiro se está travado pelo background
+    const backgroundConfig = slideData?.backgroundConfig || slideData?.uiConfig?.backgroundConfig;
+    if (backgroundConfig?.lockSlide === true) {
+      return true;
+    }
+    
+    // Se não tiver elementos, não está travado por elementos
     if (!slideData?.elements) {
       return false;
     }
@@ -1340,7 +1360,7 @@ export default function PublicQuiz() {
     }
   }, [currentSlide, reel]);
 
-  // Verificar se o slide atual está travado por algum botão
+  // Verificar se o slide atual está travado por algum botão ou background
   useEffect(() => {
     if (!reel?.slides || currentSlide >= reel.slides.length) {
       const newIsLocked = false;
@@ -1350,6 +1370,16 @@ export default function PublicQuiz() {
     }
 
     const currentSlideData = reel.slides[currentSlide];
+    
+    // Verificar primeiro se está travado pelo background
+    const backgroundConfig = currentSlideData?.backgroundConfig || currentSlideData?.uiConfig?.backgroundConfig;
+    if (backgroundConfig?.lockSlide === true) {
+      const newIsLocked = true;
+      prevIsSlideLockedRef.current = newIsLocked;
+      dispatchSlide({ type: 'SET_IS_LOCKED', payload: newIsLocked });
+      return;
+    }
+    
     if (!currentSlideData?.elements) {
       const newIsLocked = false;
       prevIsSlideLockedRef.current = newIsLocked;
@@ -1548,22 +1578,43 @@ export default function PublicQuiz() {
       // Só bloquear se realmente estiver no slide travado (usar currentSlide do estado)
       if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
         const expectedScrollTop = currentSlide * slideHeight;
+        const lockedByBackground = isLockedByBackground(currentSlide);
         
-        // Bloquear imediatamente qualquer scroll para baixo (avançar) sem tolerância
-        if (e.deltaY > 0) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          e.stopPropagation();
-          // Forçar scrollTop de volta imediatamente
-          container.scrollTop = expectedScrollTop;
-          
-          // Ativar animação visual por 500ms
-          setBlockedScrollAttempt(true);
-          setTimeout(() => {
-            setBlockedScrollAttempt(false);
-          }, 500);
-          
-          return false;
+        // Se travado pelo background, bloquear ambos os lados (cima e baixo)
+        if (lockedByBackground) {
+          // Bloquear qualquer movimento (para cima ou para baixo)
+          if (e.deltaY !== 0) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            e.stopPropagation();
+            // Forçar scrollTop de volta imediatamente
+            container.scrollTop = expectedScrollTop;
+            
+            // Ativar animação visual por 500ms
+            setBlockedScrollAttempt(true);
+            setTimeout(() => {
+              setBlockedScrollAttempt(false);
+            }, 500);
+            
+            return false;
+          }
+        } else {
+          // Se travado por elementos, bloquear apenas para baixo (avançar)
+          if (e.deltaY > 0) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            e.stopPropagation();
+            // Forçar scrollTop de volta imediatamente
+            container.scrollTop = expectedScrollTop;
+            
+            // Ativar animação visual por 500ms
+            setBlockedScrollAttempt(true);
+            setTimeout(() => {
+              setBlockedScrollAttempt(false);
+            }, 500);
+            
+            return false;
+          }
         }
         
         // Também garantir que o scrollTop esteja exatamente na posição esperada
@@ -1611,6 +1662,7 @@ export default function PublicQuiz() {
       // Só bloquear se realmente estiver no slide travado (usar currentSlide do estado)
       if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
         const expectedScrollTop = currentSlide * slideHeight;
+        const lockedByBackground = isLockedByBackground(currentSlide);
         const touchY = e.touches[0].clientY;
         const touchX = e.touches[0].clientX;
         const deltaY = touchY - touchStartY;
@@ -1624,23 +1676,43 @@ export default function PublicQuiz() {
           return;
         }
         
-        // Bloquear apenas movimentos verticais significativos para baixo (swipe down = avançar)
-        // Usar uma tolerância mínima para evitar bloquear taps acidentais
-        if (deltaY > 10) {
-          isScrollingForward = true;
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          e.stopPropagation();
-          // Forçar scrollTop de volta imediatamente
-          container.scrollTop = expectedScrollTop;
-          
-          // Ativar animação visual por 500ms
-          setBlockedScrollAttempt(true);
-          setTimeout(() => {
-            setBlockedScrollAttempt(false);
-          }, 500);
-          
-          return false;
+        // Se travado pelo background, bloquear ambos os lados (cima e baixo)
+        if (lockedByBackground) {
+          // Bloquear qualquer movimento vertical significativo
+          if (Math.abs(deltaY) > 10) {
+            isScrollingForward = deltaY > 0;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            e.stopPropagation();
+            // Forçar scrollTop de volta imediatamente
+            container.scrollTop = expectedScrollTop;
+            
+            // Ativar animação visual por 500ms
+            setBlockedScrollAttempt(true);
+            setTimeout(() => {
+              setBlockedScrollAttempt(false);
+            }, 500);
+            
+            return false;
+          }
+        } else {
+          // Se travado por elementos, bloquear apenas para baixo (swipe down = avançar)
+          if (deltaY > 10) {
+            isScrollingForward = true;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            e.stopPropagation();
+            // Forçar scrollTop de volta imediatamente
+            container.scrollTop = expectedScrollTop;
+            
+            // Ativar animação visual por 500ms
+            setBlockedScrollAttempt(true);
+            setTimeout(() => {
+              setBlockedScrollAttempt(false);
+            }, 500);
+            
+            return false;
+          }
         }
         
         // Também garantir que o scrollTop esteja exatamente na posição esperada
@@ -1676,14 +1748,26 @@ export default function PublicQuiz() {
     };
 
     const preventKeys = (e: KeyboardEvent) => {
-      if (isSlideLocked && !isProgrammaticScrollRef.current) {
-        // Bloquear apenas teclas que avançam para frente
-        if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          return false;
+      if (isSlideLocked && !isProgrammaticScrollRef.current && reel?.slides) {
+        const lockedByBackground = isLockedByBackground(currentSlide);
+        
+        // Se travado pelo background, bloquear ambos os lados (cima e baixo)
+        if (lockedByBackground) {
+          if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ' || 
+              e.key === 'ArrowUp' || e.key === 'PageUp') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return false;
+          }
+        } else {
+          // Se travado por elementos, bloquear apenas teclas que avançam para frente
+          if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return false;
+          }
+          // Permitir ArrowUp e PageUp para voltar
         }
-        // Permitir ArrowUp e PageUp para voltar
       }
     };
 
@@ -1722,7 +1806,7 @@ export default function PublicQuiz() {
       container.removeEventListener('scroll', preventScroll, { capture: true } as EventListenerOptions);
       document.removeEventListener('keydown', preventKeys, { capture: true } as EventListenerOptions);
     };
-  }, [isSlideLocked, currentSlide, reel?.slides]);
+  }, [isSlideLocked, currentSlide, reel?.slides, isLockedByBackground]);
 
   // Handler para mudança de validação do formulário
   const handleFormValidationChange = useCallback((elementId: string, isValid: boolean) => {

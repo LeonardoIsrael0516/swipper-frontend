@@ -61,6 +61,9 @@ export interface BackgroundConfig {
     fakeProgressSpeed?: number; // Velocidade do fake progress (ex: 1.5 = 50% mais rápido, 2.0 = 2x mais rápido)
     fakeProgressSlowdownStart?: number; // Porcentagem do vídeo onde começa a desacelerar (ex: 0.9 = últimos 10%)
   };
+  
+  // Travar slide (bloqueia scroll para cima e para baixo)
+  lockSlide?: boolean;
 }
 
 export interface GamificationElementConfig {
