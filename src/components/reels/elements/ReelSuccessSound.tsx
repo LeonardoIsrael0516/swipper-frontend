@@ -128,37 +128,95 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
   };
 
   // Inicializar AudioContext após primeira interação (necessário para iOS)
-  const initAudioContext = useCallback(() => {
-    if (!audioContextRef.current) {
-      try {
+  // Retorna Promise para garantir que o contexto esteja pronto
+  const initAudioContext = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      } catch (error) {
-        console.warn('Erro ao criar AudioContext:', error);
+        if (import.meta.env.DEV) {
+          console.log('[ReelSuccessSound] AudioContext criado:', audioContextRef.current.state);
+        }
       }
-    }
-    // Retomar contexto se estiver suspenso (iOS)
-    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-      audioContextRef.current.resume().catch(() => {
-        // Ignorar erro se não conseguir retomar
-      });
+      
+      const audioContext = audioContextRef.current;
+      
+      // Retomar contexto se estiver suspenso (iOS)
+      if (audioContext.state === 'suspended') {
+        if (import.meta.env.DEV) {
+          console.log('[ReelSuccessSound] AudioContext suspenso, tentando retomar...');
+        }
+        await audioContext.resume();
+        if (import.meta.env.DEV) {
+          console.log('[ReelSuccessSound] AudioContext retomado:', audioContext.state);
+        }
+      }
+      
+      // Verificar se está no estado correto
+      if (audioContext.state === 'running') {
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('[ReelSuccessSound] Erro ao inicializar AudioContext:', error);
+      }
+      return false;
     }
   }, []);
 
   // Marcar que usuário interagiu (necessário para iOS)
+  // Manter listeners ativos até AudioContext estar pronto
   useEffect(() => {
     if (isIOSDevice()) {
-      const handleUserInteraction = () => {
+      const handleUserInteraction = async () => {
+        if (import.meta.env.DEV) {
+          console.log('[ReelSuccessSound] Interação do usuário detectada');
+        }
+        
         hasUserInteractedRef.current = true;
-        initAudioContext();
-        // Remover listeners após primeira interação
-        document.removeEventListener('touchstart', handleUserInteraction);
-        document.removeEventListener('touchend', handleUserInteraction);
-        document.removeEventListener('click', handleUserInteraction);
+        const isReady = await initAudioContext();
+        
+        if (import.meta.env.DEV) {
+          console.log('[ReelSuccessSound] AudioContext após interação:', {
+            isReady,
+            state: audioContextRef.current?.state,
+          });
+        }
+        
+        // Se AudioContext está pronto, podemos remover alguns listeners
+        // Mas manter alguns ativos para garantir que sempre funcione
+        if (isReady && audioContextRef.current?.state === 'running') {
+          // AudioContext está pronto, mas manter listeners para garantir que continue funcionando
+        }
       };
       
-      document.addEventListener('touchstart', handleUserInteraction, { once: true, passive: true });
-      document.addEventListener('touchend', handleUserInteraction, { once: true, passive: true });
-      document.addEventListener('click', handleUserInteraction, { once: true, passive: true });
+      // Adicionar mais tipos de eventos de interação
+      const interactionEvents = [
+        'touchstart',
+        'touchend',
+        'touchmove',
+        'click',
+        'scroll',
+        'pointerdown',
+        'pointerup',
+      ];
+      
+      const options = { passive: true };
+      
+      // Adicionar listeners (não usar once: true para manter ativos)
+      interactionEvents.forEach((eventType) => {
+        document.addEventListener(eventType, handleUserInteraction, options);
+        window.addEventListener(eventType, handleUserInteraction, options);
+      });
+      
+      return () => {
+        // Cleanup: remover listeners quando componente desmontar
+        interactionEvents.forEach((eventType) => {
+          document.removeEventListener(eventType, handleUserInteraction);
+          window.removeEventListener(eventType, handleUserInteraction);
+        });
+      };
     } else {
       // Em outros dispositivos, marcar como interagido imediatamente
       hasUserInteractedRef.current = true;
@@ -167,18 +225,39 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
   }, [initAudioContext]);
 
   // Fallback: sons sintéticos usando Web Audio API (sempre funciona)
-  const createFallbackSound = useCallback((type: string) => {
+  // No iOS, este é o método preferido pois funciona melhor
+  const createFallbackSound = useCallback(async (type: string): Promise<boolean> => {
     try {
-      // Garantir que AudioContext está inicializado
-      if (!audioContextRef.current) {
-        initAudioContext();
-      }
+      // Garantir que AudioContext está inicializado e pronto
+      const isReady = await initAudioContext();
       
-      if (!audioContextRef.current) {
+      if (!isReady || !audioContextRef.current) {
+        if (import.meta.env.DEV) {
+          console.warn('[ReelSuccessSound] AudioContext não está pronto para fallback');
+        }
         return false;
       }
       
       const audioContext = audioContextRef.current;
+      
+      // Garantir que está no estado running
+      if (audioContext.state !== 'running') {
+        if (import.meta.env.DEV) {
+          console.log('[ReelSuccessSound] AudioContext não está running, tentando retomar...');
+        }
+        await audioContext.resume();
+      }
+      
+      if (audioContext.state !== 'running') {
+        if (import.meta.env.DEV) {
+          console.warn('[ReelSuccessSound] AudioContext não conseguiu entrar em estado running');
+        }
+        return false;
+      }
+      
+      if (import.meta.env.DEV) {
+        console.log('[ReelSuccessSound] Criando som de fallback:', type);
+      }
       
       // Configurações de som para cada tipo
       const soundConfigs: Record<string, { frequencies: number[]; duration: number; type: OscillatorType }> = {
@@ -208,28 +287,62 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
         gainNode.gain.linearRampToValueAtTime(volume * 0.2, startTime + 0.01);
         gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + config.duration);
 
-        oscillator.start(startTime);
-        oscillator.stop(startTime + config.duration);
-      });
+      oscillator.start(startTime);
+      oscillator.stop(startTime + config.duration);
+    });
 
-      return true;
+    if (import.meta.env.DEV) {
+      console.log('[ReelSuccessSound] Som de fallback criado com sucesso');
+    }
+    
+    return true;
     } catch (error) {
-      console.warn('Erro ao criar som de fallback:', error);
+      if (import.meta.env.DEV) {
+        console.warn('[ReelSuccessSound] Erro ao criar som de fallback:', error);
+      }
       return false;
     }
   }, [volume, initAudioContext]);
 
-  const playSound = useCallback(() => {
-    // No iOS, só tocar se usuário já interagiu
-    if (isIOSDevice() && !hasUserInteractedRef.current) {
-      // Tentar usar fallback que funciona melhor no iOS
-      createFallbackSound(soundType);
-      return;
+  const playSound = useCallback(async () => {
+    if (import.meta.env.DEV) {
+      console.log('[ReelSuccessSound] playSound chamado:', {
+        isIOS: isIOSDevice(),
+        hasUserInteracted: hasUserInteractedRef.current,
+        audioContextState: audioContextRef.current?.state,
+      });
+    }
+    
+    const isIOS = isIOSDevice();
+    
+    // No iOS, priorizar Web Audio API (fallback) pois funciona melhor
+    if (isIOS) {
+      // Sempre tentar retomar AudioContext antes de tocar
+      await initAudioContext();
+      
+      // No iOS, usar Web Audio API como primário
+      const fallbackSuccess = await createFallbackSound(soundType);
+      if (fallbackSuccess) {
+        if (import.meta.env.DEV) {
+          console.log('[ReelSuccessSound] Som tocado com sucesso usando Web Audio API (iOS)');
+        }
+        return;
+      }
+      
+      // Se fallback falhar, tentar HTMLAudioElement como último recurso
+      if (import.meta.env.DEV) {
+        console.log('[ReelSuccessSound] Fallback falhou, tentando HTMLAudioElement...');
+      }
     }
 
     try {
       // Prioridade: 1. URL customizada, 2. URL padrão, 3. Fallback
       const soundToPlay = soundUrl || defaultSounds[soundType] || defaultSounds.success;
+      
+      // Garantir que AudioContext está pronto antes de tentar tocar HTMLAudioElement
+      if (isIOS) {
+        await initAudioContext();
+      }
       
       // Criar novo elemento de áudio (sempre criar nova instância para não cortar sons anteriores)
       const audio = new Audio(soundToPlay);
@@ -269,15 +382,23 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
         playPromise
           .then(() => {
             // Áudio iniciado com sucesso
+            if (import.meta.env.DEV) {
+              console.log('[ReelSuccessSound] HTMLAudioElement tocado com sucesso');
+            }
             // Manter referência principal apenas se não houver outro áudio tocando
             if (!audioRef.current || audioRef.current.paused || audioRef.current.ended) {
               audioRef.current = audio;
             }
           })
-          .catch((error) => {
+          .catch(async (error) => {
             // Se autoplay for bloqueado ou houver erro, tentar fallback
-            console.debug('Erro ao tocar áudio, tentando fallback:', error);
-            createFallbackSound(soundType);
+            if (import.meta.env.DEV) {
+              console.warn('[ReelSuccessSound] Erro ao tocar HTMLAudioElement, tentando fallback:', error);
+            }
+            const fallbackSuccess = await createFallbackSound(soundType);
+            if (!fallbackSuccess && import.meta.env.DEV) {
+              console.warn('[ReelSuccessSound] Fallback também falhou');
+            }
             activeAudiosRef.current.delete(audio);
           });
       } else {
@@ -287,11 +408,13 @@ export const ReelSuccessSound = forwardRef<ReelSuccessSoundRef, ReelSuccessSound
         }
       }
     } catch (error) {
-      console.warn('Erro ao tocar som, usando fallback:', error);
+      if (import.meta.env.DEV) {
+        console.warn('[ReelSuccessSound] Erro ao tocar som, usando fallback:', error);
+      }
       // Último recurso: usar fallback
-      createFallbackSound(soundType);
+      await createFallbackSound(soundType);
     }
-  }, [soundUrl, soundType, volume, createFallbackSound]);
+  }, [soundUrl, soundType, volume, createFallbackSound, initAudioContext]);
 
   // Expor método trigger via ref
   useImperativeHandle(ref, () => ({
