@@ -1741,42 +1741,6 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   const publishReel = useCallback(async () => {
     if (!reel || isLoading) return;
 
-    // Verificar se o usuário tem plano free e bloquear publicação
-    if (user?.planId) {
-      try {
-        // Buscar informações do plano do usuário
-        const plans = await api.getPlans<any[]>();
-        const plansArray = Array.isArray(plans) ? plans : [];
-        const userPlan = plansArray.find((plan: any) => plan.id === user.planId);
-        
-        // Verificar se é plano free (título "free" ou preço 0)
-        if (userPlan) {
-          const planTitle = (userPlan.title || '').toLowerCase().trim();
-          const planPrice = typeof userPlan.price === 'number' 
-            ? userPlan.price 
-            : parseFloat(String(userPlan.price || 0));
-          
-          if (planTitle === 'free' || planPrice === 0) {
-            toast.error('O plano gratuito não permite publicar swippers. Faça upgrade para publicar!', {
-              duration: 5000,
-            });
-            window.location.href = '/plans';
-            return;
-          }
-        }
-      } catch (error) {
-        // Se não conseguir buscar planos, verificar se planId é null (usuário sem plano = free)
-        // Se planId existe mas não conseguimos buscar, continuar (não bloquear)
-      }
-    } else {
-      // Se não tem planId, assumir que é plano free
-      toast.error('O plano gratuito não permite publicar swippers. Faça upgrade para publicar!', {
-        duration: 5000,
-      });
-      window.location.href = '/plans';
-      return;
-    }
-
     // Verificar se email está verificado antes de publicar
     try {
       const settings = await api.getSettings();

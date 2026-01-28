@@ -288,17 +288,34 @@ export default function Plans() {
               <p className="text-muted-foreground">Nenhum plano disponível no momento.</p>
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
-              {plans.filter((plan) => {
-                // Ocultar plano gratuito (preço 0)
-                const priceValue = normalizePrice(plan.price);
-                return priceValue > 0;
-              }).map((plan) => {
-                // Comparar planId do usuário com o ID do plano
-                // Comparar planId do usuário com o ID do plano
-                // Tentar usar planId diretamente ou de diferentes fontes
+            <>
+              {/* Separar plano free dos planos pagos */}
+              {(() => {
+                const freePlan = plans.find(plan => normalizePrice(plan.price) === 0);
+                const paidPlans = plans.filter(plan => normalizePrice(plan.price) > 0);
                 const planIdFromProfile = userProfile?.planId;
-                const isCurrentPlan = planIdFromProfile && plan.id && String(planIdFromProfile) === String(plan.id);
+                const isFreePlanCurrent = freePlan && planIdFromProfile && String(planIdFromProfile) === String(freePlan.id);
+                
+                // Debug: verificar features do plano free
+                if (freePlan && import.meta.env.DEV) {
+                  console.log('Free Plan:', freePlan);
+                  console.log('Free Plan Features:', freePlan.features);
+                  console.log('Free Plan Features Type:', typeof freePlan.features);
+                  console.log('Free Plan Features Is Array:', Array.isArray(freePlan.features));
+                  if (freePlan.features) {
+                    console.log('Free Plan Features Length:', freePlan.features.length);
+                  }
+                }
+
+                return (
+                  <>
+                    {/* Grid de planos pagos */}
+                    {paidPlans.length > 0 && (
+                      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+                        {paidPlans.map((plan) => {
+                          // Comparar planId do usuário com o ID do plano
+                          const planIdFromProfile = userProfile?.planId;
+                          const isCurrentPlan = planIdFromProfile && plan.id && String(planIdFromProfile) === String(plan.id);
                 
                 return (
                 <div
@@ -338,7 +355,7 @@ export default function Plans() {
                       <span className={`text-4xl font-bold ${plan.isPopular && theme === 'light' ? 'text-white' : ''}`}>
                         {(() => {
                           const priceValue = normalizePrice(plan.price);
-                          return priceValue === 0 ? 'Grátis' : formatPrice(priceValue);
+                          return priceValue === 0 ? 'Free' : formatPrice(priceValue);
                         })()}
                       </span>
                       {(() => {
@@ -421,7 +438,108 @@ export default function Plans() {
                 </div>
               );
               })}
-            </div>
+                      </div>
+                    )}
+
+                    {/* Card horizontal para plano free - abaixo dos planos pagos */}
+                    {freePlan && (
+                      <div className="w-full mt-12 max-w-7xl mx-auto">
+                        <div className={`relative p-6 md:p-8 rounded-2xl transition-all duration-300 hover:scale-[1.01] group ${
+                          theme === 'light'
+                            ? 'bg-gradient-to-r from-gray-50 to-white border border-gray-200 hover:border-gray-300 shadow-sm'
+                            : 'bg-gradient-to-r from-white/5 to-white/3 backdrop-blur-md border border-white/10 hover:border-white/20'
+                        }`}>
+                          <div className="flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-8">
+                            {/* Conteúdo central */}
+                            <div className="flex-1 space-y-3">
+                              <div>
+                                <h3 className={`font-display text-2xl md:text-3xl font-bold mb-2 ${
+                                  theme === 'light' ? 'text-gray-900' : 'text-foreground'
+                                }`}>
+                                  {freePlan.title}
+                                </h3>
+                                {freePlan.description && (
+                                  <p className={`text-sm md:text-base ${
+                                    theme === 'light' ? 'text-gray-600' : 'text-muted-foreground'
+                                  }`}>
+                                    {freePlan.description}
+                                  </p>
+                                )}
+                              </div>
+                              
+                              {/* Features completas - lado a lado */}
+                              {(() => {
+                                // Garantir que features seja um array válido
+                                const features = freePlan.features && Array.isArray(freePlan.features) 
+                                  ? freePlan.features 
+                                  : [];
+                                
+                                if (features.length > 0) {
+                                  return (
+                                    <div className="flex flex-wrap gap-2 md:gap-3 pt-2">
+                                      {features.map((feature, index) => (
+                                        <div 
+                                          key={index} 
+                                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${
+                                            theme === 'light' 
+                                              ? 'bg-gray-100 border border-gray-200' 
+                                              : 'bg-white/5 border border-white/10'
+                                          }`}
+                                        >
+                                          {feature.icon ? (
+                                            <div className="flex-shrink-0">
+                                              {renderFeatureIcon(feature.icon, feature.iconColor)}
+                                            </div>
+                                          ) : (
+                                            <Check className={`w-3 h-3 md:w-4 md:h-4 flex-shrink-0 ${
+                                              theme === 'light' ? 'text-primary' : 'text-primary'
+                                            }`} />
+                                          )}
+                                          <span className={`text-xs md:text-sm font-medium ${
+                                            theme === 'light' ? 'text-gray-700' : 'text-foreground'
+                                          }`}>
+                                            {feature.text}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+
+                            {/* Botão à direita */}
+                            <div className="flex-shrink-0 w-full md:w-auto">
+                              {isFreePlanCurrent ? (
+                                <div className={`w-full md:w-auto px-6 py-3 rounded-lg text-center ${
+                                  theme === 'light'
+                                    ? 'bg-gray-100 text-gray-700 border border-gray-200'
+                                    : 'bg-muted text-muted-foreground'
+                                }`}>
+                                  <span className="text-sm font-medium">Plano Atual</span>
+                                </div>
+                              ) : (
+                                <Link to="/signup" className="block">
+                                  <Button className={`w-full md:w-auto h-auto py-3 px-6 ${
+                                    theme === 'light'
+                                      ? 'gradient-primary text-primary-foreground glow-primary'
+                                      : 'bg-black text-white hover:bg-gray-800'
+                                  }`}>
+                                    Começar Grátis
+                                    <ArrowRight className="w-4 h-4 ml-2" />
+                                  </Button>
+                                </Link>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </>
           )}
         </div>
       </section>
